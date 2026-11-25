@@ -56,6 +56,7 @@ var drift: DriftSystem
 var fog: FogSystem
 var wind: WindSystem
 var steering: IslandSteering
+var patrols: AirPatrols
 var _phase_label: Label
 var _banner: Label
 var resources: PlayerResources
@@ -153,6 +154,15 @@ func _ready() -> void:
 	combat.spawn_headquarters()
 	raids.combat = combat
 
+	# Your patrol airships (Ships tab).
+	patrols = AirPatrols.new()
+	patrols.name = "AirPatrols"
+	patrols.region = region
+	patrols.combat = combat
+	patrols.resources = resources
+	patrols.camera = camera
+	add_child(patrols)
+
 	defenses = DefenseSystem.new()
 	defenses.name = "DefenseSystem"
 	defenses.region = region
@@ -228,6 +238,10 @@ func _ready() -> void:
 	building.mode_changed.connect(_on_build_mode_changed)
 	walkways.notice.connect(show_notice)
 	steering.notice.connect(show_notice)
+	patrols.notice.connect(show_notice)
+	patrols.mode_changed.connect(func(on): build_menu.set_hint("Patrol Route: click an Airship Hangar, then Relay Stations and Refuel Points in order. Right click: finish. Esc: cancel." if on else ""))
+	patrols.ship_launched.connect(func(s): show_notice("Your %s took off from the hangar" % s.display_name))
+	region.buildings_changed.connect(patrols.mark_routes_dirty)
 	steering.mode_changed.connect(func(on): build_menu.set_hint("Steer Island: click your turbine island, then open sky in the direction to go. Esc or right click: cancel." if on else ""))
 	steering.steering_started.connect(func(_p, _n): _refresh_resources())
 	steering.arrived.connect(func(_p): _refresh_resources())
@@ -446,6 +460,7 @@ func _build_hud() -> void:
 	build_menu.building = building
 	build_menu.walkways = walkways
 	build_menu.steering = steering
+	build_menu.patrols = patrols
 	build_menu.recruiter = recruiter
 	build_menu.resources = resources
 	layer.add_child(build_menu)

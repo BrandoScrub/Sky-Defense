@@ -63,6 +63,8 @@ var wind_multiplier := 1.0
 @export var flying := false
 ## Can this unit shoot aircraft?
 @export var hits_air := false
+## Air-to-air ships: shoots only aircraft and airships.
+@export var air_only := false
 ## False for bombers, which only attack buildings and headquarters.
 @export var targets_units := true
 ## Armored units take extra damage from anti-armor weapons (vs_armor).

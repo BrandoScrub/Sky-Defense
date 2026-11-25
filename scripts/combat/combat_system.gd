@@ -79,7 +79,7 @@ func step(delta: float) -> void:
 			if unit.heal_power > 0.0:
 				_tend(unit, faction, delta)
 				continue
-			var target = nearest_enemy(unit.global_position, faction, unit.get_attack_range(), unit.hits_air, unit.targets_units)
+			var target = nearest_enemy(unit.global_position, faction, unit.get_attack_range(), unit.hits_air, unit.targets_units, unit.air_only)
 			if target != null:
 				if not unit.is_moving() or unit.attack_move:
 					unit.stop()
