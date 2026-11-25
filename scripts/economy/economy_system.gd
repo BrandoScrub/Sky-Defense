@@ -9,7 +9,7 @@ extends Node
 
 signal grid_changed(efficiency: float)
 
-@export var scrap_per_heap_per_second := 0.5
+@export var scrap_per_heap_per_second := 0.75
 @export var crystals_per_harvester_per_second := 0.1
 
 @export var region: SkyRegion

@@ -107,9 +107,11 @@ func try_place(type_id: String, hex, rotation_steps := 0) -> String:
 
 ## Removes a building and refunds part of its cost.
 func demolish(hex: Vector2i) -> int:
-	var building := region.remove_building(hex)
-	if building == null:
+	var existing: Building = region.buildings.get(hex)
+	if existing == null or existing.faction != "player":
+		# Ironbell's buildings have to be destroyed in a fight.
 		return 0
+	var building := region.remove_building(hex)
 	var refund := BuildingCatalog.refund_for(building.type_id)
 	resources.add_scrap(refund)
 	notice.emit("Demolished %s (+%d scrap)" % [building.get_data().name, refund])

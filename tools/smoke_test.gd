@@ -24,8 +24,11 @@ func _initialize() -> void:
 	_check_routing(main.get_node("Region"))
 	await _check_selection_and_orders(main)
 	_check_building(main)
+	_check_ferry(main)
 	await _check_claiming_walkways_and_raids(main)
 	_check_weight_power_income(main)
+	_check_storms(main)
+	await _check_hero_respawn(main)
 	await _check_combat_and_waves(main)
 	if _failures == 0:
 		print("Smoke test passed")
@@ -169,7 +172,7 @@ func _check_building(main: Node) -> void:
 	var res: PlayerResources = main.resources
 	var hub: Vector2i = region.platforms["Hub"].center
 	var start_scrap := res.scrap
-	_expect(start_scrap == 200, "player should start with 200 scrap")
+	_expect(start_scrap == 250, "player should start with 250 scrap")
 
 	var deck := hub + Vector2i(2, 0)
 	_expect(region.get_tile(deck).type == "deck", "test tile should be plain deck")
@@ -304,6 +307,9 @@ func _check_weight_power_income(main: Node) -> void:
 	var res: PlayerResources = main.resources
 	loads.set_process(false)
 	economy.set_process(false)
+	# Storm power is checked on its own in _check_storms.
+	main.storms.set_process(false)
+	region.storm_bonus = 0
 	for e in get_root().get_tree().get_nodes_in_group(Unit.ENEMY_GROUP):
 		e.free()
 
@@ -361,12 +367,139 @@ func _check_weight_power_income(main: Node) -> void:
 	var scrap_before := res.scrap
 	var crystals_before := res.crystals
 	economy.step(10.0)
-	_expect(res.scrap == scrap_before + 10, "2 heaps should give 10 scrap in 10 s, got %d" % (res.scrap - scrap_before))
+	_expect(res.scrap == scrap_before + 15, "2 heaps should give 15 scrap in 10 s, got %d" % (res.scrap - scrap_before))
 	_expect(res.crystals == crystals_before + 1, "1 harvester should form 1 crystal in 10 s")
 	region.set_platform_owner("Foundry", "")
 	scrap_before = res.scrap
 	economy.step(10.0)
 	_expect(res.scrap == scrap_before, "unowned scrap heaps give nothing")
+
+
+func _check_ferry(main: Node) -> void:
+	var region: SkyRegion = main.get_node("Region")
+	var ferry: FerrySystem = main.ferry
+	var sel: SelectionController = main.selection
+	ferry.set_process(false)
+	_expect(ferry.ferries.size() == 1, "expected one ferry route")
+	var hero: Unit = sel.find_hero()
+	hero.position = region.get_platform_position("Hub") + Vector3(0, 0, 3)
+	hero.stop()
+	sel.select_units([hero])
+	var spire := region.get_platform_position("Crystal Spire") + Vector3(1, 0, 0)
+	_expect(region.find_route(hero.position, spire).is_empty(), "Crystal Spire can't be walked to")
+	_expect(sel.order_move(spire), "an order to the Crystal Spire should go by ferry")
+	_expect(ferry.is_waiting(hero), "the hero should head for the ferry dock")
+	var rode := false
+	for i in 1200:
+		hero._process(0.05)
+		ferry.step(0.05)
+		rode = rode or hero.riding
+		if not hero.riding and not hero.is_moving() and region.platform_at(hero.position) == "Crystal Spire":
+			break
+	_expect(rode, "the hero should have boarded the ferry")
+	_expect(region.platform_at(hero.position) == "Crystal Spire", "the ferry should land the hero on the Crystal Spire, got '%s'" % region.platform_at(hero.position))
+	_expect(not ferry.is_waiting(hero) and not hero.riding, "the trip should be finished")
+	# And back: an order to the Hub also goes by ferry.
+	_expect(sel.order_move(region.get_platform_position("Hub") + Vector3(0, 0, 3)), "ferry back to the Hub")
+	for i in 1200:
+		hero._process(0.05)
+		ferry.step(0.05)
+		if not hero.riding and not hero.is_moving() and region.platform_at(hero.position) == "Hub":
+			break
+	_expect(region.platform_at(hero.position) == "Hub", "the ferry should bring the hero home")
+	sel.select_units([])
+
+
+func _check_storms(main: Node) -> void:
+	var region: SkyRegion = main.get_node("Region")
+	var storms: StormSystem = main.storms
+	var build: BuildController = main.building
+	storms.set_process(false)
+	main.ferry.set_process(false)
+	var anchors := {}
+	for hex in region.tiles:
+		var t: Dictionary = region.tiles[hex]
+		if t.type == "harvester_anchor":
+			anchors[hex] = t
+			if region.buildings.has(hex):
+				region.remove_building(hex).free()
+	_expect(anchors.size() == 4, "expected 4 harvester anchors, got %d" % anchors.size())
+	var hub_anchor := Vector2i.ZERO
+	for hex in anchors:
+		_expect(region.clouds.has(anchors[hex].get("target", "")), "anchor %s should face a cloud" % [hex])
+		if anchors[hex].platform == "Hub":
+			hub_anchor = hex
+	storms.refresh()
+	_expect(storms.control["North Storm"] == "" and region.storm_bonus == 0, "storms start uncontrolled")
+
+	main.resources.add_scrap(200)
+	_expect(build.try_place("harvester", hub_anchor) == "", "place a harvester on the Hub anchor")
+	storms.refresh()
+	_expect(storms.control["North Storm"] == "player", "one harvester should control the North Storm")
+	var supply_with := region.power_supply()
+	_expect(region.storm_bonus == storms.power_per_storm, "a controlled storm adds power")
+
+	# Ironbell holds Midway and builds on every free anchor it owns.
+	var midway_owner := region.platform_owner("Midway")
+	region.set_platform_owner("Midway", "rival")
+	var built := 0
+	while storms.rival_build() != "":
+		built += 1
+	_expect(built == 3, "Ironbell should build on 3 anchors (2 Midway, 1 HQ), built %d" % built)
+	storms.refresh()
+	_expect(storms.control["North Storm"] == "", "1 v 1 harvesters leaves the North Storm uncontrolled")
+	_expect(storms.control["East Storm"] == "rival", "Ironbell should control the East Storm")
+	_expect(region.power_supply() == supply_with - storms.power_per_storm, "losing the storm loses its power")
+	_expect(is_equal_approx(main.waves.hp_bonus, storms.wave_hp_per_storm), "an Ironbell storm toughens waves")
+	var rival_harvester: Building = null
+	for b in region.buildings.values():
+		if b.faction == "rival":
+			rival_harvester = b
+	_expect(build.demolish(rival_harvester.hex) == 0, "you can't demolish Ironbell's buildings")
+
+	# Lightning from the East Storm hits a unit beneath it.
+	var victim: Unit = main.selection.all_units()[1]
+	victim.position = region.hex_center(region.clouds["East Storm"].center + Vector2i(0, 2))
+	victim.stop()
+	var hp_before := victim.hp
+	_expect(storms.strike("East Storm") == victim and victim.hp < hp_before, "the East Storm should strike the nearby unit")
+	victim.hp = victim.max_hp
+
+	for hex in anchors:
+		if region.buildings.has(hex):
+			region.remove_building(hex).free()
+	region.set_platform_owner("Midway", midway_owner)
+	storms.refresh()
+	_expect(region.storm_bonus == 0 and main.waves.hp_bonus == 0.0, "storm effects clear when harvesters go")
+
+
+func _check_hero_respawn(main: Node) -> void:
+	var hero: Unit = main.selection.find_hero()
+	hero.take_damage(100000.0)
+	await process_frame
+	_expect(main.selection.find_hero() == null, "a fallen Commander should leave the field")
+	main._process(main.HERO_RESPAWN_SECONDS - 1.0)
+	_expect(main.selection.find_hero() == null, "the Commander shouldn't be back early")
+	main._process(1.5)
+	var back: Unit = main.selection.find_hero()
+	_expect(back != null and back.is_alive() and main.region.platform_at(back.position) == "Hub", "the Commander should respawn on the Hub")
+
+	# Recruiting a Riveteer costs scrap and takes the training time.
+	var rec: Recruiter = main.recruiter
+	rec.set_process(false)
+	var before: int = main.selection.all_units().size()
+	main.resources.add_scrap(100)
+	var scrap: int = main.resources.scrap
+	_expect(rec.queue_one() == "", "queue a Riveteer")
+	_expect(main.resources.scrap == scrap - rec.cost, "recruiting costs scrap up front")
+	rec.step(rec.train_seconds - 0.5)
+	await process_frame
+	_expect(main.selection.all_units().size() == before, "no Riveteer before training ends")
+	rec.step(1.0)
+	await process_frame
+	_expect(main.selection.all_units().size() == before + 1, "a trained Riveteer joins the squad")
+	main.resources.scrap = 0
+	_expect(rec.queue_one() != "", "recruiting needs scrap")
 
 
 func _check_combat_and_waves(main: Node) -> void:

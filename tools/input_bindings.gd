@@ -49,6 +49,7 @@ static func bindings() -> Dictionary:
 		"building_cancel": [[KEY, KEY_ESCAPE, []]],
 		"demolish": [[KEY, KEY_DELETE, []]],
 		"build_walkway": [[KEY, KEY_T, []]],
+		"recruit_unit": [[KEY, KEY_Y, []]],
 
 		# Game flow
 		"start_wave_early": [[KEY, KEY_G, []]],

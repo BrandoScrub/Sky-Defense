@@ -10,7 +10,7 @@
 class_name CombatSystem
 extends Node
 
-signal building_destroyed(building_name: String)
+signal building_destroyed(building_name: String, faction: String)
 signal headquarters_destroyed(faction: String)
 signal unit_killed(unit: Unit)
 
@@ -60,7 +60,7 @@ func step(delta: float) -> void:
 
 	for faction in ["player", "rival"]:
 		for unit in _units(faction):
-			if not unit.is_alive():
+			if not unit.is_alive() or unit.riding:
 				continue
 			unit.cooldown_left -= delta
 			var target = nearest_enemy(unit.global_position, faction, unit.attack_range)
@@ -72,6 +72,8 @@ func step(delta: float) -> void:
 					_hit(unit, target, unit.damage, Color(1.0, 0.85, 0.4))
 			elif chase and (not unit.is_moving() or unit.attack_move):
 				var prey = nearest_enemy(unit.global_position, faction, unit.aggro_range)
+				if prey == null and faction == "player" and not unit.is_moving():
+					prey = _intruder_on_platform(unit)
 				if prey != null:
 					var route := region.find_route(unit.position, region.snap_to_walkable(prey.global_position))
 					if not route.is_empty():
@@ -115,7 +117,7 @@ func nearest_enemy(from: Vector3, faction: String, max_range: float):
 	var best_d := max_range
 	var other := "rival" if faction == "player" else "player"
 	for unit in _units(other):
-		if unit.is_alive():
+		if unit.is_alive() and not unit.riding:
 			var d := _flat_distance(from, unit.global_position)
 			if d <= best_d:
 				best_d = d
@@ -136,13 +138,30 @@ func nearest_enemy(from: Vector3, faction: String, max_range: float):
 	return best
 
 
+## An enemy unit standing on the same platform as an idle player unit, so a
+## squad parked anywhere on the Hub defends all of it.
+func _intruder_on_platform(unit: Unit):
+	var here := region.platform_at(unit.position)
+	if here == "" or region.platform_owner(here) != "player":
+		return null
+	var best = null
+	var best_d := INF
+	for foe in _units("rival"):
+		if foe.is_alive() and not foe.riding and region.platform_at(foe.position) == here:
+			var d := _flat_distance(unit.global_position, foe.global_position)
+			if d < best_d:
+				best_d = d
+				best = foe
+	return best
+
+
 func _hit(attacker: Node3D, target: Node3D, amount: float, color: Color) -> void:
 	_tracer(attacker.global_position + Vector3.UP * 1.2, target.global_position + Vector3.UP * 1.0, color)
 	if target is Building:
 		var b := target as Building
 		if b.take_damage(amount):
 			region.remove_building(b.hex)
-			building_destroyed.emit(b.get_data().name)
+			building_destroyed.emit(b.get_data().name, b.faction)
 			b.queue_free()
 	elif target is Unit:
 		var u := target as Unit

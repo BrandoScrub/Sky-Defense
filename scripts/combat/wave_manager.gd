@@ -59,6 +59,10 @@ func step(delta: float) -> void:
 				phase_changed.emit(phase, wave)
 
 
+## Extra walker toughness, e.g. from storms Ironbell controls (StormSystem).
+var hp_bonus := 0.0
+
+
 func party_size_for(n: int) -> int:
 	return mini(base_party + n, max_party)
 
@@ -69,7 +73,7 @@ func start_wave() -> void:
 	phase = WAVE
 	_wave_units = raids.send_party(party_size_for(wave))
 	for u in _wave_units:
-		u.max_hp *= 1.0 + hp_growth_per_wave * (wave - 1)
+		u.max_hp *= (1.0 + hp_growth_per_wave * (wave - 1)) * (1.0 + hp_bonus)
 		u.hp = u.max_hp
 	phase_changed.emit(phase, wave)
 

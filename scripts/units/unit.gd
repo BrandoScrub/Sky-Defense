@@ -44,6 +44,9 @@ var selected := false:
 			_ring.visible = value
 ## True when the current order was an attack-move (used once enemies exist).
 var attack_move := false
+## True while aboard an airship ferry: FerrySystem moves the unit and it
+## neither walks nor fights.
+var riding := false
 
 var _route := PackedVector3Array()
 var _ring: MeshInstance3D
@@ -88,7 +91,7 @@ func stop() -> void:
 
 
 func _process(delta: float) -> void:
-	if _route.is_empty():
+	if _route.is_empty() or riding:
 		return
 	var target := _route[0]
 	var to_target := target - position

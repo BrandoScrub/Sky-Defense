@@ -9,10 +9,10 @@ const GROUP := "headquarters"
 
 var faction := "player"
 var platform := ""
-var max_hp := 1000.0
-var hp := 1000.0
+var max_hp := 1500.0
+var hp := 1500.0
 var cooldown_left := 0.0
-var attack := {"damage": 10.0, "range": 9.0, "cooldown": 1.2}
+var attack := {"damage": 18.0, "range": 10.0, "cooldown": 1.0}
 
 var _health_bar: HealthBar
 

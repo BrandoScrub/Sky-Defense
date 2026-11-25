@@ -28,7 +28,7 @@ const BUILDINGS := {
 		"tiles": ["deck"], "shape": "turret",
 		"color": Color(0.6, 0.62, 0.66),
 		"hp": 150.0,
-		"attack": {"damage": 12.0, "range": 10.0, "cooldown": 0.8},
+		"attack": {"damage": 15.0, "range": 10.0, "cooldown": 0.8},
 	},
 	"flak_battery": {
 		"name": "Flak Battery", "cost": 50, "power": -3, "weight": 3,
