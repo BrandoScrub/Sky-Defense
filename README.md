@@ -49,6 +49,7 @@ The map is generated each game from a seed (`scripts/world/level_layout.gd`). Yo
 | Build a walkway | Economy tab, W, then click a tile on your platform, then a tile on another platform (15 scrap per tile) |
 | Train a Riveteer | Army tab, Q (30 scrap, 5 seconds) |
 | Start the next wave early | Space |
+| What is this? | Left click anything (unit, building, platform, tile, storm cloud, ferry route, air lane) for a card in the bottom right that says what it is and does |
 | Show or hide the legend | L, or click its title |
 | Pause | P |
 | Game speed | F1 normal, F2 double, F3 triple |
@@ -61,7 +62,7 @@ The full default key map (selection, control groups, build shortcuts, game speed
 | --- | --- |
 | `scenes/` | Godot scenes; `main.tscn` is the entry point |
 | `scripts/camera/` | The RTS camera |
-| `scripts/ui/` | HUD pieces: the bottom-left build menu |
+| `scripts/ui/` | HUD pieces: the bottom-left build menu and the bottom-right info card |
 | `scripts/world/` | Hex grid math, level layout data, the sky region builder with routing, claiming, platform load, the airship ferry and storm control |
 | `scripts/units/` | Player units, the hero and recruiting |
 | `scripts/selection/` | Selection, orders and control groups |
