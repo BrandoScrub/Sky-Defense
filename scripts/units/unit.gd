@@ -13,6 +13,10 @@ const ENEMY_GROUP := "enemy_units"
 ## "player" or "rival". Rival units aren't selectable.
 @export var faction := "player"
 @export var move_speed := 6.0
+## Weight this unit adds to the platform it stands on.
+@export var weight := 1
+## Set by LoadSystem: below 1 on an overloaded platform.
+var speed_multiplier := 1.0
 @export var body_color := Color(0.42, 0.5, 0.6)
 ## Radius used for click picking and formation spacing.
 @export var footprint := 0.6
@@ -54,7 +58,7 @@ func _process(delta: float) -> void:
 	var target := _route[0]
 	var to_target := target - position
 	to_target.y = 0.0
-	var step := move_speed * delta
+	var step := move_speed * speed_multiplier * delta
 	if to_target.length() <= step:
 		position = Vector3(target.x, position.y, target.z)
 		_route.remove_at(0)

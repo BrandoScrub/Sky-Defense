@@ -53,6 +53,7 @@ func send_party(size := party_size) -> Array[Unit]:
 		u.display_name = "Ironbell Walker"
 		u.faction = "rival"
 		u.move_speed = 4.0
+		u.weight = 3
 		u.footprint = 0.75
 		u.body_color = Color(0.55, 0.18, 0.15)
 		u.position = region.snap_to_walkable(spawn + offsets[i])

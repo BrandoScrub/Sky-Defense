@@ -11,7 +11,11 @@ var platform := ""
 ## Power this building gives (+) or takes (-) where it stands.
 var power := 0
 
+## 0..1, how well this building is powered (consumers dim in a brownout).
+var efficiency := 1.0
+
 var _materials: Array[StandardMaterial3D] = []
+var _base_colors: Array[Color] = []
 
 
 func setup(id: String) -> Building:
@@ -32,6 +36,16 @@ func set_ghost(valid: bool) -> void:
 		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		mat.albedo_color = tint
 		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+
+
+## Dims power-hungry buildings when the grid can't keep up.
+func set_efficiency(value: float) -> void:
+	if power >= 0 or is_equal_approx(value, efficiency):
+		return
+	efficiency = value
+	var dark := Color(0.15, 0.15, 0.17)
+	for i in _materials.size():
+		_materials[i].albedo_color = dark.lerp(_base_colors[i], 0.35 + 0.65 * value)
 
 
 func _build_shape() -> void:
@@ -86,5 +100,6 @@ func _add(mesh: Mesh, at: Vector3, color: Color) -> MeshInstance3D:
 	mat.metallic = 0.4
 	part.material_override = mat
 	_materials.append(mat)
+	_base_colors.append(color)
 	add_child(part)
 	return part
