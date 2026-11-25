@@ -24,6 +24,7 @@ func _initialize() -> void:
 	_check_routing(main.get_node("Region"))
 	await _check_selection_and_orders(main)
 	_check_building(main)
+	_check_build_menu(main)
 	_check_ferry(main)
 	await _check_claiming_walkways_and_raids(main)
 	_check_weight_power_income(main)
@@ -373,6 +374,30 @@ func _check_weight_power_income(main: Node) -> void:
 	scrap_before = res.scrap
 	economy.step(10.0)
 	_expect(res.scrap == scrap_before, "unowned scrap heaps give nothing")
+
+
+func _check_build_menu(main: Node) -> void:
+	var menu: BuildMenu = main.build_menu
+	_expect(menu != null and menu.get_parent() != null, "the build panel should be on screen")
+	var names := []
+	for c in BuildMenu.CATEGORIES:
+		names.append(c.name)
+	_expect(names == ["Army", "Defense", "Economy", "Storm"], "build tabs should be Army, Defense, Economy, Storm")
+	menu.set_tab(1)
+	_expect(menu.activate(0) and main.building.placing == "rivet_turret", "Defense slot 1 places a Rivet Turret")
+	_expect(not menu.activate(5), "empty slots do nothing")
+	menu.set_tab(2)
+	_expect(menu.activate(1) and main.walkways.active and main.building.placing == "", "Economy slot 2 starts a walkway")
+	main.walkways.cancel()
+	menu.set_tab(3)
+	_expect(menu.activate(0) and main.building.placing == "harvester", "Storm slot 1 places a Cloud Harvester")
+	main.building.cancel_placing()
+	var ev := InputEventAction.new()
+	ev.action = "build_tab_next"
+	ev.pressed = true
+	menu._unhandled_input(ev)
+	_expect(menu.tab == 0, "Tab cycles back to the first category")
+	menu.set_tab(1)
 
 
 func _check_ferry(main: Node) -> void:

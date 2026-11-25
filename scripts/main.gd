@@ -10,13 +10,14 @@ const HOW_TO_PLAY := """How to play
 Goal: destroy Ironbell HQ (far north) and the Vesper Aerodrome (far east)
 before they destroy your Hub. Ironbell walks; Vesper flies bombers.
 
-1. Build during the build phase: C Rivet Turrets guard the walkway to Midway.
-   Z Dynamo Generators power them; watch the power number at the top.
+1. Build with the panel in the bottom-left corner (Tab cycles categories).
+   Defense: Rivet Turrets guard the walkway to Midway. Economy: Dynamo
+   Generators power them; watch the power number at the top.
 2. Each wave of Ironbell walkers comes down the walkway. Kills pay scrap.
    From wave 2 Vesper bombers fly in along the red air lanes and bomb your
-   buildings: V Flak Batteries shred them, Rivet Turrets only scratch them.
+   buildings: Flak Batteries shred them, Rivet Turrets only scratch them.
 3. Send units to a neutral platform to claim it (the Foundry gives scrap).
-4. Put X Cloud Harvesters on storm anchors. Hold more harvesters on a storm
+4. Put Cloud Harvesters (Storm tab) on storm anchors. Hold more harvesters on a storm
    than Ironbell to get its power; if Ironbell holds it, lightning strikes.
 5. Right click the Crystal Spire to send units there by airship ferry.
 6. Keep platforms under their weight limit or they sag and shed buildings.
@@ -39,6 +40,7 @@ var ferry: FerrySystem
 var storms: StormSystem
 var recruiter: Recruiter
 var fleet: VesperFleet
+var build_menu: BuildMenu
 var _phase_label: Label
 var _banner: Label
 var resources: PlayerResources
@@ -348,8 +350,7 @@ func _build_hud() -> void:
 
 	_help = PanelContainer.new()
 	_help.name = "HowToPlay"
-	_help.set_anchors_preset(Control.PRESET_CENTER_LEFT)
-	_help.position = Vector2(16, -170)
+	_help.position = Vector2(16, 104)
 	var help_box := VBoxContainer.new()
 	_help.add_child(help_box)
 	var help_text := Label.new()
@@ -361,6 +362,14 @@ func _build_hud() -> void:
 	help_box.add_child(got_it)
 	layer.add_child(_help)
 	waves.phase_changed.connect(_on_phase_changed)
+
+	build_menu = BuildMenu.new()
+	build_menu.building = building
+	build_menu.walkways = walkways
+	build_menu.recruiter = recruiter
+	build_menu.resources = resources
+	layer.add_child(build_menu)
+	build_menu.notice.connect(show_notice)
 
 	_banner = _hud_label("Banner", 48)
 	_banner.set_anchors_preset(Control.PRESET_CENTER)
@@ -406,14 +415,14 @@ func _on_build_mode_changed(type_id: String) -> void:
 		var data := BuildingCatalog.get_data(type_id)
 		_build_bar.text = "Placing %s (%d scrap, weight %d)    Left click: place    Shift: keep placing    R: rotate    Esc / right click: cancel" % [data.name, data.cost, data.weight]
 		return
-	var parts := PackedStringArray()
-	for i in BuildingCatalog.HOTKEY_ORDER.size():
-		var data := BuildingCatalog.get_data(BuildingCatalog.HOTKEY_ORDER[i])
-		parts.append("%s %s (%d)" % [BuildingCatalog.HOTKEY_LABELS[i], data.name, data.cost])
-	_build_bar.text = "    ".join(parts) + "    T Walkway    Y Recruit Riveteer (%d)    Del: demolish    P pause, F1-F3 speed" % recruiter.cost
+	_build_bar.text = "Tab: build category    T: walkway    Y: recruit    Del: demolish    G: start wave    P: pause    F1-F3: speed"
+	if build_menu:
+		build_menu.refresh()
 
 
 func _on_walkway_mode_changed(active: bool) -> void:
+	if build_menu:
+		build_menu.refresh()
 	if active:
 		_build_bar.text = "Building a walkway (%d scrap per tile): click a tile on your platform, then a tile on another platform    Esc / right click: cancel" % SkyRegion.WALKWAY_COST_PER_TILE
 	else:

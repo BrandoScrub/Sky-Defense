@@ -49,9 +49,6 @@ const BUILDINGS := {
 	},
 }
 
-## Build-menu order, matching context hotkeys 1 to 5 (Z, X, C, V, B).
-const HOTKEY_ORDER := ["dynamo", "harvester", "rivet_turret", "flak_battery", "arc_coil"]
-const HOTKEY_LABELS := ["Z", "X", "C", "V", "B"]
 
 
 static func get_data(type_id: String) -> Dictionary:
