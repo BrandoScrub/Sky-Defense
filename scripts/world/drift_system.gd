@@ -401,12 +401,14 @@ func _place_balloons() -> void:
 	var hub: Vector3 = region.get_platform_position("Hub")
 	var candidates := []
 	var names := []
+	var linked := region.planned_reachable("Hub")
 	for platform_name in region.platforms:
 		var p: Dictionary = region.platforms[platform_name]
 		if p.kind == "rival" or p.get("balloon", false):
 			continue
-		# Only platforms you can walk to from the Hub (not the ferry-only Spire).
-		if p.name == "Hub" or not region.find_route(hub, region.snap_to_walkable(region.hex_center(p.center)), true).is_empty():
+		# Only platforms the planned walkways link to the Hub (not the
+		# ferry-only Spire).
+		if linked.has(platform_name):
 			names.append(platform_name)
 	names.sort()
 	for i in names.size():
@@ -454,7 +456,7 @@ func _candidate(a_name: String, b_name: String, hub: Vector3, turn_a := 0.0, tur
 		for h in HexGrid.disk(hex, RADIUS):
 			footprint[h] = true
 		for h in HexGrid.disk(hex, RADIUS + 1):
-			if region.tiles.has(h):
+			if region.tiles.has(h) or region.planned_hexes.has(h):
 				return {}
 	# Each mooring walkway must cross open sky and touch only its two ends.
 	for end_info in [[start, a], [end, b]]:
@@ -468,9 +470,11 @@ func _candidate(a_name: String, b_name: String, hub: Vector3, turn_a := 0.0, tur
 			ends[h] = true
 			footprint[h] = true
 		for h in corridor:
-			if region.tiles.has(h):
+			if region.tiles.has(h) or region.planned_hexes.has(h):
 				return {}
 			for n in HexGrid.neighbors(h):
+				if region.planned_hexes.has(n):
+					return {}
 				if region.tiles.has(n) and region.get_tile(n).platform != end_info[1].name:
 					return {}
 	var mid := (region.hex_center(start) + region.hex_center(end)) / 2.0

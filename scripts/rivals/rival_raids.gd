@@ -14,6 +14,10 @@ signal raid_sent(size: int)
 @export var capture: CaptureSystem
 ## Optional: lets raiders hold position while enemies are close.
 @export var combat: CombatSystem
+## Optional: while Ironbell's bridge doesn't reach the target yet, raiders
+## wait at the end of it.
+@export var bridges: RivalBridges
+@export var corp := "Ironbell"
 @export var rival_platform := "Ironbell HQ"
 @export var target_platform := "Hub"
 @export var party_size := 3
@@ -93,8 +97,22 @@ func _give_orders(unit: Unit) -> void:
 	if unit.position.distance_to(target) < 0.5:
 		return
 	var route := _route(unit.position, target)
+	if route.is_empty():
+		route = _route_to_frontier(unit)
 	if not route.is_empty():
 		unit.set_route(route, true)
+
+
+## The way to the end of the bridge, or nothing if already waiting there.
+func _route_to_frontier(unit: Unit) -> PackedVector3Array:
+	if bridges == null:
+		return PackedVector3Array()
+	var end := bridges.frontier(corp)
+	if end == "" or region.platform_at(unit.position) == end:
+		return PackedVector3Array()
+	var index := int(unit.get_meta("raid_index", 0)) % 6
+	var offsets := SelectionController.formation_offsets_for(6, formation_spacing)
+	return _route(unit.position, region.snap_to_walkable(region.get_platform_position(end) + offsets[index]))
 
 
 ## The open route if there is one, otherwise straight through the player's
