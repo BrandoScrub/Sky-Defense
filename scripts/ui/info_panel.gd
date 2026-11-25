@@ -15,7 +15,7 @@ const PICK_RADIUS := 28.0
 ## here use their blurb from UnitCatalog.
 const UNIT_INFO := {
 	"Commander": "Leads your squad. Tougher and faster than a Riveteer, and can shoot aircraft. Comes back to the Hub 15 seconds after falling.",
-	"Vesper Bomber": "Vesper's bomber airship. Flies the red air lanes and bombs your buildings and Hub. Only anti-air can hit it: flak towers, drones, the Commander and headquarters guns.",
+	"Vesper Bomber": "Vesper's bomber airship. Flies the red air lanes around islands, attacking from upwind, and bombs your buildings and Hub. Only anti-air can hit it: flak towers, drones, the Commander and headquarters guns.",
 	"Defense Drone": "A small clockwork flyer from a Drone Hangar. Chases anything that comes near its hangar, aircraft included, then flies home. Only anti-air can hit it. The hangar builds a new one when it's lost.",
 }
 
@@ -54,6 +54,7 @@ var storms: StormSystem
 var loads: LoadSystem
 var defenses: DefenseSystem
 var fog: FogSystem
+var wind: WindSystem
 
 ## The thing being described: a Node3D, or a Dictionary for map features.
 var shown = null
@@ -299,7 +300,9 @@ func describe(thing) -> Dictionary:
 			"air_lane":
 				info.title = "Rival air lane"
 				info.subtitle = "%s to %s" % [thing.a, thing.b]
-				info.body = "Vesper bombers fly this route toward your buildings. Put flak towers or a Drone Hangar under it."
+				info.body = "Vesper bombers fly this route toward your buildings, steering around islands and attacking from upwind. It moves when the wind turns (every 3 waves). Put flak towers or a Drone Hangar under it."
+				if wind:
+					info.stats = "Wind from the %s, turns in %d wave%s" % [wind.from_name(), wind.waves_until_shift(wind.waves.wave), "" if wind.waves_until_shift(wind.waves.wave) == 1 else "s"]
 	return info
 
 
@@ -368,21 +371,25 @@ func _cloud_at(screen: Vector2) -> String:
 ## The ferry route or air lane under a screen point, or {}.
 func _route_at(screen: Vector2) -> Dictionary:
 	var base := region.hex_center(Vector2i.ZERO).y
-	var checks := [
-		["ferry", region.layout.get("ferry_routes", []), SkyRegion.FERRY_HEIGHT, true],
-		["air_lane", region.layout.get("air_lanes", []), SkyRegion.AIR_LANE_HEIGHT, false],
-	]
-	for check in checks:
-		var point = _point_at(screen, base + check[2])
-		if point == null:
-			continue
+	var point = _point_at(screen, base + SkyRegion.FERRY_HEIGHT)
+	if point != null:
 		var flat := Vector2(point.x, point.z)
-		for pair in check[1]:
-			var a := _route_end(pair[0], check[3])
-			var b := _route_end(pair[1], check[3])
-			var closest := Geometry2D.get_closest_point_to_segment(flat, a, b)
-			if flat.distance_to(closest) < region.tile_size:
-				return {"kind": check[0], "a": pair[0], "b": pair[1]}
+		for pair in region.layout.get("ferry_routes", []):
+			var a := _route_end(pair[0], true)
+			var b := _route_end(pair[1], true)
+			if flat.distance_to(Geometry2D.get_closest_point_to_segment(flat, a, b)) < region.tile_size:
+				return {"kind": "ferry", "a": pair[0], "b": pair[1]}
+	# Air lanes bend around islands, so test each leg of the drawn route.
+	point = _point_at(screen, base + SkyRegion.AIR_LANE_HEIGHT)
+	if point != null:
+		var flat := Vector2(point.x, point.z)
+		for lane in region.air_lane_routes():
+			var pts: PackedVector3Array = lane[2]
+			for i in range(1, pts.size()):
+				var a := Vector2(pts[i - 1].x, pts[i - 1].z)
+				var b := Vector2(pts[i].x, pts[i].z)
+				if flat.distance_to(Geometry2D.get_closest_point_to_segment(flat, a, b)) < region.tile_size:
+					return {"kind": "air_lane", "a": lane[0], "b": lane[1]}
 	return {}
 
 

@@ -3,6 +3,10 @@
 ## an air lane (region.layout.air_lanes), then bombs the nearest of your
 ## buildings, or your Hub's headquarters if there are none.
 ##
+## Airships steer around islands rather than over them (AirNav), and make
+## their runs downwind: when the wind turns (WindSystem, every few waves) the
+## lanes are replanned and redrawn, and the attacks come from a new side.
+##
 ## Bombers ignore your units, and only anti-air weapons can hit them: flak
 ## towers, hangar drones, headquarters guns and the Commander.
 class_name VesperFleet
@@ -16,12 +20,33 @@ const ALTITUDE := 7.0
 @export var combat: CombatSystem
 @export var home := "Vesper Aerodrome"
 @export var formation_spacing := 2.4
+## Optional: the wind bends the routes when set.
+@export var wind: WindSystem:
+	set(value):
+		wind = value
+		if wind and not wind.wind_changed.is_connected(_on_wind_changed):
+			wind.wind_changed.connect(_on_wind_changed)
 
+var nav: AirNav
 var _count := 0
 var _next_lane := 0
+var _drawn_version := -1
+
+
+func _ready() -> void:
+	_ensure_nav()
+
+
+func _ensure_nav() -> AirNav:
+	if nav == null:
+		nav = AirNav.new(region)
+	return nav
 
 
 func _process(_delta: float) -> void:
+	# A balloon island moved: replan the drawn lanes around it.
+	if wind and nav and region.tiles_version != _drawn_version:
+		refresh_lanes()
 	step()
 
 
@@ -35,7 +60,10 @@ func step() -> void:
 			continue
 		var target := target_for(unit)
 		if target != null:
-			unit.set_route(PackedVector3Array([Vector3(target.global_position.x, 0, target.global_position.z)]), true)
+			var route := _ensure_nav().plan(unit.global_position, target.global_position)
+			if route.is_empty():
+				route = PackedVector3Array([Vector3(target.global_position.x, 0, target.global_position.z)])
+			unit.set_route(route, true)
 
 
 ## Lanes that start at the aerodrome, as [from, to] platform names.
@@ -54,6 +82,7 @@ func send_flight(size: int) -> Array[Unit]:
 	var start := region.get_platform_position(home)
 	var end := region.get_platform_position(lane[1])
 	var offsets := SelectionController.formation_offsets_for(size, formation_spacing)
+	var route := route_for(lane)
 	for i in size:
 		_count += 1
 		var u := Unit.new()
@@ -74,10 +103,33 @@ func send_flight(size: int) -> Array[Unit]:
 		u.position = start + offsets[i] + Vector3.UP * ALTITUDE
 		_units_root().add_child(u)
 		# Fly the lane first, bombing anything of yours right under it.
-		u.set_route(PackedVector3Array([end + offsets[i]]), true)
+		var mine := PackedVector3Array()
+		for p in route:
+			mine.append(p + offsets[i])
+		u.set_route(mine if not mine.is_empty() else PackedVector3Array([end + offsets[i]]), true)
 		out.append(u)
 	flight_sent.emit(size)
 	return out
+
+
+## The flight path for a lane: around islands, swinging upwind of the
+## target to make the run with the wind.
+func route_for(lane: Array) -> PackedVector3Array:
+	return _ensure_nav().plan_attack(region.get_platform_position(lane[0]), region.get_platform_position(lane[1]))
+
+
+## Replans and redraws every Vesper air lane for the current wind.
+func refresh_lanes() -> void:
+	_drawn_version = region.tiles_version
+	for lane in lanes():
+		region.set_air_route(lane[0], lane[1], route_for(lane), false)
+	region.air_routes_changed.emit()
+
+
+func _on_wind_changed(_from_index: int, _first: bool) -> void:
+	var blow := wind.blowing()
+	_ensure_nav().wind = Vector2(blow.x, blow.z)
+	refresh_lanes()
 
 
 ## The nearest of the player's buildings, or the Hub's headquarters.
