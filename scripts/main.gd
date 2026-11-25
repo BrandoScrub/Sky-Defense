@@ -21,6 +21,8 @@ Ironbell bridges its way to you and walks; Vesper flies bombers.
    Dynamo Generators (Economy, Q) power them; watch the power number at the top.
 4. From wave 2 Vesper bombers fly the red air lanes and bomb your buildings:
    Flak Batteries (Defense, W) shred them, Rivet Turrets only scratch them.
+   From wave 3 Ironbell troop carriers drop squads onto your platforms (shoot
+   them down first), and from wave 4 Vesper gunships hunt your units.
    Airships steer around islands and attack from upwind. The wind (top of
    the screen) turns every 3 waves: the air lanes move and balloon islands drift.
 5. Put Cloud Harvesters (Storm, Q) on storm anchors. Hold more harvesters on a storm
@@ -222,6 +224,8 @@ func _ready() -> void:
 	waves.game_over.connect(_on_game_over)
 	waves.rival_defeated.connect(func(p): show_notice("%s has fallen! Its attacks stop" % p))
 	fleet.flight_sent.connect(func(n): show_notice("Vesper bombers inbound: %d airship%s on the air lane" % [n, "" if n == 1 else "s"]))
+	fleet.airships_launched.connect(_on_airships_launched)
+	fleet.troops_dropped.connect(func(corp, p, units): show_notice("%s dropped %d troops on %s!" % [corp, units.size(), p]))
 	ferry.departed.connect(_on_ferry_departed)
 	loads.building_lost.connect(func(b, p): show_notice("%s is overloaded: a %s broke off and fell!" % [p, b]))
 	economy.grid_changed.connect(func(_e): _refresh_resources())
@@ -243,6 +247,14 @@ func _on_storm_control_changed(cloud: String, controller: String) -> void:
 		_:
 			show_notice("Nobody controls the %s now" % cloud)
 	_refresh_resources()
+
+
+func _on_airships_launched(corp: String, kind: String, n: int) -> void:
+	match kind:
+		"carrier":
+			show_notice("%s troop carriers inbound: %d airship%s, %d troops each" % [corp, n, "" if n == 1 else "s", VesperFleet.AIRSHIPS.carrier.troops.size()])
+		"gunship":
+			show_notice("%s gunships inbound: %d escort%s hunting your units" % [corp, n, "" if n == 1 else "s"])
 
 
 func _on_ferry_departed(from_platform: String, to_platform: String, passengers: int) -> void:

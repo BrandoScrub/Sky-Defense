@@ -1,25 +1,60 @@
-## Vesper Aeronautics, the second rival corporation. It fights from the air:
-## each flight of bomber airships takes off from the Vesper Aerodrome, flies
-## an air lane (region.layout.air_lanes), then bombs the nearest of your
-## buildings, or your Hub's headquarters if there are none.
+## Every rival airship (the class keeps its old name; Vesper was the first
+## corporation to fly). Kinds, in AIRSHIPS:
+##   bomber  - Vesper. Flies an air lane (region.layout.air_lanes) from the
+##             Vesper Aerodrome, then bombs the nearest of your buildings, or
+##             your Hub's headquarters. Ignores your units.
+##   gunship - Vesper escort. Hunts your units and drones, in the air and on
+##             the decks, then your buildings.
+##   carrier - Ironbell troop carrier. Flies to your platform nearest its HQ,
+##             hovers, drops a squad onto the deck, and flies home. Shoot it
+##             down on the way in and the troops go down with it.
 ##
-## Airships steer around islands rather than over them (AirNav), and make
-## their runs downwind: when the wind turns (WindSystem, every few waves) the
-## lanes are replanned and redrawn, and the attacks come from a new side.
-##
-## Bombers ignore your units, and only anti-air weapons can hit them: flak
-## towers, hangar drones, headquarters guns and the Commander.
+## Airships steer around islands rather than over them (AirNav) and follow
+## the wind: they make their runs downwind, fly faster with a tailwind and
+## slower into a headwind. When the wind turns (WindSystem, every 3 waves)
+## the lanes are replanned and redrawn, and attacks come from a new side.
+## Only anti-air weapons can hit airships: flak, hangar drones, headquarters
+## guns and the Commander.
 class_name VesperFleet
 extends Node
 
 signal flight_sent(size: int)
+## Any airships launched (bombers too): corp, AIRSHIPS kind, how many.
+signal airships_launched(corp: String, kind: String, count: int)
+## A carrier dropped its squad on one of your platforms.
+signal troops_dropped(corp: String, platform: String, units: Array)
 
 const ALTITUDE := 7.0
+## A full tailwind speeds an airship up by this share; a headwind slows it.
+const WIND_SPEED := 0.3
+## Seconds a carrier hovers before its troops are down.
+const UNLOAD_SECONDS := 1.5
+
+const AIRSHIPS := {
+	"bomber": {
+		"name": "Vesper Bomber", "corp": "Vesper", "hp": 110.0, "damage": 30.0, "range": 2.5,
+		"cooldown": 2.5, "speed": 5.0, "bounty": 25, "footprint": 0.9,
+		"color": Color(0.18, 0.22, 0.45), "targets_units": false, "hits_air": false,
+	},
+	"gunship": {
+		"name": "Vesper Gunship", "corp": "Vesper", "hp": 90.0, "damage": 9.0, "range": 5.0,
+		"cooldown": 0.8, "speed": 6.0, "bounty": 20, "footprint": 0.65,
+		"color": Color(0.32, 0.42, 0.7), "targets_units": true, "hits_air": true,
+	},
+	"carrier": {
+		"name": "Ironbell Troop Carrier", "corp": "Ironbell", "hp": 220.0, "damage": 0.0, "range": 0.0,
+		"cooldown": 99.0, "speed": 4.0, "bounty": 35, "footprint": 1.3,
+		"color": Color(0.45, 0.22, 0.16), "targets_units": false, "hits_air": false,
+		"troops": ["shieldbearer", "rifleman", "riveteer"],
+	},
+}
 
 @export var region: SkyRegion
 @export var combat: CombatSystem
 @export var home := "Vesper Aerodrome"
 @export var formation_spacing := 2.4
+## How far a gunship looks for your units to hunt.
+@export var gunship_hunt_range := 40.0
 ## Optional: the wind bends the routes when set.
 @export var wind: WindSystem:
 	set(value):
@@ -43,27 +78,134 @@ func _ensure_nav() -> AirNav:
 	return nav
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	# A balloon island moved: replan the drawn lanes around it.
 	if wind and nav and region.tiles_version != _drawn_version:
 		refresh_lanes()
-	step()
+	step(delta)
 
 
-## Gives idle bombers a new target. Public so tests can drive it.
-func step() -> void:
+## Display name of an airship kind, e.g. "Ironbell Troop Carrier".
+static func name_of(kind: String) -> String:
+	return AIRSHIPS[kind].name
+
+
+## The headquarters platform of a corporation, or "".
+func hq_of(corp: String) -> String:
+	var path: Array = region.layout.get("paths", {}).get(corp, [])
+	return path[path.size() - 1] if not path.is_empty() else ""
+
+
+## Gives idle airships new orders and sets their wind speed. Public so tests
+## can drive it.
+func step(delta := 0.0) -> void:
 	for node in get_tree().get_nodes_in_group(Unit.ENEMY_GROUP):
 		var unit := node as Unit
-		if not unit.flying or not unit.is_alive() or unit.is_moving():
+		if not unit.flying or not unit.is_alive():
 			continue
-		if combat and combat.nearest_enemy(unit.global_position, "rival", unit.attack_range, false, false) != null:
-			continue
-		var target := target_for(unit)
-		if target != null:
-			var route := _ensure_nav().plan(unit.global_position, target.global_position)
-			if route.is_empty():
-				route = PackedVector3Array([Vector3(target.global_position.x, 0, target.global_position.z)])
-			unit.set_route(route, true)
+		unit.wind_multiplier = wind_speed_for(unit)
+		match unit.get_meta("airship", "bomber"):
+			"carrier":
+				_step_carrier(unit, delta)
+			"gunship":
+				_step_gunship(unit)
+			_:
+				_step_bomber(unit)
+
+
+## Speed factor from the wind for where this airship is heading.
+func wind_speed_for(unit: Unit) -> float:
+	if wind == null or not unit.is_moving():
+		return 1.0
+	var to := unit.next_waypoint() - unit.position
+	to.y = 0.0
+	if to.length() < 0.01:
+		return 1.0
+	return 1.0 + WIND_SPEED * to.normalized().dot(wind.blowing())
+
+
+func _step_bomber(unit: Unit) -> void:
+	if unit.is_moving():
+		return
+	if combat and combat.nearest_enemy(unit.global_position, "rival", unit.attack_range, false, false) != null:
+		return
+	var target := target_for(unit)
+	if target != null:
+		_fly(unit, target.global_position)
+
+
+func _step_gunship(unit: Unit) -> void:
+	# While flying it attack-moves: combat stops it to shoot whatever's near.
+	if unit.is_moving():
+		return
+	if combat == null or combat.nearest_enemy(unit.global_position, "rival", unit.attack_range, true, true) != null:
+		return
+	var prey = combat.nearest_enemy(unit.global_position, "rival", gunship_hunt_range, true, true)
+	if prey == null:
+		prey = target_for(unit)
+	if prey != null:
+		_fly(unit, prey.global_position)
+
+
+func _step_carrier(unit: Unit, delta: float) -> void:
+	if unit.is_moving():
+		return
+	var target: String = unit.get_meta("carrier_target", "Hub")
+	match unit.get_meta("carrier_state", "inbound"):
+		"inbound":
+			if region.platform_at(unit.position) == target:
+				unit.set_meta("carrier_state", "unloading")
+				unit.set_meta("unload_left", UNLOAD_SECONDS)
+			else:
+				_fly(unit, region.get_platform_position(target), true)
+		"unloading":
+			var left: float = unit.get_meta("unload_left", 0.0) - delta
+			unit.set_meta("unload_left", left)
+			if left <= 0.0:
+				drop_troops(unit)
+		"outbound":
+			# Home again: it leaves the fight.
+			unit.remove_from_group(Unit.ENEMY_GROUP)
+			unit.queue_free()
+
+
+## Puts a carrier's squad on the deck below it and sends it home. Returns
+## the troops.
+func drop_troops(carrier: Unit) -> Array[Unit]:
+	var out: Array[Unit] = []
+	var spec: Dictionary = AIRSHIPS.carrier
+	var platform_name := region.platform_at(carrier.position)
+	var offsets := SelectionController.formation_offsets_for(spec.troops.size(), 1.6)
+	for i in spec.troops.size():
+		_count += 1
+		var u := UnitCatalog.make(spec.troops[i], "rival")
+		u.name = "Dropped%s%d" % [String(spec.troops[i]).capitalize(), _count]
+		u.set_meta("raid_index", _count)
+		u.position = region.snap_to_walkable(Vector3(carrier.position.x, 0, carrier.position.z) + offsets[i])
+		_units_root().add_child(u)
+		out.append(u)
+	carrier.set_meta("carrier_state", "outbound")
+	var back := hq_of(carrier.get_meta("corp", "Ironbell"))
+	if back != "":
+		_fly(carrier, region.get_platform_position(back))
+	troops_dropped.emit(carrier.get_meta("corp", "Ironbell"), platform_name, out)
+	return out
+
+
+## Your platform a carrier from `corp` lands troops on: the one nearest its
+## headquarters.
+func drop_target(corp: String) -> String:
+	var hq := hq_of(corp)
+	var from := region.get_platform_position(hq) if hq != "" else Vector3.ZERO
+	var best := "Hub"
+	var best_d := INF
+	for p in region.platforms:
+		if region.platform_owner(p) == "player":
+			var d := from.distance_to(region.get_platform_position(p))
+			if d < best_d:
+				best_d = d
+				best = p
+	return best
 
 
 ## Lanes that start at the aerodrome, as [from, to] platform names.
@@ -73,43 +215,84 @@ func lanes() -> Array:
 
 ## Launches `size` bombers along the next air lane. Returns them.
 func send_flight(size: int) -> Array[Unit]:
+	var out := launch("bomber", size)
+	if not out.is_empty():
+		flight_sent.emit(size)
+	return out
+
+
+## Launches `count` airships of a kind from their corporation's HQ. Bombers
+## and gunships fly the next air lane; carriers head for drop_target.
+func launch(kind: String, count: int) -> Array[Unit]:
 	var out: Array[Unit] = []
-	var all := lanes()
-	if all.is_empty() or size <= 0:
+	var spec: Dictionary = AIRSHIPS[kind]
+	var start_name := home if spec.corp == "Vesper" else hq_of(spec.corp)
+	if count <= 0 or start_name == "" or not region.platforms.has(start_name):
 		return out
-	var lane: Array = all[_next_lane % all.size()]
-	_next_lane += 1
-	var start := region.get_platform_position(home)
-	var end := region.get_platform_position(lane[1])
-	var offsets := SelectionController.formation_offsets_for(size, formation_spacing)
-	var route := route_for(lane)
-	for i in size:
+	var start := region.get_platform_position(start_name)
+	var route := PackedVector3Array()
+	var target_name := ""
+	if kind == "carrier":
+		target_name = drop_target(spec.corp)
+		route = _ensure_nav().plan_attack(start, region.get_platform_position(target_name))
+	else:
+		var all := lanes()
+		if all.is_empty():
+			return out
+		var lane: Array = all[_next_lane % all.size()]
+		if kind == "bomber":
+			_next_lane += 1
+		target_name = lane[1]
+		route = route_for(lane)
+	var end := region.get_platform_position(target_name)
+	var offsets := SelectionController.formation_offsets_for(count, formation_spacing)
+	for i in count:
 		_count += 1
-		var u := Unit.new()
-		u.name = "VesperBomber%d" % _count
-		u.display_name = "Vesper Bomber"
-		u.faction = "rival"
-		u.flying = true
-		u.targets_units = false
-		u.move_speed = 5.0
-		u.weight = 0
-		u.max_hp = 110.0
-		u.damage = 30.0
-		u.attack_range = 2.5
-		u.attack_cooldown = 2.5
-		u.bounty = 25
-		u.footprint = 0.9
-		u.body_color = Color(0.18, 0.22, 0.45)
+		var u := _make(kind)
+		u.name = "%s%d" % [String(spec.name).replace(" ", ""), _count]
+		u.set_meta("corp", spec.corp)
+		if kind == "carrier":
+			u.set_meta("carrier_target", target_name)
+			u.set_meta("carrier_state", "inbound")
 		u.position = start + offsets[i] + Vector3.UP * ALTITUDE
 		_units_root().add_child(u)
-		# Fly the lane first, bombing anything of yours right under it.
+		# Fly the route first, attacking anything in reach on the way.
 		var mine := PackedVector3Array()
 		for p in route:
 			mine.append(p + offsets[i])
-		u.set_route(mine if not mine.is_empty() else PackedVector3Array([end + offsets[i]]), true)
+		u.set_route(mine if not mine.is_empty() else PackedVector3Array([end + offsets[i]]), kind != "carrier")
 		out.append(u)
-	flight_sent.emit(size)
+	airships_launched.emit(spec.corp, kind, count)
 	return out
+
+
+func _make(kind: String) -> Unit:
+	var spec: Dictionary = AIRSHIPS[kind]
+	var u := Unit.new()
+	u.display_name = spec.name
+	u.faction = "rival"
+	u.flying = true
+	u.targets_units = spec.targets_units
+	u.hits_air = spec.hits_air
+	u.move_speed = spec.speed
+	u.weight = 0
+	u.max_hp = spec.hp
+	u.damage = spec.damage
+	u.attack_range = spec.range
+	u.attack_cooldown = spec.cooldown
+	u.bounty = spec.bounty
+	u.footprint = spec.footprint
+	u.body_color = spec.color
+	u.set_meta("airship", kind)
+	return u
+
+
+## Flies a unit to a point through open sky, upwind-first when `attack`.
+func _fly(unit: Unit, to: Vector3, attack := false) -> void:
+	var route := _ensure_nav().plan_attack(unit.global_position, to) if attack else _ensure_nav().plan(unit.global_position, to)
+	if route.is_empty():
+		route = PackedVector3Array([Vector3(to.x, 0, to.z)])
+	unit.set_route(route, unit.get_meta("airship", "bomber") != "carrier")
 
 
 ## The flight path for a lane: around islands, swinging upwind of the

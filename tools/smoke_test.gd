@@ -47,6 +47,7 @@ func _initialize() -> void:
 	await _check_unit_roster(main)
 	await _check_defense_roles(main)
 	_check_air_routes(main)
+	await _check_rival_airships(main)
 	await _check_combat_and_waves(main)
 	if _failures == 0:
 		print("Smoke test passed")
@@ -1383,6 +1384,59 @@ func _check_air_routes(main: Node) -> void:
 	wind.since_wave = 1
 	wind.from_index = old_wind
 	wind.wind_changed.emit(old_wind, true)
+
+
+## Rivals launch airships in waves: Ironbell carriers drop troops on your
+## platforms, Vesper gunships hunt your units, and the wind sets their speed.
+func _check_rival_airships(main: Node) -> void:
+	var region: SkyRegion = main.region
+	var fleet: VesperFleet = main.fleet
+	var waves: WaveManager = main.waves
+	var combat: CombatSystem = main.combat
+	fleet.set_process(false)
+	# Wave data the top bar reads.
+	_expect(waves.carriers_for(2) == 0 and waves.carriers_for(3) == 1 and waves.carriers_for(99) == waves.max_carriers, "carriers start in wave 3 and grow")
+	_expect(waves.gunships_for(3) == 0 and waves.gunships_for(4) == 1, "gunships start in wave 4")
+	var kinds := waves.composition_for(4).map(func(e): return e.unit)
+	_expect(kinds.has("carrier") and kinds.has("gunship") and kinds.has("bomber") and kinds.has("walker"), "wave 4 sends walkers, carriers, bombers and gunships: %s" % [kinds])
+	var plan_text := str(waves.wave_plan(4))
+	_expect(plan_text.contains("Troop Carrier") and plan_text.contains("Gunship"), "the wave preview lists the airships")
+	# A carrier flies around islands to your platform and drops its squad.
+	var carrier: Unit = fleet.launch("carrier", 1)[0]
+	var target: String = carrier.get_meta("carrier_target")
+	_expect(region.platform_owner(target) == "player", "carriers aim for one of your platforms")
+	_expect(carrier.flying and carrier.is_moving() and not carrier.attack_move, "a carrier flies without stopping to fight")
+	var dropped := []
+	fleet.troops_dropped.connect(func(_c, p, units): dropped.append([p, units]), CONNECT_ONE_SHOT)
+	carrier.stop()
+	carrier.position = region.get_platform_position(target) + Vector3.UP * VesperFleet.ALTITUDE
+	fleet.step(0.1)
+	_expect(carrier.get_meta("carrier_state") == "unloading", "over its target, the carrier hovers to unload")
+	fleet.step(VesperFleet.UNLOAD_SECONDS)
+	_expect(dropped.size() == 1 and dropped[0][1].size() == VesperFleet.AIRSHIPS.carrier.troops.size(), "the carrier drops its squad")
+	if dropped.size() == 1:
+		for u in dropped[0][1]:
+			_expect(region.platform_at(u.position) == target and not u.flying, "dropped troops land on %s" % target)
+			u.free()
+	_expect(carrier.get_meta("carrier_state") == "outbound" and carrier.is_moving(), "an empty carrier flies home")
+	carrier.free()
+	# A gunship hunts a unit of yours and can hit aircraft.
+	var gun: Unit = fleet.launch("gunship", 1)[0]
+	_expect(gun.targets_units and gun.hits_air, "gunships fight units and aircraft")
+	var prey: Unit = main.selection.all_units()[0]
+	gun.stop()
+	gun.position = prey.global_position + Vector3(12, VesperFleet.ALTITUDE, 0)
+	fleet.step(0.1)
+	_expect(gun.is_moving() and gun.next_waypoint().distance_to(Vector3(prey.global_position.x, 0, prey.global_position.z)) < 1.0, "an idle gunship goes after your nearest unit")
+	# Airships ride the wind.
+	var blow: Vector3 = main.wind.blowing()
+	gun.set_route(PackedVector3Array([gun.position + blow * 10.0]))
+	_expect(fleet.wind_speed_for(gun) > 1.2, "a tailwind speeds an airship up")
+	gun.set_route(PackedVector3Array([gun.position - blow * 10.0]))
+	_expect(fleet.wind_speed_for(gun) < 0.8, "a headwind slows it down")
+	gun.free()
+	fleet.set_process(true)
+	await process_frame
 
 
 ## First platform (other than `allowed`) that a flight along `route` from

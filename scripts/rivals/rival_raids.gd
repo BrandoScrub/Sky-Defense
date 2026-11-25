@@ -41,6 +41,9 @@ func _process(delta: float) -> void:
 			send_party()
 	for node in get_tree().get_nodes_in_group(Unit.ENEMY_GROUP):
 		var unit := node as Unit
+		# Airships take their orders from VesperFleet.
+		if unit.flying:
+			continue
 		if not unit.is_moving():
 			if combat and combat.nearest_enemy(unit.global_position, "rival", unit.aggro_range) != null:
 				continue
