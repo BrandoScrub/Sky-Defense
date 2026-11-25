@@ -163,16 +163,29 @@ func snap_to_walkable(point: Vector3) -> Vector3:
 
 ## Waypoints from one point to another across decks and walkways, ending at
 ## `to`. Empty if `to` isn't walkable or can't be reached on foot.
-func find_route(from: Vector3, to: Vector3) -> PackedVector3Array:
+##
+## With `through_buildings`, buildings don't block the route: raiders use this
+## when the player has walled off a walkway, and smash through.
+func find_route(from: Vector3, to: Vector3, through_buildings := false) -> PackedVector3Array:
 	var route := PackedVector3Array()
 	var goal_hex := hex_at(to)
-	if not is_hex_walkable(goal_hex):
+	if not _astar_ids.has(goal_hex) or (not through_buildings and not is_hex_walkable(goal_hex)):
 		return route
+	var blocked: Array[int] = []
+	if through_buildings:
+		for hex in buildings:
+			if _astar_ids.has(hex):
+				blocked.append(_astar_ids[hex])
+				_astar.set_point_disabled(_astar_ids[hex], false)
 	var start_id := _astar.get_closest_point(Vector3(from.x, 0.0, from.z))
 	var path := _astar.get_point_path(start_id, _astar_ids[goal_hex])
+	for id in blocked:
+		_astar.set_point_disabled(id, true)
 	if path.is_empty():
 		return route
 	path[path.size() - 1] = Vector3(to.x, 0.0, to.z)
+	if through_buildings:
+		return path
 	return _smooth(Vector3(from.x, 0.0, from.z), path)
 
 
@@ -230,6 +243,7 @@ func place_building(building: Building, hex: Vector2i, facing := 0) -> void:
 	building.hex = hex
 	building.platform = tile.platform
 	building.power = BuildingCatalog.power_for(building.type_id, tile.type)
+	building.faction = "rival" if platform_owner(tile.platform) == "rival" else "player"
 	building.position = hex_center(hex)
 	building.rotation.y = facing * PI / 3.0
 	if building.get_parent() == null:

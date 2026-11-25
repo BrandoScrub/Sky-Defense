@@ -14,7 +14,9 @@ The current build is a placeholder sky region on hexagonal tiles: your Hub, five
 
 Weight matters: buildings and units both add to a platform's load. Over capacity a platform sways (over 100%), sags and slows units (over 115%), then fails (over 130%), dropping its newest building every few seconds. If towers draw more power than generators and harvesters supply, the grid browns out and towers run at reduced efficiency. Scrap heaps on platforms you own produce scrap, and Cloud Harvesters slowly form crystals.
 
-Park units on a neutral platform to claim it (it's contested while both sides have units there), then build on it. Ironbell raiding parties march along walkways, claim platforms on the way, and gather at your Hub; there's no combat yet.
+Park units on a neutral platform to claim it (it's contested while both sides have units there), then build on it. Ironbell raiding parties march along walkways, claim platforms on the way, and attack whatever they meet. If you wall off a walkway with buildings they smash through the wall instead of stopping.
+
+The game runs in waves. You get 45 seconds to build before wave 1 (25 seconds before later waves), then Ironbell sends a growing party of walkers; clear it to start the next build phase. Turrets, units and both headquarters shoot automatically, and each kill pays 15 scrap. You lose if your Hub headquarters falls and win if you destroy Ironbell HQ.
 
 To change the map, edit `scripts/world/level_layout.gd`: platforms, features, walkways, ferry routes, clouds and air lanes are all plain tables there.
 
@@ -36,7 +38,9 @@ To change the map, edit `scripts/world/level_layout.gd`: platforms, features, wa
 | While placing | Left click places, Shift keeps placing, R rotates, Esc or right click cancels |
 | Demolish | Delete over a building (refunds 75%) |
 | Build a walkway | T, click a tile on your platform, then a tile on another platform (15 scrap per tile) |
-| Send an Ironbell raid | G (for testing until timed waves arrive) |
+| Start the next wave early | G |
+| Pause | P |
+| Game speed | F1 normal, F2 double, F3 triple |
 
 The full default key map (selection, control groups, build shortcuts, game speed) is defined in `tools/input_bindings.gd` and already written into `project.godot`. Those actions will be hooked up as each system is built.
 
@@ -52,6 +56,7 @@ The full default key map (selection, control groups, build shortcuts, game speed
 | `scripts/buildings/` | Building catalog (costs, power, weight), placed buildings and build mode |
 | `scripts/economy/` | The player's scrap and crystals, income and the power grid |
 | `scripts/rivals/` | Ironbell raiding parties |
+| `scripts/combat/` | Health bars, headquarters, targeting and damage, and the wave timer |
 | `tools/` | Developer scripts: input map generator and the smoke test |
 
 ## Developer tools

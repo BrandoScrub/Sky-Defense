@@ -91,7 +91,43 @@ func _initialize() -> void:
 	cam._apply_zoom()
 	await _settle()
 	_save(out_dir + "/systems.png")
+
+	# Combat: a wave of Ironbell walkers hits the Hub's turret line.
+	var hubc: Vector2i = region.platforms["Hub"].center
+	main.resources.add_scrap(300)
+	for hex in [hubc + Vector2i(1, -3), hubc + Vector2i(3, -3)]:
+		main.building.try_place("rivet_turret", hex)
+	for i in units.size():
+		units[i].position = region.hex_center(hubc + Vector2i(i - 2, -1))
+		units[i].stop()
+	main.waves.start_wave()
+	# Skip the long walk: drop the walkers just past the Midway walkway.
+	var k := 0
+	for e in main.get_tree().get_nodes_in_group(Unit.ENEMY_GROUP):
+		e.position = region.hex_center(hubc + Vector2i(2, -5)) + Vector3((k % 3) * 1.2 - 1.2, 0, -(k / 3) * 1.2)
+		k += 1
+	for i in 8:
+		main.raids._process(0.05)
+		for u in get_root_units(main):
+			u._process(0.05)
+		main.combat.step(0.05)
+	cam.position = region.get_platform_position("Hub") + Vector3(2, 0, -6)
+	cam.zoom = 0.12
+	cam._target_zoom = 0.12
+	cam._apply_zoom()
+	await _settle()
+	for i in 4:
+		main.combat.step(0.1)
+		await process_frame
+	_save(out_dir + "/combat.png")
 	quit(0)
+
+
+func get_root_units(main: Node) -> Array:
+	var out := []
+	for group in [Unit.GROUP, Unit.ENEMY_GROUP]:
+		out.append_array(main.get_tree().get_nodes_in_group(group))
+	return out
 
 
 func _settle() -> void:

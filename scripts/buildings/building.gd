@@ -13,6 +13,12 @@ var power := 0
 
 ## 0..1, how well this building is powered (consumers dim in a brownout).
 var efficiency := 1.0
+## "player" or "rival", from the platform's owner when placed.
+var faction := "player"
+var hp := 100.0
+var max_hp := 100.0
+var cooldown_left := 0.0
+var _health_bar: HealthBar
 
 var _materials: Array[StandardMaterial3D] = []
 var _base_colors: Array[Color] = []
@@ -21,8 +27,32 @@ var _base_colors: Array[Color] = []
 func setup(id: String) -> Building:
 	type_id = id
 	name = BuildingCatalog.get_data(id).name.replace(" ", "")
+	max_hp = BuildingCatalog.get_data(id).get("hp", 100.0)
+	hp = max_hp
 	_build_shape()
+	_health_bar = HealthBar.new()
+	_health_bar.position.y = 3.2
+	add_child(_health_bar)
 	return self
+
+
+## Attack stats, or an empty dictionary for buildings that don't shoot.
+func get_attack() -> Dictionary:
+	return get_data().get("attack", {})
+
+
+func is_alive() -> bool:
+	return hp > 0.0 and is_inside_tree()
+
+
+## Lowers hit points. Returns true if this destroyed the building; the caller
+## (CombatSystem) removes it from the region.
+func take_damage(amount: float) -> bool:
+	if hp <= 0.0:
+		return false
+	hp -= amount
+	_health_bar.set_ratio(hp / max_hp)
+	return hp <= 0.0
 
 
 func get_data() -> Dictionary:
