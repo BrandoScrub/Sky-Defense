@@ -44,6 +44,8 @@ const DRONE_GROUP := "drones"
 @export var weight := 1
 ## Set by LoadSystem: below 1 on an overloaded platform.
 var speed_multiplier := 1.0
+## Airships: faster with a tailwind, slower into a headwind (VesperFleet).
+var wind_multiplier := 1.0
 @export var body_color := Color(0.42, 0.5, 0.6)
 ## Radius used for click picking and formation spacing.
 @export var footprint := 0.6
@@ -250,6 +252,11 @@ func set_route(route: PackedVector3Array, as_attack_move := false) -> void:
 	attack_move = as_attack_move
 
 
+## The point the unit is heading for now, or where it stands.
+func next_waypoint() -> Vector3:
+	return _route[0] if not _route.is_empty() else position
+
+
 func stop() -> void:
 	_route = PackedVector3Array()
 
@@ -261,7 +268,7 @@ func _process(delta: float) -> void:
 	var target := _route[0]
 	var to_target := target - position
 	to_target.y = 0.0
-	var step := move_speed * speed_multiplier * buff_multiplier("speed") * delta
+	var step := move_speed * speed_multiplier * wind_multiplier * buff_multiplier("speed") * delta
 	if to_target.length() <= step:
 		position = Vector3(target.x, position.y, target.z)
 		_route.remove_at(0)

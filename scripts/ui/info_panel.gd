@@ -15,6 +15,8 @@ const PICK_RADIUS := 28.0
 ## here use their blurb from UnitCatalog.
 const UNIT_INFO := {
 	"Commander": "Leads your squad. Tougher and faster than a Riveteer, and can shoot aircraft. Comes back to the Hub 15 seconds after falling.",
+	"Vesper Gunship": "Vesper's escort airship. Flies with the bombers, around islands and with the wind, and hunts your units and drones, in the air and on the decks. Only anti-air can hit it.",
+	"Ironbell Troop Carrier": "Ironbell's troop airship. Flies around islands to your platform nearest Ironbell, hovers, and drops a squad (Shieldbearer, Rifleman, Riveteer) onto the deck. Shoot it down first and the squad goes down with it.",
 	"Vesper Bomber": "Vesper's bomber airship. Flies the red air lanes around islands, attacking from upwind, and bombs your buildings and Hub. Only anti-air can hit it: flak towers, drones, the Commander and headquarters guns.",
 	"Defense Drone": "A small clockwork flyer from a Drone Hangar. Chases anything that comes near its hangar, aircraft included, then flies home. Only anti-air can hit it. The hangar builds a new one when it's lost.",
 }
