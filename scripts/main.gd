@@ -14,6 +14,10 @@ var capture: CaptureSystem
 var raids: RivalRaids
 var loads: LoadSystem
 var economy: EconomySystem
+var combat: CombatSystem
+var waves: WaveManager
+var _phase_label: Label
+var _banner: Label
 var resources: PlayerResources
 var _status: Label
 var _resource_bar: Label
@@ -74,6 +78,21 @@ func _ready() -> void:
 	economy.resources = resources
 	add_child(economy)
 
+	combat = CombatSystem.new()
+	combat.name = "CombatSystem"
+	combat.region = region
+	combat.resources = resources
+	combat.loads = loads
+	add_child(combat)
+	combat.spawn_headquarters()
+	raids.combat = combat
+
+	waves = WaveManager.new()
+	waves.name = "WaveManager"
+	waves.raids = raids
+	waves.combat = combat
+	add_child(waves)
+
 	_build_hud()
 	selection.selection_changed.connect(_on_selection_changed)
 	_on_selection_changed(selection.selected)
@@ -84,7 +103,9 @@ func _ready() -> void:
 	walkways.notice.connect(show_notice)
 	walkways.mode_changed.connect(_on_walkway_mode_changed)
 	capture.platform_claimed.connect(_on_platform_claimed)
-	raids.raid_sent.connect(func(n): show_notice("Ironbell sent %d walkers toward your Hub" % n))
+	raids.raid_sent.connect(func(n): show_notice("Wave %d: Ironbell sent %d walkers toward your Hub" % [waves.wave, n]))
+	combat.building_destroyed.connect(func(n): show_notice("Your %s was destroyed" % n))
+	waves.game_over.connect(_on_game_over)
 	loads.building_lost.connect(func(b, p): show_notice("%s is overloaded: a %s broke off and fell!" % [p, b]))
 	economy.grid_changed.connect(func(_e): _refresh_resources())
 	_refresh_resources()
@@ -95,6 +116,40 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("camera_focus_hub"):
 		camera.focus_on(region.get_platform_position("Hub"))
 		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("time_pause"):
+		set_game_speed(0.0 if Engine.time_scale > 0.0 else 1.0)
+	elif event.is_action_pressed("time_normal"):
+		set_game_speed(1.0)
+	elif event.is_action_pressed("time_double"):
+		set_game_speed(2.0)
+	elif event.is_action_pressed("time_triple"):
+		set_game_speed(3.0)
+
+
+## 0 pauses; 1, 2 and 3 are normal, double and triple speed.
+func set_game_speed(speed: float) -> void:
+	Engine.time_scale = speed
+	show_notice("Paused" if speed == 0.0 else "Speed %dx" % int(speed))
+
+
+func _process(_delta: float) -> void:
+	if _phase_label == null or waves == null:
+		return
+	match waves.phase:
+		WaveManager.BUILD:
+			_phase_label.text = "Build phase: wave %d in %ds (G to start now)" % [waves.wave, ceili(waves.time_left)]
+		WaveManager.WAVE:
+			_phase_label.text = "Wave %d: %d Ironbell walkers left" % [waves.wave, waves.remaining()]
+		_:
+			_phase_label.text = ""
+	if Engine.time_scale != 1.0:
+		_phase_label.text += "   [%s]" % ("Paused" if Engine.time_scale == 0.0 else "%dx" % int(Engine.time_scale))
+
+
+func _on_game_over(won: bool) -> void:
+	_banner.text = "Victory! Ironbell HQ has fallen." if won else "Defeat. Your Hub has fallen."
+	_banner.modulate = Color(1.0, 0.85, 0.4) if won else Color(1.0, 0.4, 0.35)
+	_banner.visible = true
 
 
 func _spawn_starting_units() -> void:
@@ -109,6 +164,9 @@ func _spawn_starting_units() -> void:
 	hero.is_hero = true
 	hero.move_speed = 7.0
 	hero.weight = 2
+	hero.max_hp = 220.0
+	hero.damage = 18.0
+	hero.attack_range = 6.0
 	hero.body_color = Color(0.85, 0.65, 0.3)
 	# Start just south of the Hub's core, on open deck tiles.
 	var hub_hex := region.hex_at(hub)
@@ -161,6 +219,21 @@ func _build_hud() -> void:
 	_notice.modulate.a = 0.0
 	layer.add_child(_notice)
 
+	_phase_label = _hud_label("Phase", 18)
+	_phase_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_phase_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_phase_label.position.y = 48
+	_phase_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	layer.add_child(_phase_label)
+
+	_banner = _hud_label("Banner", 48)
+	_banner.set_anchors_preset(Control.PRESET_CENTER)
+	_banner.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_banner.grow_vertical = Control.GROW_DIRECTION_BOTH
+	_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_banner.visible = false
+	layer.add_child(_banner)
+
 
 func _hud_label(node_name: String, font_size: int) -> Label:
 	var label := Label.new()
@@ -201,7 +274,7 @@ func _on_build_mode_changed(type_id: String) -> void:
 	for i in BuildingCatalog.HOTKEY_ORDER.size():
 		var data := BuildingCatalog.get_data(BuildingCatalog.HOTKEY_ORDER[i])
 		parts.append("%s %s (%d)" % [BuildingCatalog.HOTKEY_LABELS[i], data.name, data.cost])
-	_build_bar.text = "    ".join(parts) + "    T Walkway    Del: demolish    G: send Ironbell raid"
+	_build_bar.text = "    ".join(parts) + "    T Walkway    Del: demolish    P pause, F1-F3 speed"
 
 
 func _on_walkway_mode_changed(active: bool) -> void:

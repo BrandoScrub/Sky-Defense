@@ -1,9 +1,11 @@
-## A player unit that can be selected and ordered to move along a route.
-## Combat, health and stances arrive in later milestones.
+## A unit that moves along routes and fights. Player units can be selected and
+## ordered; rival units are driven by RivalRaids. CombatSystem does the
+## targeting and damage.
 class_name Unit
 extends Node3D
 
 signal arrived
+signal died(unit: Unit)
 
 const GROUP := "player_units"
 const ENEMY_GROUP := "enemy_units"
@@ -21,6 +23,20 @@ var speed_multiplier := 1.0
 ## Radius used for click picking and formation spacing.
 @export var footprint := 0.6
 
+@export_group("Combat")
+@export var max_hp := 60.0
+@export var damage := 8.0
+@export var attack_range := 4.0
+@export var attack_cooldown := 1.0
+## Idle or attack-moving units go after enemies this close.
+@export var aggro_range := 9.0
+## Scrap the player gets for destroying this unit.
+@export var bounty := 0
+
+var hp := 60.0
+var cooldown_left := 0.0
+var _health_bar: HealthBar
+
 var selected := false:
 	set(value):
 		selected = value
@@ -35,7 +51,26 @@ var _ring: MeshInstance3D
 
 func _ready() -> void:
 	add_to_group(GROUP if faction == "player" else ENEMY_GROUP)
+	hp = max_hp
 	_build_visuals()
+	_health_bar = HealthBar.new()
+	_health_bar.position.y = 2.9 if is_hero else 2.3
+	add_child(_health_bar)
+
+
+func is_alive() -> bool:
+	return hp > 0.0 and is_inside_tree()
+
+
+func take_damage(amount: float) -> void:
+	if hp <= 0.0:
+		return
+	hp -= amount
+	_health_bar.set_ratio(hp / max_hp, faction != "player")
+	if hp <= 0.0:
+		hp = 0.0
+		died.emit(self)
+		queue_free()
 
 
 func is_moving() -> bool:

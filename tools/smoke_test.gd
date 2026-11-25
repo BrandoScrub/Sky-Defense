@@ -26,6 +26,7 @@ func _initialize() -> void:
 	_check_building(main)
 	await _check_claiming_walkways_and_raids(main)
 	_check_weight_power_income(main)
+	await _check_combat_and_waves(main)
 	if _failures == 0:
 		print("Smoke test passed")
 	else:
@@ -366,3 +367,139 @@ func _check_weight_power_income(main: Node) -> void:
 	scrap_before = res.scrap
 	economy.step(10.0)
 	_expect(res.scrap == scrap_before, "unowned scrap heaps give nothing")
+
+
+func _check_combat_and_waves(main: Node) -> void:
+	var region: SkyRegion = main.get_node("Region")
+	var combat: CombatSystem = main.combat
+	var waves: WaveManager = main.waves
+	var raids: RivalRaids = main.raids
+	var build: BuildController = main.building
+	var res: PlayerResources = main.resources
+	for n in [combat, waves, raids, main.loads, main.economy, main.capture]:
+		n.set_process(false)
+	for e in get_root().get_tree().get_nodes_in_group(Unit.ENEMY_GROUP):
+		e.free()
+	# Clear the Hub of buildings and park player units far away.
+	for b in region.buildings.values().duplicate():
+		build.demolish(b.hex)
+	var units: Array[Unit] = main.selection.all_units()
+	for u in units:
+		u.position = region.get_platform_position("Outpost")
+		u.stop()
+	await process_frame
+
+	var hqs := get_root().get_tree().get_nodes_in_group(Headquarters.GROUP)
+	_expect(hqs.size() == 2, "expected 2 headquarters, got %d" % hqs.size())
+
+	# A Rivet Turret kills a walker and pays its bounty.
+	var hub: Vector2i = region.platforms["Hub"].center
+	res.add_scrap(500)
+	_expect(build.try_place("rivet_turret", hub + Vector2i(2, -2)) == "", "place a turret")
+	var walker: Unit = raids.send_party(1)[0]
+	walker.position = region.hex_center(hub + Vector2i(3, -3))
+	walker.stop()
+	_expect(combat.nearest_enemy(walker.global_position, "rival", 10.0) != null, "walker should see a target")
+	var scrap_before := res.scrap
+	for i in 400:
+		combat.step(0.05)
+		if not is_instance_valid(walker) or walker.hp <= 0.0:
+			break
+	_expect(not is_instance_valid(walker) or walker.hp <= 0.0, "the turret should destroy the walker")
+	_expect(res.scrap == scrap_before + 15, "a walker kill should pay 15 scrap, got %d" % (res.scrap - scrap_before))
+	await process_frame
+
+	# Brownout halves a tower's damage over time.
+	var turret: Building = region.buildings[hub + Vector2i(2, -2)]
+	var dummy: Unit = raids.send_party(1)[0]
+	dummy.max_hp = 100000.0
+	dummy.hp = dummy.max_hp
+	dummy.damage = 0.0
+	dummy.position = region.hex_center(hub + Vector2i(3, -3))
+	dummy.stop()
+	turret.efficiency = 1.0
+	turret.cooldown_left = 0.0
+	for i in 200:
+		combat.step(0.05)
+	var full_damage := dummy.max_hp - dummy.hp
+	dummy.hp = dummy.max_hp
+	turret.efficiency = 0.5
+	turret.cooldown_left = 0.0
+	for i in 200:
+		combat.step(0.05)
+	var half_damage := dummy.max_hp - dummy.hp
+	_expect(full_damage > 0.0 and half_damage > 0.0 and half_damage < full_damage * 0.7,
+		"a 50%% grid should cut damage roughly in half (%d vs %d)" % [half_damage, full_damage])
+	dummy.free()
+
+	# Arc Coil lightning chains across a cluster.
+	_expect(build.try_place("arc_coil", hub + Vector2i(-2, 2)) == "", "place an Arc Coil")
+	build.demolish(hub + Vector2i(2, -2))
+	var cluster := raids.send_party(3)
+	for i in cluster.size():
+		cluster[i].position = region.hex_center(hub + Vector2i(-3, 3)) + Vector3(i * 1.2, 0, 0)
+		cluster[i].damage = 0.0
+		cluster[i].max_hp = 1000.0
+		cluster[i].hp = 1000.0
+		cluster[i].stop()
+	var coil: Building = region.buildings[hub + Vector2i(-2, 2)]
+	coil.cooldown_left = 0.0
+	combat.step(0.01)
+	var hit_count := 0
+	for u in cluster:
+		if u.hp < 1000.0:
+			hit_count += 1
+	_expect(hit_count == 3, "one Arc Coil shot should hit all 3 walkers, hit %d" % hit_count)
+	for u in cluster:
+		u.free()
+	build.demolish(hub + Vector2i(-2, 2))
+
+	# Units fight each other.
+	var riveteer: Unit = units[1]
+	riveteer.position = region.hex_center(hub + Vector2i(0, 2))
+	var foe: Unit = raids.send_party(1)[0]
+	foe.position = riveteer.position + Vector3(2.0, 0, 0)
+	foe.stop()
+	for i in 40:
+		combat.step(0.05)
+	_expect(riveteer.hp < riveteer.max_hp and foe.hp < foe.max_hp, "adjacent units should trade blows")
+	foe.free()
+	riveteer.hp = riveteer.max_hp
+
+	# Walling off the Midway walkway doesn't stop raiders: they route through
+	# the wall and attack it, while player routes still respect buildings.
+	var wall := [hub + Vector2i(1, -3), hub + Vector2i(2, -3), hub + Vector2i(3, -3)]
+	for hex in wall:
+		_expect(build.try_place("rivet_turret", hex) == "", "place wall turret at %s" % [hex])
+	var from := region.get_platform_position("Midway")
+	var to := raids._target_point()
+	_expect(region.find_route(from, to).is_empty(), "the wall should block a normal route to the Hub")
+	var smash := raids._route(from, to)
+	_expect(not smash.is_empty(), "raiders should still find a route through the wall")
+	for hex in wall:
+		_expect(not region.is_hex_walkable(hex), "wall tile %s should stay blocked" % [hex])
+		build.demolish(hex)
+
+	# Waves: the build timer starts wave 1 with 3 walkers; clearing it starts the next build phase.
+	_expect(waves.phase == WaveManager.BUILD and waves.wave == 1, "game starts in the build phase")
+	waves.step(waves.time_left + 0.1)
+	_expect(waves.phase == WaveManager.WAVE and waves.remaining() == 3, "wave 1 should send 3 walkers")
+	for e in get_root().get_tree().get_nodes_in_group(Unit.ENEMY_GROUP):
+		e.take_damage(10000.0)
+	await process_frame
+	waves.step(0.1)
+	_expect(waves.phase == WaveManager.BUILD and waves.wave == 2, "clearing wave 1 should start the build phase for wave 2")
+	_expect(waves.party_size_for(2) == 4 and waves.party_size_for(50) == waves.max_party, "waves grow up to a cap")
+	waves.start_wave()
+	_expect(waves.remaining() == 4, "starting early sends wave 2 now")
+	for e in get_root().get_tree().get_nodes_in_group(Unit.ENEMY_GROUP):
+		e.take_damage(10000.0)
+	await process_frame
+
+	# Victory when Ironbell HQ falls.
+	var won := [false]
+	waves.game_over.connect(func(w): won[0] = w)
+	for hq in hqs:
+		if hq.faction == "rival":
+			hq.take_damage(100000.0)
+	_expect(waves.phase == WaveManager.OVER and won[0], "destroying Ironbell HQ should win")

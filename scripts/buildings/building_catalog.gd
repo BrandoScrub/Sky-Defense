@@ -15,26 +15,36 @@ const BUILDINGS := {
 		"color": Color(0.95, 0.78, 0.25),
 		# Generators on a generator socket produce more.
 		"power_on_socket": 15,
+		"hp": 120.0,
 	},
 	"harvester": {
 		"name": "Cloud Harvester", "cost": 80, "power": 30, "weight": 2,
 		"tiles": ["harvester_anchor"], "shape": "harvester",
 		"color": Color(0.35, 0.6, 1.0),
+		"hp": 80.0,
 	},
 	"rivet_turret": {
 		"name": "Rivet Turret", "cost": 30, "power": -2, "weight": 2,
 		"tiles": ["deck"], "shape": "turret",
 		"color": Color(0.6, 0.62, 0.66),
+		"hp": 150.0,
+		"attack": {"damage": 12.0, "range": 10.0, "cooldown": 0.8},
 	},
 	"flak_battery": {
 		"name": "Flak Battery", "cost": 50, "power": -3, "weight": 3,
 		"tiles": ["deck"], "shape": "flak",
 		"color": Color(0.45, 0.55, 0.4),
+		"hp": 150.0,
+		# Built for aircraft; against ground units it fires fast but weak.
+		"attack": {"damage": 5.0, "range": 12.0, "cooldown": 0.35},
 	},
 	"arc_coil": {
 		"name": "Arc Coil", "cost": 70, "power": -8, "weight": 4,
 		"tiles": ["deck"], "shape": "coil",
 		"color": Color(0.55, 0.45, 0.95),
+		"hp": 130.0,
+		# Chain lightning: hits up to 3 enemies near the first target.
+		"attack": {"damage": 16.0, "range": 8.0, "cooldown": 1.5, "chain": 3},
 	},
 }
 
