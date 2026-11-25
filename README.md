@@ -16,7 +16,7 @@ Weight matters: buildings and units both add to a platform's load. Over capacity
 
 Park units on a neutral platform to claim it (it's contested while both sides have units there), then build on it. Ironbell raiding parties march along walkways, claim platforms on the way, and attack whatever they meet. If you wall off a walkway with buildings they smash through the wall instead of stopping.
 
-The game runs in waves. You get 45 seconds to build before wave 1 (25 seconds before later waves), then Ironbell sends a growing party of walkers; clear it to start the next build phase. Turrets, units and both headquarters shoot automatically, and each kill pays 15 scrap. You lose if your Hub headquarters falls and win once both rival headquarters are destroyed; press Enter on the end screen to play again. Use the Army tab (Q) to train more Riveteers at the Hub (30 scrap each). If your Commander falls, they return to the Hub after 15 seconds. A how-to-play panel is shown until the first wave starts.
+The game runs in waves. You get 45 seconds to build before wave 1 (25 seconds before later waves), then Ironbell sends a growing party of walkers; clear it to start the next build phase. Turrets, units and both headquarters shoot automatically, and each kill pays 15 scrap. You lose if your Hub headquarters falls and win once both rival headquarters are destroyed; press Enter on the end screen to play again. Use the Army tab to train more units at the Hub (see Ground units below). If your Commander falls, they return to the Hub after 15 seconds. A how-to-play panel is shown until the first wave starts.
 
 There are two rival corporations. Ironbell Consolidated walks: its walkers come down the walkway from Midway. Vesper Aeronautics flies: from wave 2 its bomber airships leave the Vesper Aerodrome (far east), fly the red air lanes, and bomb your buildings or your Hub. Bombers ignore your units, and only anti-air weapons can hit them. Flak Batteries are built for this, Rivet Turrets only scratch them, and the Commander and headquarters guns can shoot them too. Arc Coils and Riveteers can't. Reach the Aerodrome on foot over the long walkway from the Outpost. When one rival's headquarters falls, that rival stops attacking.
 
@@ -27,6 +27,21 @@ The Crystal Spire has no walkway at the start. Right click it and your units wal
 All art is placeholder geometry built in code: brass-trimmed decks with lamp posts, lift engines under each platform, a clock-tower headquarters, helmeted Riveteers, a top-hatted Commander, boxy Ironbell walkers and Vesper blimps. Below the city a stormy sea of cloud drifts past, with lightning flickering through it (`scripts/world/sky_backdrop.gd` and `shaders/cloud_sea.gdshader`).
 
 The map is generated each game from a seed (`scripts/world/level_layout.gd`). Your Hub is in the middle. Each rival headquarters sits in its own compass direction (one of the 8, at least 90 degrees apart), with a chain of 4 to 9 platforms between it and the Hub, plus a few side platforms. The Foundry, Generator Rig and ferry-only Crystal Spire sit near the Hub, and a storm cloud hangs beside the middle of each rival's chain. The generator already handles up to 4 rivals for future factions. To replay one map, set `map_seed` on the Region node in `scenes/main.tscn`. To compare maps, run `tools/map_preview.gd` (instructions at the top of the file).
+
+## Ground units
+
+Every faction fields the same base troops (stats live in `scripts/units/unit_catalog.gd`); Ironbell mixes Shieldbearers and Riflemen into raiding parties of 4 or more alongside its armored walkers.
+
+| Unit | Cost | Role |
+| --- | --- | --- |
+| Riveteer | 30 | Cheap all-rounder. Claims platforms, fights at short range. |
+| Shieldbearer | 45 | Riot shield. Tough melee fighter. Its shield stops 75% of any shot aimed at it and catches enemy shots that try to fly past it toward allies behind. |
+| Rifleman | 40 | Bolt gun. Long range and hard-hitting, but fragile. |
+| Sapper | 40 | Engineer. Repairs your damaged buildings nearby and does 4x damage to enemy buildings. |
+| Lancer | 60 | Anti-armor. Slow, heavy shots that do 2.5x damage to armored walkers and partly pierce shields. |
+| Medic | 40 | Doesn't fight. Heals the most wounded ally nearby. |
+
+Melee hits, Arc Coil lightning and bombs from the air go around shields. Units can be buffed by anything in the game with `unit.add_buff(id, {"damage": 1.25, ...}, seconds)`, or by an aura with `Unit.buff_allies_near(...)`; the stats a buff can change are listed in `Unit.BUFF_STATS`. Clicking a unit shows its stats and any buffs on the info card.
 
 ## Controls
 
@@ -47,7 +62,7 @@ The map is generated each game from a seed (`scripts/world/level_layout.gd`). Yo
 | While placing | Left click places, Shift keeps placing, R rotates, Esc or right click cancels |
 | Demolish | Delete over a building (refunds 75%) |
 | Build a walkway | Economy tab, W, then click a tile on your platform, then a tile on another platform (15 scrap per tile) |
-| Train a Riveteer | Army tab, Q (30 scrap, 5 seconds) |
+| Train units | Army tab: Q Riveteer, W Shieldbearer, E Rifleman, R Sapper, A Lancer, S Medic |
 | Start the next wave early | Space |
 | What is this? | Left click anything (unit, building, platform, tile, storm cloud, ferry route, air lane) for a card in the bottom right that says what it is and does |
 | Show or hide the legend | L, or click its title |

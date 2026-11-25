@@ -7,6 +7,12 @@
 ## - Towers shoot the nearest enemy in range. Their fire rate scales with grid
 ##   efficiency, and they miss more on an overloaded platform.
 ## - Headquarters have a light gun of their own.
+## - Shots from range (units with a long reach, towers, headquarters guns) are
+##   projectiles. A shielded unit (Shieldbearer) stops most of a projectile
+##   aimed at it, and catches projectiles that would fly past it toward an
+##   ally behind. Melee hits, lightning and bombs from the air aren't blocked.
+## - Medics heal the most wounded ally in range instead of fighting. Sappers
+##   repair damaged buildings in range when there's no enemy to fight.
 class_name CombatSystem
 extends Node
 
@@ -18,6 +24,12 @@ signal unit_killed(unit: Unit)
 const MISS_CHANCE := {"Stable": 0.0, "Swaying": 0.15, "Sagging": 0.3, "Failing": 0.45}
 ## How far an Arc Coil's lightning can jump between targets.
 const CHAIN_JUMP := 5.0
+## How far to either side of a shot's path a shield still catches it, added
+## to the shield bearer's footprint.
+const SHIELD_REACH := 0.5
+## Anti-armor shots (attackers with bonus damage against armor, like Lancers)
+## punch through: shields stop this much less of them.
+const PIERCE_SHARE := 0.6
 
 @export var region: SkyRegion
 @export var resources: PlayerResources
@@ -63,13 +75,18 @@ func step(delta: float) -> void:
 			if not unit.is_alive() or unit.riding:
 				continue
 			unit.cooldown_left -= delta
-			var target = nearest_enemy(unit.global_position, faction, unit.attack_range, unit.hits_air, unit.targets_units)
+			if unit.heal_power > 0.0:
+				_tend(unit, faction, delta)
+				continue
+			var target = nearest_enemy(unit.global_position, faction, unit.get_attack_range(), unit.hits_air, unit.targets_units)
 			if target != null:
 				if not unit.is_moving() or unit.attack_move:
 					unit.stop()
 				if unit.cooldown_left <= 0.0 and not unit.is_moving():
-					unit.cooldown_left = unit.attack_cooldown
-					_hit(unit, target, unit.damage, Color(1.0, 0.85, 0.4))
+					unit.cooldown_left = unit.get_attack_cooldown()
+					_hit(unit, target, unit.get_damage(), Color(1.0, 0.85, 0.4))
+			elif unit.repair_power > 0.0 and not unit.is_moving() and _repair(unit, faction, delta):
+				pass
 			elif chase and not unit.flying and (not unit.is_moving() or unit.attack_move):
 				var prey = nearest_enemy(unit.global_position, faction, unit.aggro_range, unit.hits_air, unit.targets_units)
 				if prey == null and faction == "player" and not unit.is_moving():
@@ -95,7 +112,7 @@ func step(delta: float) -> void:
 		if rng.randf() < miss:
 			_tracer(b.global_position + Vector3.UP * 1.2, target.global_position + Vector3(1.5, 1, 0), Color(0.7, 0.7, 0.7))
 			continue
-		_hit(b, target, amount, Color(0.6, 0.7, 1.0) if attack.has("chain") else Color(1.0, 0.85, 0.4))
+		_hit(b, target, amount, Color(0.6, 0.7, 1.0) if attack.has("chain") else Color(1.0, 0.85, 0.4), not attack.has("chain"))
 		if attack.has("chain"):
 			_chain(target, b.faction, amount * 0.7, int(attack.chain) - 1)
 
@@ -108,7 +125,7 @@ func step(delta: float) -> void:
 		var target = nearest_enemy(hq.global_position, hq.faction, hq.attack.range, true)
 		if target != null:
 			hq.cooldown_left = hq.attack.cooldown
-			_hit(hq, target, hq.attack.damage, Color(1.0, 0.6, 0.3))
+			_hit(hq, target, hq.attack.damage, Color(1.0, 0.6, 0.3), true)
 
 
 ## The closest living enemy of `faction` within `max_range`: a unit, a
@@ -159,7 +176,26 @@ func _intruder_on_platform(unit: Unit):
 	return best
 
 
-func _hit(attacker: Node3D, target: Node3D, amount: float, color: Color) -> void:
+## Deals damage from an attacker to a target. With `projectile` true (the
+## default for ranged units), a shield in the way catches the shot.
+func _hit(attacker: Node3D, target: Node3D, amount: float, color: Color, projectile = null) -> void:
+	if attacker is Unit:
+		var a := attacker as Unit
+		if projectile == null:
+			projectile = a.is_ranged() and not a.flying
+		if target is Building or target is Headquarters:
+			amount *= a.vs_buildings
+		elif target is Unit and (target as Unit).armored:
+			amount *= a.vs_armor
+	if projectile == true and not (target is Unit and (target as Unit).flying):
+		var blocker := shield_in_path(attacker.global_position, target)
+		if blocker != null:
+			target = blocker
+		if target is Unit and (target as Unit).shield > 0.0:
+			var pierce: bool = attacker is Unit and (attacker as Unit).vs_armor > 1.0
+			var stopped: float = (target as Unit).shield * ((1.0 - PIERCE_SHARE) if pierce else 1.0)
+			amount *= 1.0 - stopped
+			color = Color(0.75, 0.8, 0.9)
 	_tracer(attacker.global_position + Vector3.UP * 1.2, target.global_position + Vector3.UP * 1.0, color)
 	if target is Building:
 		var b := target as Building
@@ -177,6 +213,78 @@ func _hit(attacker: Node3D, target: Node3D, amount: float, color: Color) -> void
 			unit_killed.emit(u)
 	else:
 		target.take_damage(amount)
+
+
+## The shielded unit that would catch a projectile flying from `from` to
+## `target`, or null. Only shields on the target's side count, and only ones
+## standing between the two (the one nearest the shooter wins).
+func shield_in_path(from: Vector3, target: Node3D) -> Unit:
+	if not ("faction" in target):
+		return null
+	var side: String = target.faction
+	var a := Vector2(from.x, from.z)
+	var b := Vector2(target.global_position.x, target.global_position.z)
+	var path := b - a
+	var length := path.length()
+	if length < 0.01:
+		return null
+	var best: Unit = null
+	var best_t := INF
+	for u in _units(side):
+		if u == target or u.shield <= 0.0 or not u.is_alive() or u.riding or u.flying:
+			continue
+		var p := Vector2(u.global_position.x, u.global_position.z)
+		var t := (p - a).dot(path) / (length * length)
+		if t <= 0.0 or t >= 1.0:
+			continue
+		if (a + path * t).distance_to(p) <= u.footprint + SHIELD_REACH and t < best_t:
+			best_t = t
+			best = u
+	return best
+
+
+## Medic: heal the most wounded ally in range. Medics never attack.
+func _tend(medic: Unit, faction: String, delta: float) -> void:
+	var best: Unit = null
+	var worst := 1.0
+	var reach := medic.get_attack_range()
+	for u in _units(faction):
+		if u == medic or not u.is_alive() or u.riding or u.flying or u.hp >= u.max_hp:
+			continue
+		if _flat_distance(medic.global_position, u.global_position) > reach:
+			continue
+		var ratio := u.hp / u.max_hp
+		if ratio < worst:
+			worst = ratio
+			best = u
+	if best == null:
+		return
+	best.heal(medic.heal_power * medic.buff_multiplier("healing") * delta)
+	if medic.cooldown_left <= 0.0:
+		medic.cooldown_left = 0.6
+		_tracer(medic.global_position + Vector3.UP * 1.2, best.global_position + Vector3.UP * 1.0, Color(0.5, 1.0, 0.6))
+
+
+## Sapper: repair the most damaged friendly building in range. Returns true
+## if it repaired something.
+func _repair(sapper: Unit, faction: String, delta: float) -> bool:
+	var best: Building = null
+	var worst := 1.0
+	for b in region.buildings.values():
+		if b.faction != faction or not b.is_alive() or b.hp >= b.max_hp:
+			continue
+		if _flat_distance(sapper.global_position, b.global_position) > sapper.get_attack_range() + Building.SIZE * 0.5:
+			continue
+		if b.hp / b.max_hp < worst:
+			worst = b.hp / b.max_hp
+			best = b
+	if best == null:
+		return false
+	best.repair(sapper.repair_power * sapper.buff_multiplier("healing") * delta)
+	if sapper.cooldown_left <= 0.0:
+		sapper.cooldown_left = 0.6
+		_tracer(sapper.global_position + Vector3.UP * 1.2, best.global_position + Vector3.UP * 1.0, Color(0.9, 0.8, 0.4))
+	return true
 
 
 func _chain(first: Node3D, faction: String, amount: float, jumps: int) -> void:

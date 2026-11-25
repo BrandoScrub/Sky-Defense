@@ -11,11 +11,10 @@ const CLICK_SLOP := 6.0
 ## Click radius in pixels for picking units.
 const PICK_RADIUS := 28.0
 
-## What each kind of unit is for, by display name.
+## What each kind of unit is for, by display name. Ground units not listed
+## here use their blurb from UnitCatalog.
 const UNIT_INFO := {
 	"Commander": "Leads your squad. Tougher and faster than a Riveteer, and can shoot aircraft. Comes back to the Hub 15 seconds after falling.",
-	"Riveteer": "Your basic soldier. Claims neutral platforms by standing on them and fights walkers. Can't hit aircraft. Train more from the Army tab.",
-	"Ironbell Walker": "Ironbell's ground trooper. Marches down walkways toward your Hub, claiming platforms and smashing buildings on the way. Pays scrap when killed.",
 	"Vesper Bomber": "Vesper's bomber airship. Flies the red air lanes and bombs your buildings and Hub. Only anti-air can hit it: Flak Batteries, the Commander and headquarters guns.",
 }
 
@@ -206,10 +205,27 @@ func describe(thing) -> Dictionary:
 		info.subtitle = "Yours" if u.faction == "player" else "Enemy"
 		if u.is_hero:
 			info.subtitle = "Your hero"
-		info.body = UNIT_INFO.get(u.display_name, "")
-		var stats := ["Health %d / %d" % [ceili(u.hp), int(u.max_hp)], "Damage %d" % int(u.damage), "Range %d" % int(u.attack_range)]
+		info.body = UNIT_INFO.get(u.display_name, UnitCatalog.get_data(u.unit_type).blurb if not u.flying else "")
+		var stats := ["Health %d / %d" % [ceili(u.hp), int(u.max_hp)]]
+		if u.heal_power > 0.0:
+			stats.append("Heals %d/s" % int(u.heal_power))
+		else:
+			stats.append("Damage %d" % roundi(u.get_damage()))
+		stats.append("Range %s" % str(snappedf(u.get_attack_range(), 0.1)))
+		if u.shield > 0.0:
+			stats.append("Shield %d%%" % int(u.shield * 100))
+		if u.armored:
+			stats.append("Armored")
+		if u.vs_armor > 1.0:
+			stats.append("x%s vs armor" % str(u.vs_armor))
+		if u.vs_buildings > 1.0:
+			stats.append("x%s vs buildings" % str(u.vs_buildings))
+		if u.repair_power > 0.0:
+			stats.append("Repairs %d/s" % int(u.repair_power))
 		if u.flying:
 			stats.append("Flying")
+		if not u.buff_ids().is_empty():
+			stats.append("Buffs: " + ", ".join(PackedStringArray(u.buff_ids().map(func(id): return String(id).capitalize()))))
 		info.stats = "   ".join(stats)
 	elif thing is Building:
 		var b: Building = thing

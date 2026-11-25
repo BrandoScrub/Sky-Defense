@@ -19,10 +19,10 @@ const BUTTON_SIZE := Vector2(100, 64)
 const SLOT_KEYS := ["Q", "W", "E", "R", "A", "S", "D", "F", "Z", "X", "C", "V", "T", "G", "B", "N"]
 
 ## Tab name -> what is in each slot, in slot order ("" leaves a slot empty).
-## An entry is a building type id from BuildingCatalog, or one of the special
-## actions "walkway" and "recruit".
+## An entry is a building type id from BuildingCatalog, the special action
+## "walkway", or "unit:<id>" to train a unit from UnitCatalog.
 const TABS := {
-	"Army": ["recruit"],
+	"Army": ["unit:riveteer", "unit:shieldbearer", "unit:rifleman", "unit:sapper", "unit:lancer", "unit:medic"],
 	"Defense": ["rivet_turret", "flak_battery", "arc_coil"],
 	"Economy": ["dynamo", "walkway"],
 	"Storm": ["harvester"],
@@ -137,9 +137,10 @@ static func entry_at(tab_name: String, slot: int) -> String:
 
 
 func _process(_delta: float) -> void:
-	# The training count changes over time, so keep the Recruit button live.
-	if _entry_buttons.has("recruit"):
-		_update_button("recruit")
+	# The training counts change over time, so keep the Army buttons live.
+	if current_tab == "Army":
+		for entry in _entry_buttons:
+			_update_button(entry)
 
 
 ## Shows the short instructions under the grid; "" shows the default keys.
@@ -185,6 +186,13 @@ func show_tab(tab_name: String) -> void:
 
 ## Runs a button's action, exactly as its hotkey would.
 func activate(entry: String) -> void:
+	if entry.begins_with("unit:"):
+		var type_id := entry.trim_prefix("unit:")
+		var problem := recruiter.queue_one(type_id)
+		var unit_name: String = UnitCatalog.get_data(type_id).name
+		recruiter.notice.emit(problem if problem != "" else "%s queued (%d in training)" % [unit_name, recruiter.queued])
+		refresh()
+		return
 	match entry:
 		"walkway":
 			if building:
@@ -193,9 +201,6 @@ func activate(entry: String) -> void:
 				walkways.cancel()
 			else:
 				walkways.begin()
-		"recruit":
-			var problem := recruiter.queue_one()
-			recruiter.notice.emit(problem if problem != "" else "Riveteer queued (%d in training)" % recruiter.queued)
 		_:
 			if walkways and walkways.active:
 				walkways.cancel()
@@ -243,24 +248,27 @@ func _update_button(entry: String) -> void:
 	var cost := 0
 	var details := ""
 	var active := false
-	match entry:
-		"walkway":
-			title = "Walkway"
-			cost = SkyRegion.WALKWAY_COST_PER_TILE
-			details = "Link one of your platforms to another.\nCosts %d scrap per tile." % cost
-			active = walkways != null and walkways.active
-		"recruit":
-			title = "Riveteer"
-			cost = recruiter.cost if recruiter else 0
-			details = "Train a Riveteer at the Hub (%ds).\nUp to %d in the queue." % [int(recruiter.train_seconds), recruiter.max_queue]
-			if recruiter and recruiter.queued > 0:
-				title += " (%d)" % recruiter.queued
-		_:
-			var data := BuildingCatalog.get_data(entry)
-			title = data.name
-			cost = data.cost
-			details = _building_details(data)
-			active = building != null and building.placing == entry
+	if entry.begins_with("unit:"):
+		var type_id := entry.trim_prefix("unit:")
+		var unit := UnitCatalog.get_data(type_id)
+		title = unit.name
+		cost = unit.cost
+		details = "Train at the Hub (%ds). Up to %d in the queue.\n%s\n%s" % [int(unit.train_seconds), recruiter.max_queue if recruiter else 0, _unit_stats(unit), unit.blurb]
+		if recruiter and recruiter.queued_of(type_id) > 0:
+			title += " (%d)" % recruiter.queued_of(type_id)
+	else:
+		match entry:
+			"walkway":
+				title = "Walkway"
+				cost = SkyRegion.WALKWAY_COST_PER_TILE
+				details = "Link one of your platforms to another.\nCosts %d scrap per tile." % cost
+				active = walkways != null and walkways.active
+			_:
+				var data := BuildingCatalog.get_data(entry)
+				title = data.name
+				cost = data.cost
+				details = _building_details(data)
+				active = building != null and building.placing == entry
 	var per_tile := " / tile" if entry == "walkway" else ""
 	button.text = "\n%s\n%d scrap%s" % [title, cost, per_tile]
 	button.tooltip_text = "%s  [%s]\n%s" % [title, _hotkey(entry), details]
@@ -270,6 +278,21 @@ func _update_button(entry: String) -> void:
 		button.modulate = Color(1.0, 0.85, 0.4)
 	else:
 		button.modulate = Color.WHITE if affordable else Color(1.0, 0.6, 0.6, 0.8)
+
+
+func _unit_stats(unit: Dictionary) -> String:
+	var parts := PackedStringArray(["Health %d" % int(unit.hp)])
+	if unit.heal > 0.0:
+		parts.append("Heals %d/s" % int(unit.heal))
+	else:
+		parts.append("Damage %d, range %s" % [int(unit.damage), str(unit.range)])
+	if unit.shield > 0.0:
+		parts.append("Shield blocks %d%%" % int(unit.shield * 100))
+	if unit.vs_armor > 1.0:
+		parts.append("x%s vs armor" % str(unit.vs_armor))
+	if unit.repair > 0.0:
+		parts.append("Repairs %d/s" % int(unit.repair))
+	return ", ".join(parts)
 
 
 func _building_details(data: Dictionary) -> String:
