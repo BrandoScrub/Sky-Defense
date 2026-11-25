@@ -21,11 +21,14 @@ func _initialize() -> void:
 	var main: Node = load("res://scenes/main.tscn").instantiate()
 	root.add_child(main)
 	await process_frame
+	# Balloon platforms only move when _check_drifting_islands drives them.
+	main.drift.set_process(false)
 	await process_frame
 	_check_scene(main)
 	_check_fog(main)
 	_check_camera(main.get_node("RtsCamera"))
 	_check_routing(main.get_node("Region"))
+	await _check_drifting_islands(main)
 	await _check_selection_and_orders(main)
 	_check_building(main)
 	_check_build_menu(main)
@@ -169,6 +172,65 @@ func _check_routing(region: SkyRegion) -> void:
 	for point in route:
 		_expect(region._clear_line(prev, point), "route leg %s -> %s crosses open sky" % [prev, point])
 		prev = point
+
+
+func _check_drifting_islands(main: Node) -> void:
+	var region: SkyRegion = main.get_node("Region")
+	var drift: DriftSystem = main.drift
+	_expect(drift.balloons.size() >= 1, "seed 3 should have a balloon platform")
+	if drift.balloons.is_empty():
+		return
+	var b: Dictionary = drift.balloons[0]
+	_expect(b.state == DriftSystem.MOORED and drift.moored_to(b) == b.ends[0], "a balloon starts moored at its first end")
+	_expect(region.tiles_of_platform(b.name).size() == 7, "a balloon platform has 7 tiles")
+	_expect(not b.walkway.is_empty(), "a moored balloon has a walkway")
+	_expect(not region.reserved_hexes.is_empty(), "a balloon's flight path should be reserved")
+	var aboard := region.hex_center(drift.center_of(b))
+	var home := region.snap_to_walkable(region.get_platform_position(b.ends[0]))
+	_expect(not region.find_route(home, aboard).is_empty(), "a moored balloon should be walkable from %s" % b.ends[0])
+
+	var units_root := main.get_node("Units")
+	var stuck := Unit.new()
+	stuck.name = "DriftTestStuck"
+	stuck.position = region.hex_center(b.walkway[0])
+	units_root.add_child(stuck)
+	var rider := Unit.new()
+	rider.name = "DriftTestRider"
+	rider.position = aboard
+	units_root.add_child(rider)
+	var warned := []
+	drift.warning_started.connect(func(_n, _p, _s, count): warned.append(count), CONNECT_ONE_SHOT)
+
+	b.timer = 0.01
+	drift.step(0.05)
+	_expect(b.state == DriftSystem.WARNING, "a balloon should warn before casting off")
+	_expect(warned == [1], "the warning should count 1 of your units on the walkway, got %s" % [warned])
+	_expect(stuck.has_node(DriftSystem.CAUTION_NAME), "a unit on a breaking walkway gets a caution sign")
+	_expect(not rider.has_node(DriftSystem.CAUTION_NAME), "a unit on the balloon itself is safe")
+
+	drift.step(drift.warning_seconds)
+	_expect(b.state == DriftSystem.DRIFTING, "after the warning the balloon casts off")
+	_expect(stuck.riding, "a unit left on the walkway falls")
+	_expect(not stuck.has_node(DriftSystem.CAUTION_NAME), "caution signs go once the walkway is gone")
+	_expect(b.walkway.is_empty() and region.find_route(home, aboard).is_empty(), "a drifting balloon is cut off")
+
+	for i in b.track.size() * 30:
+		if b.state != DriftSystem.DRIFTING:
+			break
+		drift.step(drift.hop_seconds / 10.0)
+	_expect(b.state == DriftSystem.MOORED and drift.moored_to(b) == b.ends[1], "the balloon should moor at %s" % b.ends[1])
+	_expect(drift.center_of(b) == b.track[b.track.size() - 1], "the balloon should end on its track's last hex")
+	_expect(region.platforms[b.name].center == drift.center_of(b), "the balloon's platform centre follows it")
+	_expect(region.tiles_of_platform(b.name).size() == 7, "the balloon keeps 7 tiles after drifting")
+	_expect(region.platform_at(rider.position) == b.name, "a unit aboard rides along with the balloon")
+	var far := region.snap_to_walkable(region.get_platform_position(b.ends[1]))
+	_expect(not region.find_route(far, region.hex_center(drift.center_of(b))).is_empty(),
+		"the walkway reconnects at %s" % b.ends[1])
+	_expect(region.get_node("Tiles").get_child_count() == region.tiles.size(), "every tile still has one mesh after drifting")
+	await create_timer(drift.fall_seconds + 0.3).timeout
+	_expect(not is_instance_valid(stuck), "a fallen unit is lost")
+	units_root.remove_child(rider)
+	rider.free()
 
 
 func _check_selection_and_orders(main: Node) -> void:

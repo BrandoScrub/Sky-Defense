@@ -159,7 +159,7 @@ func _refresh_nodes() -> void:
 	# Scenery: shown for good once its cell is explored.
 	var still_hidden: Array = []
 	for entry in _scenery:
-		var node: Node3D = entry[0]
+		var node = entry[0]
 		if not is_instance_valid(node):
 			continue
 		if explored.has(entry[1]):

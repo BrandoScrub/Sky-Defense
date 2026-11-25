@@ -438,6 +438,9 @@ func plan_walkway(from_hex: Vector2i, to_hex: Vector2i) -> Dictionary:
 		var hex: Vector2i = line[i]
 		var t := get_tile(hex)
 		if t.is_empty():
+			if reserved_hexes.has(hex):
+				plan.problem = "That's a balloon platform's flight path"
+				return plan
 			left_start = true
 			new_tiles.append(hex)
 		elif left_start and t.platform != b.platform:
@@ -908,3 +911,74 @@ func _material(color: Color, glow := false) -> StandardMaterial3D:
 		mat.emission_energy_multiplier = 0.8
 	_material_cache[key] = mat
 	return mat
+
+
+# --- Moving platforms -------------------------------------------------------
+# Used by DriftSystem: balloon platforms hop one hex at a time, so their tiles
+# (and the walkways that moor them) come and go at runtime.
+
+## Registers a platform that isn't in the generated layout (a balloon
+## platform). Its tiles are added separately with add_tiles.
+## Open-sky hexes a balloon platform flies through. Walkways can't be built
+## across them.
+var reserved_hexes := {}
+
+
+func add_platform(p: Dictionary) -> void:
+	platforms[p.name] = p
+	owners[p.name] = ""
+	_add_label(p)
+
+
+## The floating name label of a platform, or null.
+func platform_label(platform_name: String) -> Label3D:
+	return _labels.get(platform_name)
+
+
+## The placeholder mesh of a tile, or null.
+func tile_node(hex: Vector2i) -> MeshInstance3D:
+	return _tile_nodes.get(hex)
+
+
+## Adds tiles ({hex: {"type", "platform"}}) with their meshes, and links the
+## walkable ones into the walking graph.
+func add_tiles(new_tiles: Dictionary) -> void:
+	for hex in new_tiles:
+		tiles[hex] = new_tiles[hex]
+		_make_tile(hex)
+		var owner_name := platform_owner(tiles[hex].platform) if tiles[hex].platform != "" else ""
+		if owner_name != "":
+			_tile_nodes[hex].material_override = _material(COLORS[{"player": "hub", "rival": "rival"}[owner_name]])
+		if WALKABLE.has(tiles[hex].type):
+			_add_walk_point(hex)
+			if buildings.has(hex):
+				_astar.set_point_disabled(_astar_ids[hex], true)
+	for hex in new_tiles:
+		if _astar_ids.has(hex):
+			_connect_walk_point(hex)
+
+
+## Removes tiles, their meshes and their walking-graph points.
+func remove_tiles(hexes: Array) -> void:
+	for hex in hexes:
+		tiles.erase(hex)
+		var node: Node = _tile_nodes.get(hex)
+		if node:
+			node.get_parent().remove_child(node)
+			node.queue_free()
+		_tile_nodes.erase(hex)
+		if _astar_ids.has(hex):
+			_astar.remove_point(_astar_ids[hex])
+			_astar_ids.erase(hex)
+
+
+## Moves a building's bookkeeping from one hex to another (the caller moves
+## the tiles under it).
+func move_building(from_hex: Vector2i, to_hex: Vector2i) -> void:
+	var building: Building = buildings.get(from_hex)
+	if building == null:
+		return
+	buildings.erase(from_hex)
+	buildings[to_hex] = building
+	building.hex = to_hex
+	building.position = hex_center(to_hex)

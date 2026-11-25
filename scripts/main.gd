@@ -44,6 +44,7 @@ var ferry: FerrySystem
 var storms: StormSystem
 var recruiter: Recruiter
 var fleet: VesperFleet
+var drift: DriftSystem
 var fog: FogSystem
 var _phase_label: Label
 var _banner: Label
@@ -68,6 +69,11 @@ func _ready() -> void:
 	backdrop.area = region.get_bounds().grow(140.0)
 	add_child(backdrop)
 	camera.position = region.get_platform_position("Hub")
+	# Balloon platforms join the map before the other systems look at it.
+	drift = DriftSystem.new()
+	drift.name = "DriftSystem"
+	drift.region = region
+	add_child(drift)
 	_spawn_starting_units()
 
 	selection = SelectionController.new()
@@ -193,6 +199,8 @@ func _ready() -> void:
 	ferry.departed.connect(_on_ferry_departed)
 	loads.building_lost.connect(func(b, p): show_notice("%s is overloaded: a %s broke off and fell!" % [p, b]))
 	economy.grid_changed.connect(func(_e): _refresh_resources())
+	drift.warning_started.connect(_on_drift_warning)
+	drift.cast_off.connect(_on_drift_cast_off)
 	_refresh_resources()
 	_on_build_mode_changed("")
 
@@ -211,6 +219,20 @@ func _on_storm_control_changed(cloud: String, controller: String) -> void:
 func _on_ferry_departed(from_platform: String, to_platform: String, passengers: int) -> void:
 	if passengers > 0:
 		show_notice("Ferry left %s for %s with %d aboard" % [from_platform, to_platform, passengers])
+
+
+func _on_drift_warning(balloon_name: String, platform_name: String, seconds: float, player_units: int) -> void:
+	if player_units > 0:
+		show_notice("%s casts off from %s in %ds: get your %d unit%s off the walkway!" % [
+			balloon_name, platform_name, int(seconds), player_units, "" if player_units == 1 else "s"])
+	else:
+		show_notice("%s casts off from %s in %ds" % [balloon_name, platform_name, int(seconds)])
+
+
+func _on_drift_cast_off(balloon_name: String, _platform_name: String, fallen: Array) -> void:
+	var lost := fallen.filter(func(u): return u.faction == "player").size()
+	if lost > 0:
+		show_notice("%d of your unit%s fell when the %s cast off" % [lost, "" if lost == 1 else "s", balloon_name])
 
 
 func _unhandled_input(event: InputEvent) -> void:

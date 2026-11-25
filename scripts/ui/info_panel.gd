@@ -299,6 +299,9 @@ func _describe_platform(platform_name: String, info: Dictionary) -> void:
 			info.body = "Nobody owns it yet. Park units on it to claim it, then you can build here."
 	if platform_name == "Hub":
 		info.body = "Your home platform and headquarters. Build defenses here first."
+	if p.get("balloon", false):
+		info.subtitle += ", drifting balloon"
+		info.body += " It drifts between two moorings. Before it casts off, its walkway flashes: anything still on the walkway falls. Units aboard ride along."
 	var features := PackedStringArray()
 	for f in p.get("features", []):
 		var t: String = f[0] if f is Array else (f.get("type", "") if f is Dictionary else str(f))
