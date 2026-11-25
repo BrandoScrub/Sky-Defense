@@ -25,8 +25,22 @@ func _initialize() -> void:
 	cam._target_zoom = 1.0
 	cam._apply_zoom()
 	await _settle()
-	_save(out_dir + "/overview.png")
+	_save(out_dir + "/fog-of-war.png")
 	main._help.visible = false
+	cam.position = region.get_platform_position("Hub") + Vector3(8, 0, 2)
+	cam.zoom = 0.7
+	cam._target_zoom = 0.7
+	cam._apply_zoom()
+	await _settle()
+	_save(out_dir + "/fog-around-hub.png")
+	cam.position = Vector3(mid.x, 0, mid.y + 8)
+	cam.zoom = 1.0
+	cam._target_zoom = 1.0
+	cam._apply_zoom()
+	# The rest of the shots show the whole map.
+	main.fog.reveal_all()
+	await _settle()
+	_save(out_dir + "/overview.png")
 
 	# Close view of the Hub with the squad.
 	cam.position = region.get_platform_position("Hub")

@@ -18,7 +18,13 @@ Park units on a neutral platform to claim it (it's contested while both sides ha
 
 The game runs in waves. You get 45 seconds to build before wave 1 (25 seconds before later waves), then Ironbell sends a growing party of walkers; clear it to start the next build phase. Turrets, units and both headquarters shoot automatically, and each kill pays 15 scrap. You lose if your Hub headquarters falls and win once both rival headquarters are destroyed; press Enter on the end screen to play again. Use the Army tab (Q) to train more Riveteers at the Hub (30 scrap each). If your Commander falls, they return to the Hub after 15 seconds. A how-to-play panel is shown until the first wave starts.
 
-There are two rival corporations. Ironbell Consolidated walks: its walkers come down the walkway from Midway. Vesper Aeronautics flies: from wave 2 its bomber airships leave the Vesper Aerodrome (far east), fly the red air lanes, and bomb your buildings or your Hub. Bombers ignore your units, and only anti-air weapons can hit them. Flak Batteries are built for this, Rivet Turrets only scratch them, and the Commander and headquarters guns can shoot them too. Arc Coils and Riveteers can't. Reach the Aerodrome on foot over the long walkway from the Outpost. When one rival's headquarters falls, that rival stops attacking.
+There are two rival corporations. Ironbell Consolidated walks: its walkers come down the walkway from Midway. Vesper Aeronautics flies: from wave 2 its bomber airships leave the Vesper Aerodrome (far east), fly the red air lanes, and bomb your buildings or your Hub. Bombers ignore your units, and only anti-air weapons can hit them. Flak towers and hangar drones are built for this, and the Commander and headquarters guns can shoot them too. Ground defenses and Riveteers can't. Reach the Aerodrome on foot over the long walkway from the Outpost. When one rival's headquarters falls, that rival stops attacking.
+
+Defenses come in three roles (`scripts/buildings/building_catalog.gd`, run by `scripts/combat/combat_system.gd` and `scripts/combat/defense_system.gd`):
+
+- **Ground defenses** (Rivet Turret, Arc Coil, Rally Horn, Mending Post) can't hit aircraft. Most have modest guns but strengthen your ground units nearby: the Rivet Turret gives cover (armor), the Rally Horn adds damage and fire rate, and the Mending Post heals. Bonuses from different buildings don't stack, so each unit gets the best of each kind, and they work on every unit type.
+- **Flak** (Flak Battery, Skyhook Gun) shoots only aircraft and airships and ignores everything on the ground.
+- **Hangars** (Drone Hangar) keep 3 drones in the air. Drones chase anything that comes near the hangar, air or ground, then return; lost drones are rebuilt every 8 seconds, and they go down with their hangar.
 
 Storm clouds are worth fighting over. Each Cloud Harvester taps the storm its anchor faces, and whoever has more harvesters on a storm controls it. Your storms add 15 power to the grid. Ironbell builds harvesters on anchors of platforms it holds, and a storm it controls throws lightning at your nearby units and buildings and makes its walkers tougher. Destroy Ironbell's harvesters (they're tinted red) to break its hold.
 
@@ -45,17 +51,20 @@ The map is generated each game from a seed (`scripts/world/level_layout.gd`). Yo
 | Select hero | H (double-tap to move the camera to them) |
 | Control groups | Ctrl + 1 to 5 saves, 1 to 5 selects, double-tap to move the camera |
 | Build menu | Bottom left: tabs (Army, Defense, Economy, Storm, Ships) over a 4 x 4 command grid. Tab cycles the tabs. The grid keys match their spots on the keyboard: Q W E R / A S D F / Z X C V / T G B N, and what each does depends on the tab |
-| Build | Defense: Q Rivet Turret, W Flak Battery, E Arc Coil. Economy: Q Dynamo Generator, W Walkway. Storm: Q Cloud Harvester |
+| Build | Defense (one row per role): ground Q Rivet Turret, W Arc Coil, E Rally Horn, R Mending Post; flak A Flak Battery, S Skyhook Gun; hangars Z Drone Hangar. Economy: Q Dynamo Generator, W Walkway. Storm: Q Cloud Harvester |
 | While placing | Left click places, Shift keeps placing, R rotates, Esc or right click cancels |
 | Demolish | Delete over a building (refunds 75%) |
 | Build a walkway | Economy tab, W, then click a tile on your platform, then a tile on another platform (15 scrap per tile) |
 | Train a Riveteer | Army tab, Q (30 scrap, 5 seconds) |
 | Start the next wave early | Space |
+| What is this? | Left click anything (unit, building, platform, tile, storm cloud, ferry route, air lane) for a card in the bottom right that says what it is and does |
 | Show or hide the legend | L, or click its title |
 | Pause | P |
 | Game speed | F1 normal, F2 double, F3 triple |
 
 The full default key map (selection, control groups, build shortcuts, game speed) is defined in `tools/input_bindings.gd` and already written into `project.godot`. Those actions will be hooked up as each system is built.
+
+Dark storm clouds hide every part of the sky you haven't scouted (`scripts/world/fog_system.gd`). Your units and the platforms you own clear the clouds around them, and scouted sky stays clear. Rival units only show while something of yours can see them. Some islands glow through the storm with a hint: crystal seams (cyan, "Crystal glow?"), generator sockets (gold, "Electric hum?") and rival headquarters (Ironbell's furnace red, Vesper's violet signal lamps). The fog is only visual: it doesn't change what anyone can attack.
 
 ## Project layout
 
@@ -63,8 +72,8 @@ The full default key map (selection, control groups, build shortcuts, game speed
 | --- | --- |
 | `scenes/` | Godot scenes; `main.tscn` is the entry point |
 | `scripts/camera/` | The RTS camera |
-| `scripts/ui/` | HUD pieces: the bottom-left build menu |
-| `scripts/world/` | Hex grid math, level layout data, the sky region builder with routing, claiming, platform load, the airship ferry and storm control |
+| `scripts/ui/` | HUD pieces: the bottom-left build menu and the bottom-right info card |
+| `scripts/world/` | Hex grid math, level layout data, the sky region builder with routing, claiming, platform load, the airship ferry, storm control and the fog of war |
 | `scripts/units/` | Player units, the hero and recruiting |
 | `scripts/selection/` | Selection, orders and control groups |
 | `scripts/buildings/` | Building catalog (costs, power, weight), placed buildings and build mode |

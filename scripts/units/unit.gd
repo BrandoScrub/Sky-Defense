@@ -9,6 +9,9 @@ signal died(unit: Unit)
 
 const GROUP := "player_units"
 const ENEMY_GROUP := "enemy_units"
+## Defensive drones from hangars (either faction). They fight like units but
+## can't be selected, claim platforms or weigh anything down.
+const DRONE_GROUP := "drones"
 
 @export var display_name := "Riveteer"
 @export var is_hero := false
@@ -38,6 +41,17 @@ var speed_multiplier := 1.0
 @export var hits_air := false
 ## False for bombers, which only attack buildings and headquarters.
 @export var targets_units := true
+## Launched from a Drone Hangar; DefenseSystem flies it.
+@export var is_drone := false
+
+## Bonuses from nearby support buildings (see DefenseSystem). They work on
+## any unit type, so new units get them for free. Reset every frame.
+## Multiplies damage dealt.
+var damage_mult := 1.0
+## Multiplies time between shots (below 1 = faster).
+var cooldown_mult := 1.0
+## Fraction of incoming damage blocked, 0..0.9.
+var armor := 0.0
 
 var hp := 60.0
 var cooldown_left := 0.0
@@ -59,7 +73,10 @@ var _ring: MeshInstance3D
 
 
 func _ready() -> void:
-	add_to_group(GROUP if faction == "player" else ENEMY_GROUP)
+	if is_drone:
+		add_to_group(DRONE_GROUP)
+	else:
+		add_to_group(GROUP if faction == "player" else ENEMY_GROUP)
 	hp = max_hp
 	_build_visuals()
 	_health_bar = HealthBar.new()
@@ -74,12 +91,27 @@ func is_alive() -> bool:
 func take_damage(amount: float) -> void:
 	if hp <= 0.0:
 		return
-	hp -= amount
+	hp -= amount * (1.0 - clampf(armor, 0.0, 0.9))
 	_health_bar.set_ratio(hp / max_hp, faction != "player")
 	if hp <= 0.0:
 		hp = 0.0
 		died.emit(self)
 		queue_free()
+
+
+## Restores hit points, up to the maximum.
+func heal(amount: float) -> void:
+	if hp <= 0.0 or hp >= max_hp:
+		return
+	hp = minf(hp + amount, max_hp)
+	_health_bar.set_ratio(hp / max_hp, faction != "player")
+
+
+## Clears support bonuses back to normal.
+func reset_support() -> void:
+	damage_mult = 1.0
+	cooldown_mult = 1.0
+	armor = 0.0
 
 
 func is_moving() -> bool:

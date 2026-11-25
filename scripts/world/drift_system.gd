@@ -233,6 +233,8 @@ func _commit_hop(b: Dictionary) -> void:
 	_place_label(b, Vector3.ZERO)
 	b.hop = 0.0
 	b.riders = []
+	# The deck tiles are new nodes now (fog of war tracks map pieces by node).
+	region.walkways_changed.emit()
 	if b.index == 0 or b.index == b.track.size() - 1:
 		_moor(b)
 
