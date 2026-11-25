@@ -10,7 +10,9 @@ Built with [Godot 4.3](https://godotengine.org/download/archive/4.3-stable/) (st
 2. In the Project Manager, choose **Import** and pick `project.godot` in this folder.
 3. Press **F5** to play.
 
-The current build is a gray-box sky region: the Hub (gold), four neutral platforms (gray), a rival HQ (red), walkways and a storm cloud (blue). Your Commander (gold) and a squad of four Riveteers start on the Hub and can be selected and sent across walkways.
+The current build is a placeholder sky region on hexagonal tiles: your Hub, five neutral platforms, the rival Ironbell HQ, walkways, a ferry route, two storm clouds and a rival air lane. A legend in the top right explains the tile colours. Your Commander (gold) and a squad of four Riveteers start on the Hub and can be selected and sent across walkways.
+
+To change the map, edit `scripts/world/level_layout.gd`: platforms, features, walkways, ferry routes, clouds and air lanes are all plain tables there.
 
 ## Controls
 
@@ -35,7 +37,7 @@ The full default key map (selection, control groups, build shortcuts, game speed
 | --- | --- |
 | `scenes/` | Godot scenes; `main.tscn` is the entry point |
 | `scripts/camera/` | The RTS camera |
-| `scripts/world/` | Sky region, platforms, connections and routing |
+| `scripts/world/` | Hex grid math, the level layout data, and the sky region builder with routing |
 | `scripts/units/` | Player units and the hero |
 | `scripts/selection/` | Selection, orders and control groups |
 | `tools/` | Developer scripts: input map generator and the smoke test |
@@ -46,6 +48,12 @@ Change default keys in `tools/input_bindings.gd`, then regenerate the input map:
 
 ```sh
 godot --headless --path . --script res://tools/generate_input_map.gd
+```
+
+Render screenshots of the level (needs a display; on a server use `xvfb-run`):
+
+```sh
+godot --path . --rendering-method gl_compatibility --script res://tools/screenshot.gd -- /path/to/output
 ```
 
 Run the headless smoke test (exits non-zero on failure):
