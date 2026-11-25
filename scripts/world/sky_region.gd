@@ -61,6 +61,15 @@ var walkway_count := 0
 ## cloud name -> hexes it covers (clouds float above the deck, not on it).
 var tiles_in_clouds := {}
 
+## Emitted when a building is placed or removed.
+signal buildings_changed
+
+## Who owns each platform: "player", "rival" or "" for neutral.
+var owners := {}
+## hex -> Building standing on it.
+var buildings := {}
+
+var _labels := {}
 var _astar := AStar3D.new()
 var _astar_ids := {}
 var _hex_mesh_cache := {}
@@ -70,6 +79,7 @@ var _material_cache := {}
 func _ready() -> void:
 	for p in Layout.PLATFORMS:
 		platforms[p.name] = p
+		owners[p.name] = {"hub": "player", "rival": "rival"}.get(p.kind, "")
 	for c in Layout.CLOUDS:
 		clouds[c.name] = c
 
@@ -122,7 +132,12 @@ func platform_at(point: Vector3) -> String:
 
 
 func is_walkable(point: Vector3) -> bool:
-	return _astar_ids.has(hex_at(point))
+	return is_hex_walkable(hex_at(point))
+
+
+## Walkable tile with nothing built on it.
+func is_hex_walkable(hex: Vector2i) -> bool:
+	return _astar_ids.has(hex) and not _astar.is_point_disabled(_astar_ids[hex])
 
 
 ## The point itself if walkable, otherwise the centre of the nearest walkable tile.
@@ -138,7 +153,7 @@ func snap_to_walkable(point: Vector3) -> Vector3:
 func find_route(from: Vector3, to: Vector3) -> PackedVector3Array:
 	var route := PackedVector3Array()
 	var goal_hex := hex_at(to)
-	if not _astar_ids.has(goal_hex):
+	if not is_hex_walkable(goal_hex):
 		return route
 	var start_id := _astar.get_closest_point(Vector3(from.x, 0.0, from.z))
 	var path := _astar.get_point_path(start_id, _astar_ids[goal_hex])
@@ -174,6 +189,107 @@ func get_bounds() -> Rect2:
 		else:
 			rect = rect.expand(Vector2(c.x, c.z))
 	return rect.grow(tile_size * 2.0)
+
+
+# --- Buildings --------------------------------------------------------------
+
+## Why a building can't go on this tile, or "" if it can. Doesn't check cost
+## or units standing there; BuildController handles those.
+func build_problem(type_id: String, hex: Vector2i) -> String:
+	var tile := get_tile(hex)
+	if tile.is_empty() or tile.type == "walkway":
+		return "Buildings go on platform decks"
+	if owners.get(tile.platform, "") != "player":
+		return "You don't own %s yet" % tile.platform
+	if buildings.has(hex):
+		return "Something is already built there"
+	var allowed: Array = BuildingCatalog.get_data(type_id).tiles
+	if not allowed.has(tile.type):
+		if type_id == "harvester":
+			return "Cloud Harvesters go on a storm harvester anchor"
+		return "Can't build on a %s" % tile.type.replace("_", " ")
+	return ""
+
+
+## Places a building on a tile. The caller checks build_problem first.
+func place_building(building: Building, hex: Vector2i, facing := 0) -> void:
+	var tile := get_tile(hex)
+	building.hex = hex
+	building.platform = tile.platform
+	building.power = BuildingCatalog.power_for(building.type_id, tile.type)
+	building.position = hex_center(hex)
+	building.rotation.y = facing * PI / 3.0
+	if building.get_parent() == null:
+		_buildings_root().add_child(building)
+	buildings[hex] = building
+	if _astar_ids.has(hex):
+		_astar.set_point_disabled(_astar_ids[hex], true)
+	_refresh_label(tile.platform)
+	buildings_changed.emit()
+
+
+## Removes and returns the building on a tile, or null.
+func remove_building(hex: Vector2i) -> Building:
+	var building: Building = buildings.get(hex)
+	if building == null:
+		return null
+	buildings.erase(hex)
+	if _astar_ids.has(hex):
+		_astar.set_point_disabled(_astar_ids[hex], false)
+	_refresh_label(building.platform)
+	buildings_changed.emit()
+	return building
+
+
+## Total weight of everything built on a platform.
+func platform_load(platform_name: String) -> int:
+	var total := 0
+	for hex in buildings:
+		var b: Building = buildings[hex]
+		if b.platform == platform_name:
+			total += b.get_data().weight
+	return total
+
+
+func platform_capacity(platform_name: String) -> int:
+	return platforms[platform_name].capacity
+
+
+## Electricity supplied by the player's buildings.
+func power_supply() -> int:
+	var total := 0
+	for b in buildings.values():
+		if b.power > 0 and owners.get(b.platform) == "player":
+			total += b.power
+	return total
+
+
+## Electricity drawn by the player's buildings.
+func power_demand() -> int:
+	var total := 0
+	for b in buildings.values():
+		if b.power < 0 and owners.get(b.platform) == "player":
+			total -= b.power
+	return total
+
+
+func _buildings_root() -> Node3D:
+	var root := get_node_or_null("Buildings") as Node3D
+	if root == null:
+		root = Node3D.new()
+		root.name = "Buildings"
+		add_child(root)
+	return root
+
+
+func _refresh_label(platform_name: String) -> void:
+	var label: Label3D = _labels.get(platform_name)
+	if label == null:
+		return
+	var used := platform_load(platform_name)
+	var cap := platform_capacity(platform_name)
+	label.text = "%s\nLoad %d / %d" % [platform_name, used, cap]
+	label.modulate = Color(1.0, 0.45, 0.4) if used > cap else Color.WHITE
 
 
 # --- Layout -----------------------------------------------------------------
@@ -265,7 +381,7 @@ func _clear_line(a: Vector3, b: Vector3) -> bool:
 	var steps := int(ceil(a.distance_to(b) / (tile_size * 0.25)))
 	for s in range(steps + 1):
 		var p := a.lerp(b, float(s) / maxi(steps, 1))
-		if not _astar_ids.has(hex_at(p)):
+		if not is_hex_walkable(hex_at(p)):
 			return false
 	return true
 
@@ -367,6 +483,7 @@ func _add_label(p: Dictionary) -> void:
 	label.pixel_size = 0.02
 	label.position = hex_center(p.center) + Vector3.UP * (6.0 + p.radius)
 	add_child(label)
+	_labels[p.name] = label
 
 
 func _draw_cloud(c: Dictionary) -> void:

@@ -19,6 +19,7 @@ func _initialize() -> void:
 	_check_camera(main.get_node("RtsCamera"))
 	_check_routing(main.get_node("Region"))
 	await _check_selection_and_orders(main)
+	_check_building(main)
 	if _failures == 0:
 		print("Smoke test passed")
 	else:
@@ -153,3 +154,63 @@ func _check_selection_and_orders(main: Node) -> void:
 		_expect(region.platform_at(u.position) == "Midway", "%s should be on Midway, is at %s" % [u.name, u.position])
 	_expect(hero.position.distance_to(target) < 0.01, "hero should take the centre spot")
 	await process_frame
+
+
+func _check_building(main: Node) -> void:
+	var region: SkyRegion = main.get_node("Region")
+	var build: BuildController = main.building
+	var res: PlayerResources = main.resources
+	var hub: Vector2i = region.platforms["Hub"].center
+	var start_scrap := res.scrap
+	_expect(start_scrap == 200, "player should start with 200 scrap")
+
+	var deck := hub + Vector2i(2, 0)
+	_expect(region.get_tile(deck).type == "deck", "test tile should be plain deck")
+	_expect(build.try_place("dynamo", deck) == "", "a Dynamo on Hub deck should be allowed")
+	_expect(res.scrap == start_scrap - 40, "Dynamo should cost 40 scrap")
+	_expect(region.platform_load("Hub") == 3, "Dynamo should add 3 weight")
+	_expect(region.power_supply() == 10, "Dynamo on deck should supply 10")
+	_expect(not region.is_hex_walkable(deck), "a building blocks its tile")
+	_expect(build.try_place("rivet_turret", deck) != "", "can't build on an occupied tile")
+
+	var socket := hub + Vector2i(2, -1)
+	_expect(region.get_tile(socket).type == "generator_socket", "Hub should have a generator socket at (2,-1)")
+	_expect(build.try_place("dynamo", socket) == "", "a Dynamo on a socket should be allowed")
+	_expect(region.power_supply() == 25, "a socketed Dynamo should supply 15")
+
+	_expect(build.try_place("harvester", hub + Vector2i(-2, 0)) != "", "harvesters need an anchor")
+	var anchor := Vector2i(999, 999)
+	for hex in region.tiles_of_platform("Hub"):
+		if region.get_tile(hex).type == "harvester_anchor":
+			anchor = hex
+	_expect(build.try_place("harvester", anchor) == "", "a harvester on the Hub anchor should be allowed")
+	_expect(region.power_supply() == 55, "harvester should add 30 power")
+
+	res.add_scrap(100)
+	var coil_err := build.try_place("arc_coil", hub + Vector2i(-2, 2))
+	_expect(coil_err == "", "an Arc Coil should be allowed: " + coil_err)
+	_expect(region.power_demand() == 8, "Arc Coil should draw 8")
+	_expect(build.try_place("rivet_turret", hub) != "", "can't build on the Hub core")
+	_expect(build.try_place("rivet_turret", region.platforms["Foundry"].center) != "", "can't build on an unowned platform")
+	var hero: Unit = main.selection.find_hero()
+	var hero_home := hero.position
+	hero.position = region.hex_center(hub + Vector2i(0, 1))
+	_expect(build.placement_problem("rivet_turret", hub + Vector2i(0, 1)) == "Units are standing there", "can't build under a unit")
+	hero.position = hero_home
+
+	var before := res.scrap
+	res.scrap = 10
+	_expect(build.try_place("flak_battery", hub + Vector2i(-1, -1)).begins_with("Not enough scrap"), "costs are enforced")
+	res.scrap = before
+
+	var refund := build.demolish(deck)
+	_expect(refund == 30, "demolishing a Dynamo refunds 30, got %d" % refund)
+	_expect(res.scrap == before + 30, "refund should be added to scrap")
+	_expect(region.is_hex_walkable(deck), "demolished tile is walkable again")
+	_expect(region.platform_load("Hub") == 2 + 3 + 4, "load after demolish should be 9, got %d" % region.platform_load("Hub"))
+
+	# Build mode hotkeys create and clear the ghost.
+	build.start_placing("flak_battery")
+	_expect(build.placing == "flak_battery" and build._ghost != null, "start_placing should show a ghost")
+	build.cancel_placing()
+	_expect(build.placing == "" and build._ghost == null, "cancel_placing should clear the ghost")

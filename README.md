@@ -10,7 +10,7 @@ Built with [Godot 4.3](https://godotengine.org/download/archive/4.3-stable/) (st
 2. In the Project Manager, choose **Import** and pick `project.godot` in this folder.
 3. Press **F5** to play.
 
-The current build is a placeholder sky region on hexagonal tiles: your Hub, five neutral platforms, the rival Ironbell HQ, walkways, a ferry route, two storm clouds and a rival air lane. A legend in the top right explains the tile colours. Your Commander (gold) and a squad of four Riveteers start on the Hub and can be selected and sent across walkways.
+The current build is a placeholder sky region on hexagonal tiles: your Hub, five neutral platforms, the rival Ironbell HQ, walkways, a ferry route, two storm clouds and a rival air lane. A legend in the top right explains the tile colours. Your Commander (gold) and a squad of four Riveteers start on the Hub and can be selected and sent across walkways. You start with 200 scrap and can build on the Hub; the top bar shows scrap and the power grid, and each platform's label shows its load.
 
 To change the map, edit `scripts/world/level_layout.gd`: platforms, features, walkways, ferry routes, clouds and air lanes are all plain tables there.
 
@@ -28,6 +28,9 @@ To change the map, edit `scripts/world/level_layout.gd`: platforms, features, wa
 | Select all units on screen | Q |
 | Select hero | H (double-tap to move the camera to them) |
 | Control groups | Ctrl + 1 to 5 saves, 1 to 5 selects, double-tap to move the camera |
+| Build | Z Dynamo Generator, X Cloud Harvester, C Rivet Turret, V Flak Battery, B Arc Coil |
+| While placing | Left click places, Shift keeps placing, R rotates, Esc or right click cancels |
+| Demolish | Delete over a building (refunds 75%) |
 
 The full default key map (selection, control groups, build shortcuts, game speed) is defined in `tools/input_bindings.gd` and already written into `project.godot`. Those actions will be hooked up as each system is built.
 
@@ -40,6 +43,8 @@ The full default key map (selection, control groups, build shortcuts, game speed
 | `scripts/world/` | Hex grid math, the level layout data, and the sky region builder with routing |
 | `scripts/units/` | Player units and the hero |
 | `scripts/selection/` | Selection, orders and control groups |
+| `scripts/buildings/` | Building catalog (costs, power, weight), placed buildings and build mode |
+| `scripts/economy/` | The player's scrap and crystals |
 | `tools/` | Developer scripts: input map generator and the smoke test |
 
 ## Developer tools

@@ -1,5 +1,5 @@
 ## Root of the prototype scene. Spawns the starting units on the Hub, sets up
-## selection, and wires global hotkeys to the camera.
+## selection and build mode, and runs the HUD.
 extends Node3D
 
 const SQUAD_SIZE := 4
@@ -8,7 +8,13 @@ const SQUAD_SIZE := 4
 @onready var region: SkyRegion = $Region
 
 var selection: SelectionController
+var building: BuildController
+var resources: PlayerResources
 var _status: Label
+var _resource_bar: Label
+var _build_bar: Label
+var _notice: Label
+var _notice_tween: Tween
 
 
 func _ready() -> void:
@@ -22,9 +28,27 @@ func _ready() -> void:
 	selection.region = region
 	add_child(selection)
 
+	resources = PlayerResources.new()
+	resources.name = "PlayerResources"
+	add_child(resources)
+
+	# Added after selection so it sees mouse clicks first while placing.
+	building = BuildController.new()
+	building.name = "BuildController"
+	building.region = region
+	building.camera = camera
+	building.resources = resources
+	add_child(building)
+
 	_build_hud()
 	selection.selection_changed.connect(_on_selection_changed)
 	_on_selection_changed(selection.selected)
+	resources.changed.connect(_refresh_resources)
+	region.buildings_changed.connect(_refresh_resources)
+	building.notice.connect(show_notice)
+	building.mode_changed.connect(_on_build_mode_changed)
+	_refresh_resources()
+	_on_build_mode_changed("")
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -70,6 +94,73 @@ func _build_hud() -> void:
 	_status.add_theme_constant_override("shadow_offset_y", 1)
 	layer.add_child(_status)
 	layer.add_child(_build_legend())
+
+	_resource_bar = _hud_label("Resources", 20)
+	_resource_bar.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_resource_bar.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_resource_bar.position.y = 16
+	layer.add_child(_resource_bar)
+
+	_build_bar = _hud_label("BuildBar", 16)
+	_build_bar.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	_build_bar.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_build_bar.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_build_bar.offset_top = -40
+	_build_bar.offset_bottom = -12
+	_build_bar.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	layer.add_child(_build_bar)
+
+	_notice = _hud_label("Notice", 18)
+	_notice.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	_notice.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_notice.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_notice.offset_top = -76
+	_notice.offset_bottom = -48
+	_notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_notice.modulate.a = 0.0
+	layer.add_child(_notice)
+
+
+func _hud_label(node_name: String, font_size: int) -> Label:
+	var label := Label.new()
+	label.name = node_name
+	label.add_theme_font_size_override("font_size", font_size)
+	label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
+	label.add_theme_constant_override("shadow_offset_x", 1)
+	label.add_theme_constant_override("shadow_offset_y", 1)
+	return label
+
+
+## Shows a short message above the build bar that fades out.
+func show_notice(text: String) -> void:
+	_notice.text = text
+	_notice.modulate.a = 1.0
+	if _notice_tween and _notice_tween.is_valid():
+		_notice_tween.kill()
+	_notice_tween = create_tween()
+	_notice_tween.tween_interval(1.5)
+	_notice_tween.tween_property(_notice, "modulate:a", 0.0, 0.6)
+
+
+func _refresh_resources() -> void:
+	var supply := region.power_supply()
+	var demand := region.power_demand()
+	var power := "Power %d / %d" % [demand, supply]
+	if demand > supply:
+		power += " (brownout)"
+	_resource_bar.text = "Scrap %d      %s      Crystals %d" % [resources.scrap, power, resources.crystals]
+
+
+func _on_build_mode_changed(type_id: String) -> void:
+	if type_id != "":
+		var data := BuildingCatalog.get_data(type_id)
+		_build_bar.text = "Placing %s (%d scrap, weight %d)    Left click: place    Shift: keep placing    R: rotate    Esc / right click: cancel" % [data.name, data.cost, data.weight]
+		return
+	var parts := PackedStringArray()
+	for i in BuildingCatalog.HOTKEY_ORDER.size():
+		var data := BuildingCatalog.get_data(BuildingCatalog.HOTKEY_ORDER[i])
+		parts.append("%s %s (%d)" % [BuildingCatalog.HOTKEY_LABELS[i], data.name, data.cost])
+	_build_bar.text = "    ".join(parts) + "    Del: demolish"
 
 
 ## Colour key for the placeholder tiles, top right.
