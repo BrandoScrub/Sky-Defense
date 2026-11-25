@@ -75,6 +75,8 @@ func _ready() -> void:
 	_build_beacons()
 	_collect_scenery()
 	region.walkways_changed.connect(_collect_scenery)
+	# Air lanes are redrawn when the wind turns; hide the new markers too.
+	region.air_routes_changed.connect(_collect_scenery)
 	update_visibility()
 	for cell in _fading.keys():
 		_set_cell_scale(cell, 0.0)

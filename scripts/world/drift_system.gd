@@ -3,7 +3,9 @@
 ## the hex grid. (The world doc's towable balloon platforms.)
 ##
 ## Each balloon runs a loop:
-##   1. Moored: a short walkway joins it to the platform at its mooring.
+##   1. Moored: a short walkway joins it to the platform at its mooring. With
+##      a WindSystem set, it stays moored until the wind turns (every few
+##      waves); without one, it casts off after `moored_seconds`.
 ##   2. Warning: for `warning_seconds` the walkway flashes amber, every unit
 ##      standing on it gets a caution sign over its head, and a klaxon sounds
 ##      (then a beep each second) while any of your units are still on it.
@@ -55,6 +57,12 @@ const DRIFTING := "drifting"
 ## walkway: Array[Vector2i], hop (0..1), riders: Array[Unit], root: Node3D,
 ## sign: Label3D, beep (seconds to next beep)}
 var balloons: Array[Dictionary] = []
+## Optional: when set, balloons only cast off when the wind turns.
+var wind: WindSystem:
+	set(value):
+		wind = value
+		if wind and not wind.wind_changed.is_connected(_on_wind_changed):
+			wind.wind_changed.connect(_on_wind_changed)
 
 var _klaxon: AudioStreamPlayer
 var _beep: AudioStreamPlayer
@@ -84,7 +92,7 @@ func step(delta: float) -> void:
 		b.timer -= delta
 		match b.state:
 			MOORED:
-				if b.timer <= 0.0:
+				if b.timer <= 0.0 and wind == null:
 					_start_warning(b)
 			WARNING:
 				_update_warning(b, delta)
@@ -93,6 +101,16 @@ func step(delta: float) -> void:
 			DRIFTING:
 				_drift(b, delta)
 		_update_sign(b)
+
+
+## The wind turned: every moored balloon starts its warning and then drifts
+## to its other mooring.
+func _on_wind_changed(_from_index: int, first: bool) -> void:
+	if first:
+		return
+	for b in balloons:
+		if b.state == MOORED:
+			_start_warning(b)
 
 
 ## The balloon entry with this name, or {}.
@@ -569,7 +587,11 @@ func _place_label(b: Dictionary, offset: Vector3) -> void:
 func _update_sign(b: Dictionary) -> void:
 	match b.state:
 		MOORED:
-			b.sign.text = "Moored at %s\nCasts off in %ds" % [moored_to(b), ceili(maxf(b.timer, 0.0) + warning_seconds)]
+			if wind:
+				var left := wind.waves_until_shift(wind.waves.wave) if wind.waves else wind.shift_every
+				b.sign.text = "Moored at %s\nCasts off when the wind turns (%d wave%s)" % [moored_to(b), left, "" if left == 1 else "s"]
+			else:
+				b.sign.text = "Moored at %s\nCasts off in %ds" % [moored_to(b), ceili(maxf(b.timer, 0.0) + warning_seconds)]
 			b.sign.modulate = Color(0.75, 0.95, 1.0)
 		WARNING:
 			b.sign.text = "CASTING OFF IN %d\nClear the walkway!" % ceili(maxf(b.timer, 0.0))

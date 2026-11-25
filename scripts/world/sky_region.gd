@@ -83,6 +83,13 @@ signal buildings_changed
 signal owner_changed(platform_name: String, new_owner: String)
 ## Emitted when a walkway is added at runtime.
 signal walkways_changed
+## Emitted when the drawn rival air lanes change (the wind turned).
+signal air_routes_changed
+
+## Goes up whenever tiles are added or removed, so AirNav knows to rebuild.
+var tiles_version := 0
+## "from|to" -> the waypoints the air lane between those platforms follows.
+var air_routes := {}
 
 ## Walkway cost per tile and the longest walkway the player can build.
 const WALKWAY_COST_PER_TILE := 15
@@ -128,11 +135,14 @@ func _ready() -> void:
 		_draw_ferry_route(f[0], f[1])
 	for c in layout.clouds:
 		_draw_cloud(c)
-	for a in layout.air_lanes:
-		_draw_air_lane(a[0], a[1])
 
 	_build_tiles()
 	_build_walk_graph()
+	# Air lanes curve around islands, so they need the tiles first. Calm
+	# until the wind picks up (VesperFleet redraws them when it turns).
+	var nav := AirNav.new(self)
+	for a in layout.air_lanes:
+		set_air_route(a[0], a[1], nav.plan(get_platform_position(a[0]), get_platform_position(a[1])), false)
 
 
 # --- Queries ----------------------------------------------------------------
@@ -915,10 +925,49 @@ func _draw_ferry_route(a_name: String, b_name: String) -> void:
 	_draw_markers("Ferry_%s_%s" % [a_name, b_name], a, b, FERRY_HEIGHT, COLORS.ferry, 0.5)
 
 
-func _draw_air_lane(a_name: String, b_name: String) -> void:
-	var a: Vector2i = platforms[a_name].center
-	var b: Vector2i = platforms[b_name].center
-	_draw_markers("AirLane_%s_%s" % [a_name, b_name], a, b, AIR_LANE_HEIGHT, COLORS.air_lane, 0.6)
+## Draws the air lane from one platform to another along `route` (from
+## AirNav), replacing any earlier drawing of it.
+func set_air_route(a_name: String, b_name: String, route: PackedVector3Array, announce := true) -> void:
+	var points := PackedVector3Array([Vector3(get_platform_position(a_name).x, 0.0, get_platform_position(a_name).z)])
+	points.append_array(route)
+	air_routes[a_name + "|" + b_name] = points
+	var node_name := ("AirLane_%s_%s" % [a_name, b_name]).replace(" ", "")
+	var old := get_node_or_null(node_name)
+	if old:
+		remove_child(old)
+		old.queue_free()
+	var root := Node3D.new()
+	root.name = node_name
+	add_child(root)
+	# A marker every tile or so along the flight path, skipping both ends.
+	var spacing := tile_size * 1.6
+	var carry := spacing
+	for i in range(1, points.size()):
+		var a := points[i - 1]
+		var b := points[i]
+		var length := a.distance_to(b)
+		var t := carry
+		while t < length:
+			var at := a.lerp(b, t / length)
+			if at.distance_to(points[points.size() - 1]) > tile_size * 2.0 and at.distance_to(points[0]) > tile_size * 2.0:
+				var marker := MeshInstance3D.new()
+				marker.mesh = _hex_mesh(0.15, tile_size * 0.6)
+				marker.material_override = _material(COLORS.air_lane, true)
+				marker.position = at + Vector3.UP * AIR_LANE_HEIGHT
+				root.add_child(marker)
+			t += spacing
+		carry = t - length
+	if announce:
+		air_routes_changed.emit()
+
+
+## The drawn air lanes as [from, to, waypoints] (waypoints include the start).
+func air_lane_routes() -> Array:
+	var out := []
+	for key in air_routes:
+		var names: PackedStringArray = key.split("|")
+		out.append([names[0], names[1], air_routes[key]])
+	return out
 
 
 func _draw_markers(node_name: String, a: Vector2i, b: Vector2i, height: float, color: Color, scale_factor: float) -> void:
@@ -1006,6 +1055,7 @@ func tile_node(hex: Vector2i) -> MeshInstance3D:
 ## Adds tiles ({hex: {"type", "platform"}}) with their meshes, and links the
 ## walkable ones into the walking graph.
 func add_tiles(new_tiles: Dictionary) -> void:
+	tiles_version += 1
 	for hex in new_tiles:
 		tiles[hex] = new_tiles[hex]
 		_make_tile(hex)
@@ -1023,6 +1073,7 @@ func add_tiles(new_tiles: Dictionary) -> void:
 
 ## Removes tiles, their meshes and their walking-graph points.
 func remove_tiles(hexes: Array) -> void:
+	tiles_version += 1
 	for hex in hexes:
 		tiles.erase(hex)
 		var node: Node = _tile_nodes.get(hex)
