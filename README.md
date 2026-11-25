@@ -24,6 +24,8 @@ Storm clouds are worth fighting over. Each Cloud Harvester taps the storm its an
 
 The Crystal Spire has no walkway at the start. Right click it and your units walk to the Hub's ferry dock, board the airship when it's in, and walk on from the far dock. The ferry crosses every few seconds in both directions.
 
+All art is placeholder geometry built in code: brass-trimmed decks with lamp posts, lift engines under each platform, a clock-tower headquarters, helmeted Riveteers, a top-hatted Commander, boxy Ironbell walkers and Vesper blimps. Below the city a stormy sea of cloud drifts past, with lightning flickering through it (`scripts/world/sky_backdrop.gd` and `shaders/cloud_sea.gdshader`).
+
 To change the map, edit `scripts/world/level_layout.gd`: platforms, features, walkways, ferry routes, clouds and air lanes are all plain tables there.
 
 ## Controls

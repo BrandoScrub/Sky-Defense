@@ -54,6 +54,10 @@ var _game_over := false
 
 func _ready() -> void:
 	camera.bounds = region.get_bounds()
+	var backdrop := SkyBackdrop.new()
+	backdrop.name = "SkyBackdrop"
+	backdrop.area = region.get_bounds().grow(140.0)
+	add_child(backdrop)
 	camera.position = region.get_platform_position("Hub")
 	_spawn_starting_units()
 

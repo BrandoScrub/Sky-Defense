@@ -119,6 +119,9 @@ func _build_visuals() -> void:
 	if flying:
 		_build_aircraft()
 		return
+	if faction == "rival":
+		_build_walker()
+		return
 	var height := 2.2 if is_hero else 1.6
 	var radius := footprint * (1.0 if is_hero else 0.8)
 
@@ -145,6 +148,8 @@ func _build_visuals() -> void:
 	nose.position = Vector3(0.0, height * 0.7, radius)
 	nose.material_override = mat
 	add_child(nose)
+
+	_add_gear(height, radius)
 
 	_ring = MeshInstance3D.new()
 	_ring.name = "SelectionRing"
@@ -204,3 +209,113 @@ func _build_aircraft() -> void:
 	shadow.material_override = shadow_mat
 	shadow.position.y = -position.y + 0.08
 	add_child(shadow)
+
+
+## Helmet, pack and rifle for player units; a top hat for the Commander.
+func _add_gear(height: float, radius: float) -> void:
+	var brass := _plain(Color(0.78, 0.6, 0.3))
+	var leather := _plain(Color(0.35, 0.24, 0.16))
+	var head := MeshInstance3D.new()
+	var sphere := SphereMesh.new()
+	sphere.radius = radius * 0.7
+	sphere.height = radius * 1.4
+	head.mesh = sphere
+	head.position.y = height + radius * 0.45
+	head.material_override = _plain(Color(0.85, 0.7, 0.55))
+	add_child(head)
+	if is_hero:
+		var brim := MeshInstance3D.new()
+		brim.mesh = _cyl(radius * 1.1, radius * 1.1, 0.06)
+		brim.position.y = height + radius * 0.85
+		brim.material_override = _plain(Color(0.12, 0.1, 0.1))
+		add_child(brim)
+		var hat := MeshInstance3D.new()
+		hat.mesh = _cyl(radius * 0.6, radius * 0.65, radius * 1.1)
+		hat.position.y = height + radius * 1.4
+		hat.material_override = brim.material_override
+		add_child(hat)
+	else:
+		var helmet := MeshInstance3D.new()
+		var dome := SphereMesh.new()
+		dome.radius = radius * 0.78
+		dome.height = radius * 0.9
+		dome.is_hemisphere = true
+		helmet.mesh = dome
+		helmet.position.y = height + radius * 0.55
+		helmet.material_override = brass
+		add_child(helmet)
+	var pack := MeshInstance3D.new()
+	var box := BoxMesh.new()
+	box.size = Vector3(radius * 1.2, height * 0.4, radius * 0.6)
+	pack.mesh = box
+	pack.position = Vector3(0, height * 0.6, -radius * 0.9)
+	pack.material_override = leather
+	add_child(pack)
+	var rifle := MeshInstance3D.new()
+	var barrel := BoxMesh.new()
+	barrel.size = Vector3(0.1, 0.1, radius * 2.4)
+	rifle.mesh = barrel
+	rifle.position = Vector3(radius * 0.8, height * 0.55, radius * 0.7)
+	rifle.material_override = _plain(Color(0.2, 0.2, 0.22))
+	add_child(rifle)
+
+
+## Ironbell walker: a boxy riveted body on two stubby legs with a smokestack.
+func _build_walker() -> void:
+	var iron := _plain(body_color)
+	var dark := _plain(body_color.darkened(0.5))
+	var torso := MeshInstance3D.new()
+	torso.name = "Body"
+	var box := BoxMesh.new()
+	box.size = Vector3(1.2, 1.0, 1.0)
+	torso.mesh = box
+	torso.position.y = 1.5
+	torso.material_override = iron
+	add_child(torso)
+	for x in [-0.35, 0.35]:
+		var leg := MeshInstance3D.new()
+		var leg_box := BoxMesh.new()
+		leg_box.size = Vector3(0.3, 1.0, 0.4)
+		leg.mesh = leg_box
+		leg.position = Vector3(x, 0.5, 0)
+		leg.material_override = dark
+		add_child(leg)
+	var stack := MeshInstance3D.new()
+	stack.mesh = _cyl(0.15, 0.18, 0.8)
+	stack.position = Vector3(-0.3, 2.3, -0.25)
+	stack.material_override = dark
+	add_child(stack)
+	var eye := MeshInstance3D.new()
+	var lens := SphereMesh.new()
+	lens.radius = 0.15
+	lens.height = 0.3
+	eye.mesh = lens
+	eye.position = Vector3(0, 1.65, 0.5)
+	var glow := _plain(Color(1.0, 0.45, 0.2))
+	glow.emission_enabled = true
+	glow.emission = Color(1.0, 0.45, 0.2)
+	eye.material_override = glow
+	add_child(eye)
+	var gun := MeshInstance3D.new()
+	var barrel := BoxMesh.new()
+	barrel.size = Vector3(0.18, 0.18, 0.9)
+	gun.mesh = barrel
+	gun.position = Vector3(0.7, 1.4, 0.4)
+	gun.material_override = dark
+	add_child(gun)
+
+
+func _plain(color: Color) -> StandardMaterial3D:
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = color
+	mat.roughness = 0.6
+	return mat
+
+
+func _cyl(top: float, bottom: float, height: float) -> CylinderMesh:
+	var mesh := CylinderMesh.new()
+	mesh.top_radius = top
+	mesh.bottom_radius = bottom
+	mesh.height = height
+	mesh.radial_segments = 10
+	return mesh

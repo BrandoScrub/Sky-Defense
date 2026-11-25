@@ -567,6 +567,7 @@ func _build_tiles() -> void:
 
 	for p in Layout.PLATFORMS:
 		_add_underside(p)
+		_add_trim(p)
 		_add_label(p)
 
 
@@ -594,8 +595,8 @@ func _add_prop(tile: Node3D, type: String, tile_height: float) -> void:
 	var top := tile_height / 2.0
 	match type:
 		"core", "rival_core":
-			prop.mesh = _hex_mesh(3.0, tile_size * 0.7)
-			prop.position.y = top + 1.5
+			prop.mesh = _hex_mesh(1.2, tile_size * 0.8)
+			prop.position.y = top + 0.6
 		"generator_socket":
 			var cyl := CylinderMesh.new()
 			cyl.top_radius = tile_size * 0.35
@@ -630,6 +631,75 @@ func _add_prop(tile: Node3D, type: String, tile_height: float) -> void:
 			prop.position.y = top + 1.25
 	prop.material_override = _material(COLORS[type], type == "crystal_seam" or type == "spawn")
 	tile.add_child(prop)
+	_add_prop_details(prop, type)
+
+
+## Extra placeholder pieces that make each feature read at a glance.
+func _add_prop_details(prop: MeshInstance3D, type: String) -> void:
+	var brass := _material(Color(0.75, 0.56, 0.26))
+	var iron := _material(Color(0.22, 0.21, 0.2))
+	match type:
+		"core", "rival_core":
+			# A clock-tower headquarters: column, dome and a glowing beacon.
+			var player := type == "core"
+			var column := _part(_cylinder_mesh(0.9, 1.1, 2.6, 8), Vector3(0, 1.9, 0),
+				_material(Color(0.55, 0.4, 0.22) if player else Color(0.35, 0.12, 0.1)))
+			prop.add_child(column)
+			var dome := SphereMesh.new()
+			dome.radius = 1.2
+			dome.height = 1.6
+			prop.add_child(_part(dome, Vector3(0, 3.3, 0), brass if player else iron))
+			prop.add_child(_part(_cylinder_mesh(0.0, 0.25, 1.6, 6), Vector3(0, 4.6, 0), iron))
+			var beacon := SphereMesh.new()
+			beacon.radius = 0.35
+			beacon.height = 0.7
+			prop.add_child(_part(beacon, Vector3(0, 5.5, 0),
+				_material(Color(1.0, 0.8, 0.4) if player else Color(1.0, 0.3, 0.2), true)))
+			for x in [-1.0, 1.0]:
+				prop.add_child(_part(_cylinder_mesh(0.25, 0.3, 2.2, 8), Vector3(x * 1.3, 1.7, 0.6), iron))
+		"scrap_heap":
+			for i in 4:
+				var box := BoxMesh.new()
+				box.size = Vector3(0.6 + i * 0.1, 0.4, 0.5)
+				var junk := _part(box, Vector3(-0.5 + i * 0.35, 0.3 + (i % 2) * 0.25, 0.3 - i * 0.2),
+					_material(Color(0.45, 0.3, 0.2) if i % 2 == 0 else Color(0.4, 0.4, 0.42)))
+				junk.rotation = Vector3(0.3 * i, 0.7 * i, 0.2)
+				prop.add_child(junk)
+		"crystal_seam":
+			for i in 3:
+				var shard := _part(_cylinder_mesh(0.0, 0.35, 1.4, 4), Vector3(0.6 * cos(i * 2.1), -0.4, 0.6 * sin(i * 2.1)), prop.material_override)
+				shard.rotation = Vector3(0.4 * sin(i * 2.1), 0, -0.4 * cos(i * 2.1))
+				prop.add_child(shard)
+		"dock":
+			var arm := BoxMesh.new()
+			arm.size = Vector3(0.3, 0.3, 1.8)
+			prop.add_child(_part(arm, Vector3(0, 1.1, 0.8), iron))
+			var lamp := SphereMesh.new()
+			lamp.radius = 0.25
+			lamp.height = 0.5
+			prop.add_child(_part(lamp, Vector3(0, 1.5, 0), _material(Color(0.5, 1.0, 0.9), true)))
+		"generator_socket":
+			var coil := TorusMesh.new()
+			coil.inner_radius = 0.5
+			coil.outer_radius = 0.7
+			prop.add_child(_part(coil, Vector3(0, 0.25, 0), brass))
+
+
+func _part(mesh: Mesh, at: Vector3, mat: Material) -> MeshInstance3D:
+	var part := MeshInstance3D.new()
+	part.mesh = mesh
+	part.position = at
+	part.material_override = mat
+	return part
+
+
+func _cylinder_mesh(top: float, bottom: float, height: float, sides: int) -> CylinderMesh:
+	var mesh := CylinderMesh.new()
+	mesh.top_radius = top
+	mesh.bottom_radius = bottom
+	mesh.height = height
+	mesh.radial_segments = sides
+	return mesh
 
 
 func _add_underside(p: Dictionary) -> void:
@@ -647,6 +717,91 @@ func _add_underside(p: Dictionary) -> void:
 	cone.position = hex_center(p.center) + Vector3.DOWN * (DECK_HEIGHT + mesh.height / 2.0)
 	cone.rotation.y = PI / 6.0
 	add_child(cone)
+
+	# Lift engines: brass turbines around the cone that keep the platform up.
+	var brass := _material(Color(0.7, 0.52, 0.25))
+	var dark := _material(Color(0.18, 0.17, 0.17))
+	var engines := 3 if p.radius <= 1 else 4
+	for i in engines:
+		var angle := TAU * i / engines + 0.4
+		var out := Vector3(cos(angle), 0, sin(angle))
+		var engine := Node3D.new()
+		engine.position = hex_center(p.center) + out * radius * 0.55 + Vector3.DOWN * (DECK_HEIGHT + mesh.height * 0.45)
+		engine.rotation.y = -angle
+		add_child(engine)
+		var housing := MeshInstance3D.new()
+		var cyl := CylinderMesh.new()
+		cyl.top_radius = 0.9
+		cyl.bottom_radius = 1.1
+		cyl.height = 1.6
+		cyl.radial_segments = 10
+		housing.mesh = cyl
+		housing.rotation.z = PI / 2.0
+		housing.position = Vector3(0.9, 0, 0)
+		housing.material_override = brass
+		engine.add_child(housing)
+		var blades := MeshInstance3D.new()
+		var blade := BoxMesh.new()
+		blade.size = Vector3(0.1, 2.6, 0.3)
+		blades.mesh = blade
+		blades.position = Vector3(1.8, 0, 0)
+		blades.rotation.x = angle
+		blades.material_override = dark
+		engine.add_child(blades)
+	# A warm lamp at the tip of the cone.
+	var lamp := MeshInstance3D.new()
+	var bulb := SphereMesh.new()
+	bulb.radius = 0.6
+	bulb.height = 1.2
+	lamp.mesh = bulb
+	lamp.material_override = _material(Color(1.0, 0.75, 0.4), true)
+	lamp.position = hex_center(p.center) + Vector3.DOWN * (DECK_HEIGHT + mesh.height + 0.3)
+	add_child(lamp)
+
+
+## A riveted brass band around the deck's edge and lamp posts at its corners.
+func _add_trim(p: Dictionary) -> void:
+	var band := MeshInstance3D.new()
+	band.name = "Trim_" + p.name.replace(" ", "")
+	var ring := CylinderMesh.new()
+	var radius: float = tile_size * HexGrid.SQRT3 * (p.radius + 0.42)
+	ring.top_radius = radius
+	ring.bottom_radius = radius * 0.97
+	ring.height = 0.9
+	ring.radial_segments = 6
+	ring.cap_top = false
+	band.mesh = ring
+	var mat := _material(Color(0.62, 0.45, 0.22)).duplicate() as StandardMaterial3D
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mat.metallic = 0.3
+	band.material_override = mat
+	band.position = hex_center(p.center) + Vector3.DOWN * (DECK_HEIGHT * 0.55)
+	band.rotation.y = PI / 6.0
+	add_child(band)
+	var post_mat := _material(Color(0.2, 0.19, 0.18))
+	var glow := _material(Color(1.0, 0.8, 0.45), true)
+	for i in 6:
+		var corner: Vector2i = p.center + HexGrid.DIRECTIONS[i] * p.radius
+		var pos := hex_center(corner)
+		var out := pos - hex_center(p.center)
+		out = out.normalized() if out.length() > 0.01 else Vector3.ZERO
+		var post := MeshInstance3D.new()
+		var pole := CylinderMesh.new()
+		pole.top_radius = 0.07
+		pole.bottom_radius = 0.1
+		pole.height = 2.2
+		post.mesh = pole
+		post.material_override = post_mat
+		post.position = pos + out * tile_size * 0.75 + Vector3.UP * 1.1
+		add_child(post)
+		var light := MeshInstance3D.new()
+		var bulb := SphereMesh.new()
+		bulb.radius = 0.2
+		bulb.height = 0.4
+		light.mesh = bulb
+		light.material_override = glow
+		light.position = post.position + Vector3.UP * 1.2
+		add_child(light)
 
 
 func _add_label(p: Dictionary) -> void:
