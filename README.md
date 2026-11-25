@@ -40,7 +40,7 @@ To change the map, edit `scripts/world/level_layout.gd`: platforms, features, wa
 | Select all units on screen | Ctrl + A |
 | Select hero | H (double-tap to move the camera to them) |
 | Control groups | Ctrl + 1 to 5 saves, 1 to 5 selects, double-tap to move the camera |
-| Build menu | Bottom left: tabs (Army, Defense, Economy, Storm) over a 4 x 4 command grid. Tab cycles the tabs. The grid keys match their spots on the keyboard: Q W E R / A S D F / Z X C V / T G B N, and what each does depends on the tab |
+| Build menu | Bottom left: tabs (Army, Defense, Economy, Storm, Ships) over a 4 x 4 command grid. Tab cycles the tabs. The grid keys match their spots on the keyboard: Q W E R / A S D F / Z X C V / T G B N, and what each does depends on the tab |
 | Build | Defense: Q Rivet Turret, W Flak Battery, E Arc Coil. Economy: Q Dynamo Generator, W Walkway. Storm: Q Cloud Harvester |
 | While placing | Left click places, Shift keeps placing, R rotates, Esc or right click cancels |
 | Demolish | Delete over a building (refunds 75%) |

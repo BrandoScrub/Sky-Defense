@@ -1,5 +1,5 @@
 ## The build menu in the bottom-left corner: a row of tabs (Army, Defense,
-## Economy, Storm) above a 4 x 4 command grid, like a classic RTS. Each grid
+## Economy, Storm, Ships) above a 4 x 4 command grid, like a classic RTS. Each grid
 ## slot has a fixed key that matches its place on the keyboard:
 ##   Q W E R
 ##   A S D F
@@ -26,6 +26,8 @@ const TABS := {
 	"Defense": ["rivet_turret", "flak_battery", "arc_coil"],
 	"Economy": ["dynamo", "walkway"],
 	"Storm": ["harvester"],
+	# Airships go here once the player can build them.
+	"Ships": [],
 }
 
 const DEFAULT_HINT := "Tab: next tab   Shift + WASD: move camera   Del: demolish   Space: start wave   P: pause   F1-F3: speed"

@@ -232,7 +232,7 @@ func _check_build_menu(main: Node) -> void:
 	_expect(menu != null, "the HUD should have a build menu")
 	if menu == null:
 		return
-	_expect(menu.get_node("Box/Tabs").get_child_count() == 4, "the build menu should have 4 tabs")
+	_expect(menu.get_node("Box/Tabs").get_child_count() == 5, "the build menu should have 5 tabs")
 	for tab_name in BuildMenu.TABS:
 		menu.show_tab(tab_name)
 		_expect(menu._entry_buttons.size() == BuildMenu.TABS[tab_name].size(), "%s tab should show its buttons" % tab_name)
