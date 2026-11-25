@@ -23,6 +23,7 @@ func _initialize() -> void:
 	await process_frame
 	await process_frame
 	_check_scene(main)
+	_check_fog(main)
 	_check_camera(main.get_node("RtsCamera"))
 	_check_routing(main.get_node("Region"))
 	await _check_selection_and_orders(main)
@@ -70,6 +71,47 @@ func _check_scene(main: Node) -> void:
 		_expect(types.has(t), "no %s tile in the layout" % t)
 	_expect(region.has_node("Tiles") and region.get_node("Tiles").get_child_count() == region.tiles.size(),
 		"every tile should have a placeholder mesh")
+
+
+func _check_fog(main: Node) -> void:
+	var region: SkyRegion = main.get_node("Region")
+	var fog: FogSystem = main.fog
+	_expect(fog != null, "the main scene should have a FogSystem")
+	if fog == null:
+		return
+	fog.update_visibility()
+	_expect(fog.is_platform_revealed("Hub"), "the Hub should start out of the fog")
+	for hq in ["Ironbell HQ", "Vesper Aerodrome"]:
+		_expect(not fog.is_platform_revealed(hq), "%s should start hidden in the fog" % hq)
+		_expect(fog.beacons.has(hq), "%s should glow through the fog" % hq)
+	_expect(fog.beacons.has("Crystal Spire"), "the Crystal Spire should glow through the fog")
+	var hq_tile: Node3D = region._tile_nodes[region.platforms["Ironbell HQ"].center]
+	_expect(not hq_tile.visible, "Ironbell HQ's deck should be hidden by the fog")
+	_expect(not region.get_node("HQ_IronbellHQ").visible, "Ironbell's HQ building should be hidden by the fog")
+
+	var scout: Unit = main.get_node("Units").get_child(0)
+	var home := scout.position
+	var enemy := Unit.new()
+	enemy.faction = "rival"
+	main.get_node("Units").add_child(enemy)
+	enemy.position = region.get_platform_position("Vesper Aerodrome")
+	fog.update_visibility()
+	_expect(not enemy.visible, "a rival unit out of sight should be hidden")
+
+	scout.position = region.get_platform_position("Ironbell HQ")
+	enemy.position = scout.position + Vector3(3, 0, 0)
+	fog.update_visibility()
+	_expect(fog.is_platform_revealed("Ironbell HQ"), "a unit next to Ironbell HQ should reveal it")
+	_expect(not fog.beacons.has("Ironbell HQ"), "a revealed island stops glowing through the fog")
+	_expect(hq_tile.visible, "Ironbell HQ's deck should show once scouted")
+	_expect(enemy.visible, "a rival unit next to your unit should be visible")
+
+	scout.position = home
+	fog.update_visibility()
+	_expect(hq_tile.visible, "scouted sky should stay clear")
+	_expect(not enemy.visible, "a rival unit should vanish once you lose sight of it")
+	main.get_node("Units").remove_child(enemy)
+	enemy.free()
 
 
 func _check_hex_math() -> void:

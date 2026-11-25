@@ -56,6 +56,8 @@ The map is generated each game from a seed (`scripts/world/level_layout.gd`). Yo
 
 The full default key map (selection, control groups, build shortcuts, game speed) is defined in `tools/input_bindings.gd` and already written into `project.godot`. Those actions will be hooked up as each system is built.
 
+Dark storm clouds hide every part of the sky you haven't scouted (`scripts/world/fog_system.gd`). Your units and the platforms you own clear the clouds around them, and scouted sky stays clear. Rival units only show while something of yours can see them. Some islands glow through the storm with a hint: crystal seams (cyan, "Crystal glow?"), generator sockets (gold, "Electric hum?") and rival headquarters (Ironbell's furnace red, Vesper's violet signal lamps). The fog is only visual: it doesn't change what anyone can attack.
+
 ## Project layout
 
 | Path | What it holds |
@@ -63,7 +65,7 @@ The full default key map (selection, control groups, build shortcuts, game speed
 | `scenes/` | Godot scenes; `main.tscn` is the entry point |
 | `scripts/camera/` | The RTS camera |
 | `scripts/ui/` | HUD pieces: the bottom-left build menu and the bottom-right info card |
-| `scripts/world/` | Hex grid math, level layout data, the sky region builder with routing, claiming, platform load, the airship ferry and storm control |
+| `scripts/world/` | Hex grid math, level layout data, the sky region builder with routing, claiming, platform load, the airship ferry, storm control and the fog of war |
 | `scripts/units/` | Player units, the hero and recruiting |
 | `scripts/selection/` | Selection, orders and control groups |
 | `scripts/buildings/` | Building catalog (costs, power, weight), placed buildings and build mode |

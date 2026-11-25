@@ -47,6 +47,7 @@ var walkways: WalkwayBuilder
 var combat: CombatSystem
 var storms: StormSystem
 var loads: LoadSystem
+var fog: FogSystem
 
 ## The thing being described: a Node3D, or a Dictionary for map features.
 var shown = null
@@ -163,6 +164,10 @@ func pick(screen: Vector2):
 	var unit := _unit_at(screen)
 	if unit:
 		return unit
+	# Nothing to learn about sky still hidden in the storm.
+	var under = _point_at(screen, 0.0)
+	if fog and under != null and not fog.is_explored(under):
+		return null
 	var cloud := _cloud_at(screen)
 	if cloud != "":
 		return {"kind": "cloud", "name": cloud}

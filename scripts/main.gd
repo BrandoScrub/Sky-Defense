@@ -21,6 +21,8 @@ before they destroy your Hub. Ironbell walks; Vesper flies bombers.
    than Ironbell to get its power; if Ironbell holds it, lightning strikes.
 5. Right click the Crystal Spire to send units there by airship ferry.
 6. Keep platforms under their weight limit or they sag and shed buildings.
+7. Dark storm clouds hide the sky you haven't scouted. Glowing islands hint
+   at what's inside: crystal, generators, or a rival's HQ.
 
 Click anything to see what it is and what it does.
 When you're ready, gather your squad and attack-move (Alt + right click) north."""
@@ -41,6 +43,7 @@ var ferry: FerrySystem
 var storms: StormSystem
 var recruiter: Recruiter
 var fleet: VesperFleet
+var fog: FogSystem
 var _phase_label: Label
 var _banner: Label
 var resources: PlayerResources
@@ -158,6 +161,12 @@ func _ready() -> void:
 	add_child(recruiter)
 	recruiter.notice.connect(show_notice)
 	recruiter.recruited.connect(func(_u): show_notice("A Riveteer is ready on the Hub"))
+
+	fog = FogSystem.new()
+	fog.name = "FogSystem"
+	fog.region = region
+	fog.ferry = ferry
+	add_child(fog)
 
 	_build_hud()
 	selection.selection_changed.connect(_on_selection_changed)
@@ -344,6 +353,7 @@ func _build_hud() -> void:
 	info_panel.combat = combat
 	info_panel.storms = storms
 	info_panel.loads = loads
+	info_panel.fog = fog
 	layer.add_child(info_panel)
 
 	_notice = _hud_label("Notice", 18)
