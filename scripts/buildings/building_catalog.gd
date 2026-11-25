@@ -88,6 +88,15 @@ const BUILDINGS := {
 	},
 	# --- Hangars: launch defensive drones that fly out to anything that comes
 	# within "leash" of the hangar, then return. Lost drones are rebuilt.
+	# --- Ships: engines that let you move a turbine island (IslandSteering).
+	"turbine_engine": {
+		"name": "Turbine Engine", "cost": 60, "power": -3, "weight": 3,
+		"tiles": ["deck"], "shape": "engine",
+		"color": Color(0.72, 0.52, 0.26),
+		"hp": 140.0,
+		# Only fits on turbine islands; 4 of them let you steer the island.
+		"island_style": "turbine",
+	},
 	"drone_hangar": {
 		"name": "Drone Hangar", "cost": 90, "power": -6, "weight": 4,
 		"tiles": ["deck"], "shape": "hangar", "role": "hangar",

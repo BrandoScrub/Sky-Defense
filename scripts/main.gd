@@ -55,6 +55,7 @@ var bridges: RivalBridges
 var drift: DriftSystem
 var fog: FogSystem
 var wind: WindSystem
+var steering: IslandSteering
 var _phase_label: Label
 var _banner: Label
 var resources: PlayerResources
@@ -111,6 +112,14 @@ func _ready() -> void:
 	walkways.camera = camera
 	walkways.resources = resources
 	add_child(walkways)
+
+	# Steering turbine islands with Turbine Engines (Ships tab).
+	steering = IslandSteering.new()
+	steering.name = "IslandSteering"
+	steering.region = region
+	steering.camera = camera
+	steering.drift = drift
+	add_child(steering)
 
 	capture = CaptureSystem.new()
 	capture.name = "CaptureSystem"
@@ -217,6 +226,10 @@ func _ready() -> void:
 	building.notice.connect(show_notice)
 	building.mode_changed.connect(_on_build_mode_changed)
 	walkways.notice.connect(show_notice)
+	steering.notice.connect(show_notice)
+	steering.mode_changed.connect(func(on): build_menu.set_hint("Steer Island: click your turbine island, then open sky in the direction to go. Esc or right click: cancel." if on else ""))
+	steering.steering_started.connect(func(_p, _n): _refresh_resources())
+	steering.arrived.connect(func(_p): _refresh_resources())
 	walkways.mode_changed.connect(_on_walkway_mode_changed)
 	capture.platform_claimed.connect(_on_platform_claimed)
 	raids.raid_sent.connect(func(n): show_notice("Wave %d: Ironbell sent %d walkers toward your Hub" % [waves.wave, n]))
@@ -425,6 +438,7 @@ func _build_hud() -> void:
 	build_menu = BuildMenu.new()
 	build_menu.building = building
 	build_menu.walkways = walkways
+	build_menu.steering = steering
 	build_menu.recruiter = recruiter
 	build_menu.resources = resources
 	layer.add_child(build_menu)

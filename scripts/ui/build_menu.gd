@@ -31,14 +31,15 @@ const TABS := {
 	],
 	"Economy": ["dynamo", "walkway"],
 	"Storm": ["harvester"],
-	# Airships go here once the player can build them.
-	"Ships": [],
+	# Turbine Engines, and the order to steer a turbine island with 4 of them.
+	"Ships": ["turbine_engine", "steer"],
 }
 
 const DEFAULT_HINT := "Tab: next tab   Shift + WASD: move camera   Del: demolish   Space: start wave   P: pause   F1-F3: speed"
 
 var building: BuildController
 var walkways: WalkwayBuilder
+var steering: IslandSteering
 var recruiter: Recruiter
 var resources: PlayerResources
 
@@ -108,6 +109,8 @@ func _ready() -> void:
 		building.mode_changed.connect(_on_build_mode_changed)
 	if walkways:
 		walkways.mode_changed.connect(_on_walkway_mode_changed)
+	if steering:
+		steering.mode_changed.connect(func(_a): refresh())
 	if resources:
 		resources.changed.connect(refresh)
 	show_tab(TABS.keys()[0])
@@ -202,13 +205,27 @@ func activate(entry: String) -> void:
 		"walkway":
 			if building:
 				building.cancel_placing()
+			if steering and steering.active:
+				steering.cancel()
 			if walkways.active:
 				walkways.cancel()
 			else:
 				walkways.begin()
+		"steer":
+			if building:
+				building.cancel_placing()
+			if walkways and walkways.active:
+				walkways.cancel()
+			if steering:
+				if steering.active:
+					steering.cancel()
+				else:
+					steering.begin()
 		_:
 			if walkways and walkways.active:
 				walkways.cancel()
+			if steering and steering.active:
+				steering.cancel()
 			if building.placing == entry:
 				building.cancel_placing()
 			else:
@@ -268,6 +285,10 @@ func _update_button(entry: String) -> void:
 				cost = SkyRegion.WALKWAY_COST_PER_TILE
 				details = "Link one of your platforms to another.\nCosts %d scrap per tile." % cost
 				active = walkways != null and walkways.active
+			"steer":
+				title = "Steer Island"
+				details = "Move one of your turbine islands with %d Turbine Engines up to %d hexes.\nClick the island, then open sky in the direction to go.\nIts walkways break off after a %d second warning.\nDraws %d power while it moves." % [IslandSteering.ENGINES_NEEDED, IslandSteering.MAX_HEXES, 6, IslandSteering.STEER_POWER]
+				active = steering != null and steering.active
 			_:
 				var data := BuildingCatalog.get_data(entry)
 				title = data.name
@@ -276,6 +297,8 @@ func _update_button(entry: String) -> void:
 				active = building != null and building.placing == entry
 	var per_tile := " / tile" if entry == "walkway" else ""
 	button.text = "\n%s\n%d scrap%s" % [title, cost, per_tile]
+	if entry == "steer":
+		button.text = "\n%s\n%d power" % [title, IslandSteering.STEER_POWER]
 	button.tooltip_text = "%s  [%s]\n%s" % [title, _hotkey(entry), details]
 	button.set_pressed_no_signal(active)
 	var affordable := resources == null or resources.scrap >= cost
@@ -314,7 +337,9 @@ func _building_details(data: Dictionary) -> String:
 	var tiles := PackedStringArray()
 	for t in data.tiles:
 		tiles.append(String(t).replace("_", " "))
-	lines.append("Goes on: " + ", ".join(tiles))
+	lines.append("Goes on: " + ", ".join(tiles) + (" (%s islands only)" % data.island_style if data.has("island_style") else ""))
+	if data.has("island_style"):
+		lines.append("%d on one island let you steer it (Steer Island)" % IslandSteering.ENGINES_NEEDED)
 	return "\n".join(lines)
 
 
