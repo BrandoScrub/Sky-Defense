@@ -26,6 +26,7 @@ const COLORS := {
 	"rival": Color(0.5, 0.2, 0.18),
 	"vesper": Color(0.25, 0.33, 0.55),
 	"walkway": Color(0.3, 0.31, 0.33),
+	"rival_walkway": Color(0.42, 0.2, 0.16),
 	"core": Color(0.45, 0.28, 0.12),
 	"rival_core": Color(0.25, 0.08, 0.06),
 	"generator_socket": Color(0.95, 0.85, 0.2),
@@ -44,7 +45,7 @@ const COLORS := {
 const LEGEND := [
 	["hub", "Your platform"], ["core", "Your headquarters"], ["neutral", "Neutral platform"],
 	["rival", "Ironbell platform"], ["vesper", "Vesper platform"], ["rival_core", "Rival headquarters"],
-	["walkway", "Walkway"], ["generator_socket", "Generator socket"],
+	["walkway", "Walkway"], ["rival_walkway", "Ironbell bridge"], ["generator_socket", "Generator socket"],
 	["harvester_anchor", "Storm harvester anchor"], ["scrap_heap", "Scrap heap"],
 	["crystal_seam", "Crystal seam"], ["dock", "Ferry dock"], ["spawn", "Rival wave spawn"],
 	["cloud", "Storm cloud"], ["ferry", "Ferry route"], ["air_lane", "Rival air lane"],
@@ -59,6 +60,10 @@ var tile_size := Layout.TILE_SIZE
 static var seed_override := -1
 ## When not empty, the rivals to lay out instead of LevelLayout.DEFAULT_RIVALS.
 static var rivals_override: Array = []
+## The map starts with no walkways between islands: you build them to expand,
+## and Ironbell bridges its way toward you (RivalBridges). Tests set this to
+## lay every planned walkway up front instead.
+static var prebuilt_walkways := false
 ## The generated layout (see LevelLayout.generate).
 var layout := {}
 
@@ -116,7 +121,9 @@ func _ready() -> void:
 	for p in layout.platforms:
 		_lay_features(p)
 	for w in layout.walkways:
-		_lay_walkway(w[0], w[1])
+		_plan_walkway_span(w[0], w[1])
+		if prebuilt_walkways:
+			_lay_walkway(w[0], w[1])
 	for f in layout.ferry_routes:
 		_draw_ferry_route(f[0], f[1])
 	for c in layout.clouds:
@@ -458,9 +465,12 @@ func plan_walkway(from_hex: Vector2i, to_hex: Vector2i) -> Dictionary:
 
 
 ## Adds walkway tiles in the sky and links them into the walking graph.
-func add_walkway(new_tiles: Array) -> void:
+## `builder` is "player" or "rival" (rival bridges are tinted).
+func add_walkway(new_tiles: Array, builder := "player") -> void:
 	for hex in new_tiles:
 		tiles[hex] = {"type": "walkway", "platform": ""}
+		if builder == "rival":
+			tiles[hex].builder = "rival"
 		_make_tile(hex)
 		_add_walk_point(hex)
 	for hex in new_tiles:
@@ -487,6 +497,52 @@ func _lay_features(p: Dictionary) -> void:
 		if feature[1] is String:
 			# What the feature faces, e.g. the storm a harvester anchor taps.
 			tiles[hex].target = feature[1]
+
+
+## The open-sky hexes a planned walkway between two platforms would cover,
+## e.g. a span Ironbell will bridge. Empty if they already touch.
+func planned_span_tiles(a_name: String, b_name: String) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	for hex in planned_spans.get(_span_key(a_name, b_name), []):
+		if not tiles.has(hex):
+			out.append(hex)
+	return out
+
+
+## True if two platforms are joined by tiles you can walk on.
+func platforms_linked(a_name: String, b_name: String) -> bool:
+	var to := snap_to_walkable(get_platform_position(b_name))
+	return not find_route(snap_to_walkable(get_platform_position(a_name)), to, true).is_empty()
+
+
+## Platforms joined to `start` by planned walkways (whether built yet or not).
+func planned_reachable(start: String) -> Dictionary:
+	var seen := {start: true}
+	var todo := [start]
+	while not todo.is_empty():
+		var here: String = todo.pop_back()
+		for w in layout.walkways:
+			for k in 2:
+				if w[k] == here and not seen.has(w[1 - k]):
+					seen[w[1 - k]] = true
+					todo.append(w[1 - k])
+	return seen
+
+
+func _span_key(a_name: String, b_name: String) -> String:
+	return a_name + "|" + b_name if a_name < b_name else b_name + "|" + a_name
+
+
+func _plan_walkway_span(a_name: String, b_name: String) -> void:
+	var a: Dictionary = platforms[a_name]
+	var b: Dictionary = platforms[b_name]
+	var line := HexGrid.line(_rim_toward(a, b.center, true), _rim_toward(b, a.center, true))
+	var span: Array[Vector2i] = []
+	for hex in line:
+		if not tiles.has(hex):
+			span.append(hex)
+			planned_hexes[hex] = true
+	planned_spans[_span_key(a_name, b_name)] = span
 
 
 func _lay_walkway(a_name: String, b_name: String) -> void:
@@ -591,6 +647,8 @@ func _build_tiles() -> void:
 func _make_tile(hex: Vector2i) -> void:
 	var t: Dictionary = tiles[hex]
 	var kind: String = platforms[t.platform].kind if t.platform != "" else "walkway"
+	if t.get("builder", "") == "rival":
+		kind = "rival_walkway"
 	if t.platform != "" and platforms[t.platform].get("corp", "") == "Vesper":
 		kind = "vesper"
 	var is_walkway: bool = t.type == "walkway"
@@ -922,6 +980,11 @@ func _material(color: Color, glow := false) -> StandardMaterial3D:
 ## Open-sky hexes a balloon platform flies through. Walkways can't be built
 ## across them.
 var reserved_hexes := {}
+## Sky hexes that planned walkways (built or not) run over, so balloon tracks
+## keep clear of them.
+var planned_hexes := {}
+## "A|B" platform pair -> the hexes of the walkway planned between them.
+var planned_spans := {}
 
 
 func add_platform(p: Dictionary) -> void:

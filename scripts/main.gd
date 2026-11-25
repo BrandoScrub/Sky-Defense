@@ -7,25 +7,28 @@ const SQUAD_SIZE := 4
 const HERO_RESPAWN_SECONDS := 15.0
 
 const HOW_TO_PLAY := """How to play
-Goal: destroy Ironbell HQ (far north) and the Vesper Aerodrome (far east)
-before they destroy your Hub. Ironbell walks; Vesper flies bombers.
+Goal: destroy every rival HQ before they destroy your Hub.
+Ironbell bridges its way to you and walks; Vesper flies bombers.
 
-1. Build during the build phase with the menu in the bottom left (Tab
-   switches tabs). Rivet Turrets (Defense, Q) guard the walkway to Midway.
+1. Islands start unconnected. Build walkways (Economy, W) from a platform you
+   own to reach new islands, then park units there to claim them. How you
+   expand is up to you: the Foundry gives scrap, the Generator Rig power.
+2. Ironbell's crews bridge one span at a time from its HQ toward your Hub
+   (red-brown walkways), faster while a wave is out. Its walkers wait at the
+   end of the bridge, then march in. Kills pay scrap.
+3. Build during the build phase with the menu in the bottom left (Tab
+   switches tabs). Rivet Turrets (Defense, Q) guard where the bridge lands.
    Dynamo Generators (Economy, Q) power them; watch the power number at the top.
-2. Each wave of Ironbell walkers comes down the walkway. Kills pay scrap.
-   From wave 2 Vesper bombers fly in along the red air lanes and bomb your
-   buildings: Flak Batteries (Defense, W) shred them, Rivet Turrets only scratch them.
-3. Send units to a neutral platform to claim it (the Foundry gives scrap).
-4. Put Cloud Harvesters (Storm, Q) on storm anchors. Hold more harvesters on a storm
+4. From wave 2 Vesper bombers fly the red air lanes and bomb your buildings:
+   Flak Batteries (Defense, W) shred them, Rivet Turrets only scratch them.
+5. Put Cloud Harvesters (Storm, Q) on storm anchors. Hold more harvesters on a storm
    than Ironbell to get its power; if Ironbell holds it, lightning strikes.
-5. Right click the Crystal Spire to send units there by airship ferry.
-6. Keep platforms under their weight limit or they sag and shed buildings.
-7. Dark storm clouds hide the sky you haven't scouted. Glowing islands hint
+6. Right click the Crystal Spire to send units there by airship ferry.
+7. Keep platforms under their weight limit or they sag and shed buildings.
+8. Dark storm clouds hide the sky you haven't scouted. Glowing islands hint
    at what's inside: crystal, generators, or a rival's HQ.
 
-Click anything to see what it is and what it does.
-When you're ready, gather your squad and attack-move (Alt + right click) north."""
+Click anything to see what it is and what it does."""
 
 @onready var camera: RtsCamera = $RtsCamera
 @onready var region: SkyRegion = $Region
@@ -44,6 +47,7 @@ var ferry: FerrySystem
 var storms: StormSystem
 var recruiter: Recruiter
 var fleet: VesperFleet
+var bridges: RivalBridges
 var drift: DriftSystem
 var fog: FogSystem
 var _phase_label: Label
@@ -150,6 +154,14 @@ func _ready() -> void:
 	waves.fleet = fleet
 	waves.combat = combat
 	add_child(waves)
+
+	bridges = RivalBridges.new()
+	bridges.name = "RivalBridges"
+	bridges.region = region
+	bridges.waves = waves
+	add_child(bridges)
+	raids.bridges = bridges
+	bridges.reached_player.connect(func(c, p): show_notice("%s's bridge reached %s: expect walkers!" % [c, p]))
 
 	ferry = FerrySystem.new()
 	ferry.name = "FerrySystem"
