@@ -10,13 +10,14 @@ const HOW_TO_PLAY := """How to play
 Goal: destroy Ironbell HQ (far north) and the Vesper Aerodrome (far east)
 before they destroy your Hub. Ironbell walks; Vesper flies bombers.
 
-1. Build during the build phase: C Rivet Turrets guard the walkway to Midway.
-   Z Dynamo Generators power them; watch the power number at the top.
+1. Build during the build phase with the menu in the bottom left (Tab
+   switches tabs). Rivet Turrets (Defense, Q) guard the walkway to Midway.
+   Dynamo Generators (Economy, Q) power them; watch the power number at the top.
 2. Each wave of Ironbell walkers comes down the walkway. Kills pay scrap.
    From wave 2 Vesper bombers fly in along the red air lanes and bomb your
-   buildings: V Flak Batteries shred them, Rivet Turrets only scratch them.
+   buildings: Flak Batteries (Defense, W) shred them, Rivet Turrets only scratch them.
 3. Send units to a neutral platform to claim it (the Foundry gives scrap).
-4. Put X Cloud Harvesters on storm anchors. Hold more harvesters on a storm
+4. Put Cloud Harvesters (Storm, Q) on storm anchors. Hold more harvesters on a storm
    than Ironbell to get its power; if Ironbell holds it, lightning strikes.
 5. Right click the Crystal Spire to send units there by airship ferry.
 6. Keep platforms under their weight limit or they sag and shed buildings.
@@ -44,10 +45,12 @@ var _banner: Label
 var resources: PlayerResources
 var _status: Label
 var _resource_bar: Label
-var _build_bar: Label
+var build_menu: BuildMenu
 var _notice: Label
 var _notice_tween: Tween
 var _help: PanelContainer
+var _legend_entries: VBoxContainer
+var _legend_toggle: Button
 var _hero_respawn_left := 0.0
 var _game_over := false
 
@@ -196,6 +199,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _game_over and event is InputEventKey and event.pressed and event.keycode in [KEY_ENTER, KEY_KP_ENTER]:
 		restart()
 		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("toggle_legend") and _legend_entries:
+		set_legend_open(not _legend_entries.visible)
+		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("camera_focus_hub"):
 		camera.focus_on(region.get_platform_position("Hub"))
 		get_viewport().set_input_as_handled()
@@ -231,7 +237,7 @@ func _process(delta: float) -> void:
 		return
 	match waves.phase:
 		WaveManager.BUILD:
-			_phase_label.text = "Build phase: wave %d in %ds (G to start now)" % [waves.wave, ceili(waves.time_left)]
+			_phase_label.text = "Build phase: wave %d in %ds (Space to start now)" % [waves.wave, ceili(waves.time_left)]
 		WaveManager.WAVE:
 			_phase_label.text = "Wave %d: %d attackers left" % [waves.wave, waves.remaining()]
 		_:
@@ -320,14 +326,12 @@ func _build_hud() -> void:
 	_resource_bar.position.y = 16
 	layer.add_child(_resource_bar)
 
-	_build_bar = _hud_label("BuildBar", 16)
-	_build_bar.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	_build_bar.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_build_bar.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	_build_bar.offset_top = -40
-	_build_bar.offset_bottom = -12
-	_build_bar.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	layer.add_child(_build_bar)
+	build_menu = BuildMenu.new()
+	build_menu.building = building
+	build_menu.walkways = walkways
+	build_menu.recruiter = recruiter
+	build_menu.resources = resources
+	layer.add_child(build_menu)
 
 	_notice = _hud_label("Notice", 18)
 	_notice.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
@@ -348,8 +352,8 @@ func _build_hud() -> void:
 
 	_help = PanelContainer.new()
 	_help.name = "HowToPlay"
-	_help.set_anchors_preset(Control.PRESET_CENTER_LEFT)
-	_help.position = Vector2(16, -170)
+	# Top left, under the selection text, so it stays clear of the build menu.
+	_help.position = Vector2(16, 96)
 	var help_box := VBoxContainer.new()
 	_help.add_child(help_box)
 	var help_text := Label.new()
@@ -381,7 +385,7 @@ func _hud_label(node_name: String, font_size: int) -> Label:
 	return label
 
 
-## Shows a short message above the build bar that fades out.
+## Shows a short message near the bottom of the screen that fades out.
 func show_notice(text: String) -> void:
 	_notice.text = text
 	_notice.modulate.a = 1.0
@@ -401,23 +405,20 @@ func _refresh_resources() -> void:
 	_resource_bar.text = "Scrap %d      %s      Crystals %d" % [resources.scrap, power, resources.crystals]
 
 
+## The build menu's hint line shows how to place while a build mode is on.
 func _on_build_mode_changed(type_id: String) -> void:
 	if type_id != "":
 		var data := BuildingCatalog.get_data(type_id)
-		_build_bar.text = "Placing %s (%d scrap, weight %d)    Left click: place    Shift: keep placing    R: rotate    Esc / right click: cancel" % [data.name, data.cost, data.weight]
-		return
-	var parts := PackedStringArray()
-	for i in BuildingCatalog.HOTKEY_ORDER.size():
-		var data := BuildingCatalog.get_data(BuildingCatalog.HOTKEY_ORDER[i])
-		parts.append("%s %s (%d)" % [BuildingCatalog.HOTKEY_LABELS[i], data.name, data.cost])
-	_build_bar.text = "    ".join(parts) + "    T Walkway    Y Recruit Riveteer (%d)    Del: demolish    P pause, F1-F3 speed" % recruiter.cost
+		build_menu.set_hint("Placing %s (weight %d). Left click: place. Shift: keep placing. R: rotate. Esc or right click: cancel." % [data.name, data.weight])
+	else:
+		build_menu.set_hint("")
 
 
 func _on_walkway_mode_changed(active: bool) -> void:
 	if active:
-		_build_bar.text = "Building a walkway (%d scrap per tile): click a tile on your platform, then a tile on another platform    Esc / right click: cancel" % SkyRegion.WALKWAY_COST_PER_TILE
+		build_menu.set_hint("Walkway: click a tile on your platform, then a tile on another platform. Esc or right click: cancel.")
 	else:
-		_on_build_mode_changed("")
+		build_menu.set_hint("")
 
 
 func _on_platform_claimed(platform_name: String, new_owner: String) -> void:
@@ -427,15 +428,26 @@ func _on_platform_claimed(platform_name: String, new_owner: String) -> void:
 		show_notice("Ironbell claimed %s" % platform_name)
 
 
-## Colour key for the placeholder tiles, top right.
+## Colour key for the placeholder tiles, top right. Click its title (or
+## press L) to fold it away.
 func _build_legend() -> Control:
 	var panel := PanelContainer.new()
 	panel.name = "Legend"
 	panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	panel.position = Vector2(-16, 16)
 	panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	var outer := VBoxContainer.new()
+	panel.add_child(outer)
+	var toggle := Button.new()
+	toggle.name = "Toggle"
+	toggle.flat = true
+	toggle.focus_mode = Control.FOCUS_NONE
+	toggle.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	toggle.tooltip_text = "Show or hide the legend (L)"
+	outer.add_child(toggle)
 	var box := VBoxContainer.new()
-	panel.add_child(box)
+	box.name = "Entries"
+	outer.add_child(box)
 	for entry in SkyRegion.LEGEND:
 		var row := HBoxContainer.new()
 		var swatch := ColorRect.new()
@@ -448,11 +460,27 @@ func _build_legend() -> Control:
 		label.text = entry[1]
 		row.add_child(label)
 		box.add_child(row)
+	_legend_entries = box
+	_legend_toggle = toggle
+	toggle.pressed.connect(func(): set_legend_open(not box.visible))
+	set_legend_open(true)
 	return panel
 
 
+## Shows or folds away the legend's list.
+func set_legend_open(open: bool) -> void:
+	_legend_entries.visible = open
+	_legend_toggle.text = ("v  Legend" if open else ">  Legend")
+	# Shrink the panel back down when it folds.
+	# Zero the size: with the right edge pinned, the panel then grows left and
+	# down to exactly fit what is showing.
+	var panel := _legend_entries.get_parent().get_parent() as Control
+	panel.offset_left = panel.offset_right
+	panel.offset_bottom = panel.offset_top
+
+
 func _on_selection_changed(units: Array[Unit]) -> void:
-	var help := "Left click or drag to select, right click to move, Alt + right click to attack-move.\nQ: all on screen   H: hero   Ctrl + 1-5: save group   1-5: recall group"
+	var help := "Left click or drag to select, right click to move, Alt + right click to attack-move.\nCtrl + A: all on screen   H: hero   Ctrl + 1-5: save group   1-5: recall group"
 	if units.is_empty():
 		_status.text = "Nothing selected\n" + help
 		return

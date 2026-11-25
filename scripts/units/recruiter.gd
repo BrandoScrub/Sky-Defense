@@ -1,5 +1,6 @@
-## Trains Riveteers at the Hub headquarters. Press Y to queue one; each costs
-## scrap up front and walks out of the Hub after a short training time.
+## Trains Riveteers at the Hub headquarters. The build menu's Riveteer button
+## queues one; each costs scrap up front and walks out of the Hub after a short
+## training time.
 class_name Recruiter
 extends Node
 
@@ -20,13 +21,6 @@ signal recruited(unit: Unit)
 var queued := 0
 var time_left := 0.0
 var _count := 0
-
-
-func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("recruit_unit"):
-		var problem := queue_one()
-		notice.emit(problem if problem != "" else "Riveteer queued (%d in training)" % queued)
-		get_viewport().set_input_as_handled()
 
 
 func _process(delta: float) -> void:

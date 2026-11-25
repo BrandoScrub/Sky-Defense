@@ -1,4 +1,4 @@
-## Build mode. Z, X, C, V, B pick a building and show a ghost that snaps to the
+## Build mode. The build menu (scripts/ui/build_menu.gd) picks a building and show a ghost that snaps to the
 ## hex under the mouse (green if it can go there, red if not). Left click
 ## places, Shift + left click keeps placing, R rotates, Esc or right click
 ## cancels. Delete demolishes the building under the mouse for a partial refund.
@@ -22,12 +22,6 @@ var _ghost_hex := Vector2i(999999, 999999)
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	for i in BuildingCatalog.HOTKEY_ORDER.size():
-		if event.is_action_pressed("context_hotkey_%d" % (i + 1)):
-			start_placing(BuildingCatalog.HOTKEY_ORDER[i])
-			_handled()
-			return
-
 	if placing != "":
 		if event.is_action_pressed("building_rotate", true):
 			facing = (facing + 1) % 6

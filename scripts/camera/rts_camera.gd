@@ -104,7 +104,11 @@ func get_pitch_degrees() -> float:
 
 
 func _keyboard_pan() -> Vector2:
-	return Input.get_vector("camera_pan_left", "camera_pan_right", "camera_pan_up", "camera_pan_down")
+	var pan := Input.get_vector("camera_pan_left", "camera_pan_right", "camera_pan_up", "camera_pan_down")
+	# W A S D double as build-grid keys, so they only pan while Shift is held.
+	if Input.is_action_pressed("modifier_additive"):
+		pan += Input.get_vector("camera_shift_pan_left", "camera_shift_pan_right", "camera_shift_pan_up", "camera_shift_pan_down")
+	return pan.limit_length(1.0)
 
 
 func _edge_pan() -> Vector2:
