@@ -52,6 +52,16 @@ const LEGEND := [
 
 var tile_size := Layout.TILE_SIZE
 
+## Seed for the generated map. -1 picks a new random map each game.
+@export var map_seed := -1
+## When 0 or more, overrides map_seed for every region built afterwards
+## (tests and screenshots use this for a repeatable map).
+static var seed_override := -1
+## When not empty, the rivals to lay out instead of LevelLayout.DEFAULT_RIVALS.
+static var rivals_override: Array = []
+## The generated layout (see LevelLayout.generate).
+var layout := {}
+
 ## hex (Vector2i) -> {"type": String, "platform": String}
 var tiles := {}
 ## platform name -> its layout entry
@@ -91,23 +101,27 @@ var _material_cache := {}
 
 
 func _ready() -> void:
-	for p in Layout.PLATFORMS:
+	var chosen := seed_override if seed_override >= 0 else map_seed
+	if chosen < 0:
+		chosen = randi() % 1000000
+	layout = Layout.generate(chosen, rivals_override if not rivals_override.is_empty() else Layout.DEFAULT_RIVALS)
+	for p in layout.platforms:
 		platforms[p.name] = p
 		owners[p.name] = {"hub": "player", "rival": "rival"}.get(p.kind, "")
-	for c in Layout.CLOUDS:
+	for c in layout.clouds:
 		clouds[c.name] = c
 
-	for p in Layout.PLATFORMS:
+	for p in layout.platforms:
 		_lay_platform(p)
-	for p in Layout.PLATFORMS:
+	for p in layout.platforms:
 		_lay_features(p)
-	for w in Layout.WALKWAYS:
+	for w in layout.walkways:
 		_lay_walkway(w[0], w[1])
-	for f in Layout.FERRY_ROUTES:
+	for f in layout.ferry_routes:
 		_draw_ferry_route(f[0], f[1])
-	for c in Layout.CLOUDS:
+	for c in layout.clouds:
 		_draw_cloud(c)
-	for a in Layout.AIR_LANES:
+	for a in layout.air_lanes:
 		_draw_air_lane(a[0], a[1])
 
 	_build_tiles()
@@ -565,7 +579,7 @@ func _build_tiles() -> void:
 	for hex in tiles:
 		_make_tile(hex)
 
-	for p in Layout.PLATFORMS:
+	for p in layout.platforms:
 		_add_underside(p)
 		_add_trim(p)
 		_add_label(p)

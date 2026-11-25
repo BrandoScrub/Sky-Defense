@@ -21,7 +21,7 @@ signal rival_harvester_built(platform_name: String)
 @export var power_per_storm := 15
 @export var strike_interval := 7.0
 @export var strike_damage := 35.0
-@export var strike_range := 14.0
+@export var strike_range := 18.0
 @export var wave_hp_per_storm := 0.15
 ## Ironbell waits this long before building its first harvester, then checks
 ## again on this interval.

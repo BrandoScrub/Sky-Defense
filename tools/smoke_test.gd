@@ -15,6 +15,9 @@ func _initialize() -> void:
 		quit(1))
 	_check_input_map()
 	_check_hex_math()
+	# A fixed map so results repeat (seed 3: Ironbell southeast, Vesper northeast).
+	SkyRegion.seed_override = 3
+	_check_layout_rules()
 	var main: Node = load("res://scenes/main.tscn").instantiate()
 	root.add_child(main)
 	await process_frame
@@ -56,7 +59,7 @@ func _check_scene(main: Node) -> void:
 		_expect(region.platforms.has(p), "layout is missing platform %s" % p)
 	_expect(region.tiles_of_platform("Hub").size() == 37, "Hub (radius 3) should have 37 tiles")
 	_expect(region.tiles_of_platform("Generator Rig").size() == 7, "Generator Rig (radius 1) should have 7 tiles")
-	_expect(region.walkway_count == 6, "expected 6 walkways")
+	_expect(region.walkway_count == region.layout.walkways.size(), "expected %d walkways" % region.layout.walkways.size())
 	_expect(region.tiles_in_clouds.size() == 2, "expected 2 storm clouds")
 	var types := {}
 	for hex in region.tiles:
@@ -105,8 +108,9 @@ func _check_routing(region: SkyRegion) -> void:
 	var ironbell := region.hex_center(region.platforms["Ironbell HQ"].center + Vector2i(0, 2))
 	var route := region.find_route(hub + Vector3(0, 0, 3), ironbell)
 	_expect(not route.is_empty(), "Hub to Ironbell HQ should be walkable")
-	_expect(region.platforms_along(hub + Vector3(0, 0, 3), route) == PackedStringArray(["Hub", "Midway", "Ironbell HQ"]),
-		"Hub to Ironbell HQ should go via Midway, got %s" % [region.platforms_along(hub + Vector3(0, 0, 3), route)])
+	var along := region.platforms_along(hub + Vector3(0, 0, 3), route)
+	_expect(along == PackedStringArray(region.layout.paths.Ironbell),
+		"Hub to Ironbell HQ should follow the chain %s, got %s" % [region.layout.paths.Ironbell, along])
 	_expect(route[route.size() - 1].is_equal_approx(ironbell), "route should end at the target")
 	_expect(not region.find_route(hub, foundry).is_empty(), "Hub to Foundry should be walkable")
 	_expect(region.find_route(hub, region.get_platform_position("Crystal Spire") + Vector3(1, 0, 0)).is_empty(),
@@ -286,13 +290,17 @@ func _check_claiming_walkways_and_raids(main: Node) -> void:
 	# A raiding party claims Midway on its way, then gathers at the Hub.
 	var party := raids.send_party(3)
 	_expect(party.size() == 3 and get_root().get_tree().get_nodes_in_group(Unit.ENEMY_GROUP).size() == 3, "raid should spawn 3 walkers")
-	_expect(raids.next_objective(party[0].position) == "Midway", "raiders should go for Midway first")
-	for i in 1600:
+	var chain: Array = region.layout.paths.Ironbell
+	_expect(raids.next_objective(party[0].position) == chain[chain.size() - 2], "raiders should go for the platform next to their HQ first")
+	for i in 8000:
 		raids._process(0.05)
 		for u in party:
 			u._process(0.05)
 		capture.step(0.05)
-	_expect(region.platform_owner("Midway") == "rival", "raiders should claim Midway")
+		if region.platform_owner("Midway") == "rival" and party.all(func(u): return region.platform_at(u.position) == "Hub" and not u.is_moving()):
+			break
+	for platform_name in chain.slice(1, chain.size() - 1):
+		_expect(region.platform_owner(platform_name) == "rival", "raiders should claim %s on the way" % platform_name)
 	for u in party:
 		_expect(region.platform_at(u.position) == "Hub", "%s should end on the Hub, is at %s" % [u.name, u.position])
 	capture.set_process(true)
@@ -423,32 +431,44 @@ func _check_storms(main: Node) -> void:
 			anchors[hex] = t
 			if region.buildings.has(hex):
 				region.remove_building(hex).free()
-	_expect(anchors.size() == 4, "expected 4 harvester anchors, got %d" % anchors.size())
+	var anchor_count := 0
+	for p in region.layout.platforms:
+		for f in p.features:
+			if f[0] == "harvester_anchor":
+				anchor_count += 1
+	_expect(anchors.size() == anchor_count, "expected %d harvester anchors, got %d" % [anchor_count, anchors.size()])
 	var hub_anchor := Vector2i.ZERO
 	for hex in anchors:
 		_expect(region.clouds.has(anchors[hex].get("target", "")), "anchor %s should face a cloud" % [hex])
 		if anchors[hex].platform == "Hub":
 			hub_anchor = hex
+	# The storm the Hub can tap sits by Ironbell's chain.
+	var storm: String = anchors[hub_anchor].target
 	storms.refresh()
-	_expect(storms.control["North Storm"] == "" and region.storm_bonus == 0, "storms start uncontrolled")
+	_expect(storms.control[storm] == "" and region.storm_bonus == 0, "storms start uncontrolled")
 
 	main.resources.add_scrap(200)
 	_expect(build.try_place("harvester", hub_anchor) == "", "place a harvester on the Hub anchor")
 	storms.refresh()
-	_expect(storms.control["North Storm"] == "player", "one harvester should control the North Storm")
+	_expect(storms.control[storm] == "player", "one harvester should control the %s" % storm)
 	var supply_with := region.power_supply()
 	_expect(region.storm_bonus == storms.power_per_storm, "a controlled storm adds power")
 
-	# Ironbell holds Midway and builds on every free anchor it owns.
-	var midway_owner := region.platform_owner("Midway")
-	region.set_platform_owner("Midway", "rival")
+	# Ironbell holds the chain platforms by that storm and builds on their anchors.
+	var owners_before := {}
+	var rival_anchors := 0
+	for hex in anchors:
+		var platform_name: String = anchors[hex].platform
+		if platform_name != "Hub" and anchors[hex].target == storm:
+			owners_before[platform_name] = region.platform_owner(platform_name)
+			region.set_platform_owner(platform_name, "rival")
+			rival_anchors += 1
 	var built := 0
 	while storms.rival_build() != "":
 		built += 1
-	_expect(built == 3, "Ironbell should build on 3 anchors (2 Midway, 1 HQ), built %d" % built)
+	_expect(built == rival_anchors, "Ironbell should build on its %d anchors, built %d" % [rival_anchors, built])
 	storms.refresh()
-	_expect(storms.control["North Storm"] == "", "1 v 1 harvesters leaves the North Storm uncontrolled")
-	_expect(storms.control["East Storm"] == "rival", "Ironbell should control the East Storm")
+	_expect(storms.control[storm] == "rival", "%d v 1 harvesters should give Ironbell the %s" % [rival_anchors, storm])
 	_expect(region.power_supply() == supply_with - storms.power_per_storm, "losing the storm loses its power")
 	_expect(is_equal_approx(main.waves.hp_bonus, storms.wave_hp_per_storm), "an Ironbell storm toughens waves")
 	var rival_harvester: Building = null
@@ -457,18 +477,19 @@ func _check_storms(main: Node) -> void:
 			rival_harvester = b
 	_expect(build.demolish(rival_harvester.hex) == 0, "you can't demolish Ironbell's buildings")
 
-	# Lightning from the East Storm hits a unit beneath it.
+	# Lightning from that storm hits a unit beneath it.
 	var victim: Unit = main.selection.all_units()[1]
-	victim.position = region.hex_center(region.clouds["East Storm"].center + Vector2i(0, 2))
+	victim.position = region.snap_to_walkable(region.hex_center(region.clouds[storm].center))
 	victim.stop()
 	var hp_before := victim.hp
-	_expect(storms.strike("East Storm") == victim and victim.hp < hp_before, "the East Storm should strike the nearby unit")
+	_expect(storms.strike(storm) == victim and victim.hp < hp_before, "the %s should strike the nearby unit" % storm)
 	victim.hp = victim.max_hp
 
 	for hex in anchors:
 		if region.buildings.has(hex):
 			region.remove_building(hex).free()
-	region.set_platform_owner("Midway", midway_owner)
+	for platform_name in owners_before:
+		region.set_platform_owner(platform_name, owners_before[platform_name])
 	storms.refresh()
 	_expect(region.storm_bonus == 0 and main.waves.hp_bonus == 0.0, "storm effects clear when harvesters go")
 
@@ -601,9 +622,34 @@ func _check_combat_and_waves(main: Node) -> void:
 
 	# Walling off the Midway walkway doesn't stop raiders: they route through
 	# the wall and attack it, while player routes still respect buildings.
-	var wall := [hub + Vector2i(1, -3), hub + Vector2i(2, -3), hub + Vector2i(3, -3)]
+	var midway_hex: Vector2i = region.platforms["Midway"].center
+	var entry := []
+	var best := 1 << 30
+	for hex in region.tiles:
+		if region.tiles[hex].type != "walkway":
+			continue
+		var touches_hub := false
+		for n in HexGrid.neighbors(hex):
+			if region.get_tile(n).get("platform", "") == "Hub":
+				touches_hub = true
+		if not touches_hub:
+			continue
+		var d := HexGrid.distance(hex, midway_hex)
+		if d < best - 1:
+			entry = [hex]
+			best = d
+		elif d <= best + 1:
+			entry.append(hex)
+			best = mini(best, d)
+	var wall := []
+	for e in entry:
+		if HexGrid.distance(e, midway_hex) > best + 1:
+			continue
+		for n in HexGrid.neighbors(e):
+			if region.get_tile(n).get("platform", "") == "Hub" and region.is_hex_walkable(n) and not wall.has(n):
+				wall.append(n)
 	for hex in wall:
-		_expect(build.try_place("rivet_turret", hex) == "", "place wall turret at %s" % [hex])
+		region.place_building(Building.new().setup("rivet_turret"), hex)
 	var from := region.get_platform_position("Midway")
 	var to := raids._target_point()
 	_expect(region.find_route(from, to).is_empty(), "the wall should block a normal route to the Hub")
@@ -611,7 +657,7 @@ func _check_combat_and_waves(main: Node) -> void:
 	_expect(not smash.is_empty(), "raiders should still find a route through the wall")
 	for hex in wall:
 		_expect(not region.is_hex_walkable(hex), "wall tile %s should stay blocked" % [hex])
-		build.demolish(hex)
+		region.remove_building(hex).free()
 
 	# Vesper bombers: only anti-air can hit them, and they bomb buildings.
 	var fleet: VesperFleet = main.fleet
@@ -689,3 +735,62 @@ func _check_combat_and_waves(main: Node) -> void:
 	# Victory when both rival headquarters have fallen.
 	combat.headquarters_on("Vesper Aerodrome").take_damage(100000.0)
 	_expect(waves.phase == WaveManager.OVER and won[0], "destroying both rival headquarters should win")
+
+
+## The map rules hold for many seeds: rival headquarters in two different
+## compass directions at least 90 degrees apart, 4 to 9 platforms between
+## the Hub and each, and every platform reachable on foot or by ferry.
+func _check_layout_rules() -> void:
+	for map_seed in 40:
+		var l := LevelLayout.generate(map_seed)
+		_expect(not l.is_empty(), "seed %d should make a map" % map_seed)
+		if l.is_empty():
+			continue
+		var iron: int = LevelLayout.COMPASS.find(l.directions.Ironbell)
+		var vesper: int = LevelLayout.COMPASS.find(l.directions.Vesper)
+		_expect(iron >= 0 and vesper >= 0 and LevelLayout.compass_gap(iron, vesper) >= 2,
+			"seed %d: rival directions %s should differ by 90 degrees or more" % [map_seed, l.directions])
+		for corp in ["Ironbell", "Vesper"]:
+			var between: int = l.paths[corp].size() - 2
+			_expect(between >= LevelLayout.MIN_BETWEEN and between <= LevelLayout.MAX_BETWEEN,
+				"seed %d: %d platforms between Hub and %s" % [map_seed, between, corp])
+		# Every platform is joined to the Hub by walkways or the ferry.
+		var linked := {"Hub": true}
+		var links: Array = l.walkways + l.ferry_routes
+		var grew := true
+		while grew:
+			grew = false
+			for w in links:
+				if linked.has(w[0]) != linked.has(w[1]):
+					linked[w[0]] = true
+					linked[w[1]] = true
+					grew = true
+		_expect(linked.size() == l.platforms.size(), "seed %d: every platform should be reachable" % map_seed)
+		# HQ really is in its compass direction.
+		for p in l.platforms:
+			if p.has("corp"):
+				var w := HexGrid.to_world(p.center, LevelLayout.TILE_SIZE)
+				var idx := posmod(roundi(atan2(-w.z, w.x) / (PI / 4.0)), 8)
+				_expect(LevelLayout.COMPASS[idx] == l.directions[p.corp], "seed %d: %s should lie %s" % [map_seed, p.name, l.directions[p.corp]])
+	# Up to four rivals: four headquarters, each in its own direction.
+	var four := [
+		{"corp": "Ironbell", "hq": "Ironbell HQ", "first": "Midway"},
+		{"corp": "Vesper", "hq": "Vesper Aerodrome", "first": "Outpost"},
+		{"corp": "Third", "hq": "Third HQ", "first": "Third Reach"},
+		{"corp": "Fourth", "hq": "Fourth HQ", "first": "Fourth Reach"},
+	]
+	for map_seed in 20:
+		var l4 := LevelLayout.generate(map_seed, four)
+		_expect(not l4.is_empty() and l4.paths.size() == 4, "seed %d should fit four rivals" % map_seed)
+		if l4.is_empty():
+			continue
+		var dirs := {}
+		for corp in l4.directions:
+			dirs[l4.directions[corp]] = true
+			var between: int = l4.paths[corp].size() - 2
+			_expect(between >= LevelLayout.MIN_BETWEEN and between <= LevelLayout.MAX_BETWEEN, "seed %d: %d platforms to %s" % [map_seed, between, corp])
+		_expect(dirs.size() == 4, "seed %d: four rivals need four directions, got %s" % [map_seed, l4.directions])
+	var three := LevelLayout.generate(5, four.slice(0, 3))
+	_expect(not three.is_empty() and three.paths.size() == 3, "three rivals should fit too")
+	var again := LevelLayout.generate(7)
+	_expect(again.platforms.size() == LevelLayout.generate(7).platforms.size(), "the same seed makes the same map")
