@@ -24,6 +24,7 @@ before they destroy your Hub. Ironbell walks; Vesper flies bombers.
 7. Dark storm clouds hide the sky you haven't scouted. Glowing islands hint
    at what's inside: crystal, generators, or a rival's HQ.
 
+Click anything to see what it is and what it does.
 When you're ready, gather your squad and attack-move (Alt + right click) north."""
 
 @onready var camera: RtsCamera = $RtsCamera
@@ -49,6 +50,7 @@ var resources: PlayerResources
 var _status: Label
 var _resource_bar: Label
 var build_menu: BuildMenu
+var info_panel: InfoPanel
 var _notice: Label
 var _notice_tween: Tween
 var _help: PanelContainer
@@ -341,6 +343,18 @@ func _build_hud() -> void:
 	build_menu.recruiter = recruiter
 	build_menu.resources = resources
 	layer.add_child(build_menu)
+
+	info_panel = InfoPanel.new()
+	info_panel.region = region
+	info_panel.camera = camera
+	info_panel.selection = selection
+	info_panel.building = building
+	info_panel.walkways = walkways
+	info_panel.combat = combat
+	info_panel.storms = storms
+	info_panel.loads = loads
+	info_panel.fog = fog
+	layer.add_child(info_panel)
 
 	_notice = _hud_label("Notice", 18)
 	_notice.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
