@@ -97,6 +97,26 @@ const BUILDINGS := {
 		# Only fits on turbine islands; 4 of them let you steer the island.
 		"island_style": "turbine",
 	},
+	# Player airships: the hangar builds them, and they patrol a loop of
+	# Relay Stations and Refuel Points (AirPatrols).
+	"airship_hangar": {
+		"name": "Airship Hangar", "cost": 120, "power": -6, "weight": 5,
+		"tiles": ["deck"], "shape": "airship_hangar",
+		"color": Color(0.5, 0.42, 0.33),
+		"hp": 220.0,
+	},
+	"relay_station": {
+		"name": "Relay Station", "cost": 40, "power": -2, "weight": 1,
+		"tiles": ["deck"], "shape": "relay",
+		"color": Color(0.7, 0.62, 0.4),
+		"hp": 90.0,
+	},
+	"refuel_point": {
+		"name": "Refuel Point", "cost": 45, "power": -1, "weight": 2,
+		"tiles": ["deck"], "shape": "refuel",
+		"color": Color(0.75, 0.35, 0.2),
+		"hp": 100.0,
+	},
 	"drone_hangar": {
 		"name": "Drone Hangar", "cost": 90, "power": -6, "weight": 4,
 		"tiles": ["deck"], "shape": "hangar", "role": "hangar",

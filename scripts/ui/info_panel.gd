@@ -15,6 +15,11 @@ const PICK_RADIUS := 28.0
 ## here use their blurb from UnitCatalog.
 const UNIT_INFO := {
 	"Commander": "Leads your squad. Tougher and faster than a Riveteer, and can shoot aircraft. Comes back to the Hub 15 seconds after falling.",
+	"Skyhawk Interceptor": "Your air-to-air airship. Patrols from its Airship Hangar along your Relay Stations and Refuel Points and shoots down enemy aircraft. Can't hit anything on the ground.",
+	"Thunder Gunboat": "Your air-to-ground airship. Patrols your route and shells enemy troops and buildings below. Can't hit aircraft.",
+	"Repair Tender": "Your utility airship, on repair duty. Mends your buildings it flies over. Doesn't fight.",
+	"Scout Tender": "Your utility airship, on scouting duty. Fast, and sees far through the storm clouds. Doesn't fight.",
+	"Troop Tender": "Your utility airship, carrying 3 Riveteers. When enemies land on one of your platforms on its route, it drops them there, then flies home to reload (45 scrap). Doesn't fight.",
 	"Vesper Gunship": "Vesper's escort airship. Flies with the bombers, around islands and with the wind, and hunts your units and drones, in the air and on the decks. Only anti-air can hit it.",
 	"Ironbell Troop Carrier": "Ironbell's troop airship. Flies around islands to your platform nearest Ironbell, hovers, and drops a squad (Shieldbearer, Rifleman, Riveteer) onto the deck. Shoot it down first and the squad goes down with it.",
 	"Vesper Bomber": "Vesper's bomber airship. Flies the red air lanes around islands, attacking from upwind, and bombs your buildings and Hub. Only anti-air can hit it: flak towers, drones, the Commander and headquarters guns.",
@@ -32,6 +37,9 @@ const BUILDING_INFO := {
 	"flak_battery": "Rapid anti-air guns. Shreds bombers and other aircraft, but ignores everything on the ground.",
 	"skyhook_cannon": "A long-range harpoon gun for big airships. Slow, but each hit tears a hole in the envelope. Ignores everything on the ground.",
 	"turbine_engine": "A big brass propeller bolted to a turbine island. Build 4 on one island and you can steer it with Steer Island (Ships tab): it moves up to 4 hexes, breaking off its walkways after a warning, and draws 30 power while under way.",
+	"airship_hangar": "Builds your patrol airships (Ships tab, Z X C). They fly a loop from here through your Relay Stations and Refuel Points. Holds 4 ships. If it falls, its ships go to another hangar or go down.",
+	"relay_station": "A patrol point. Ships near it spot enemies twice as far away, and it sees far through the storm clouds.",
+	"refuel_point": "A patrol point where airships fill their fuel. Ships low on fuel fly to the nearest one, or the hangar.",
 	"drone_hangar": "Launches defensive drones that chase off anything coming near, air or ground, then return. Rebuilds lost drones over time.",
 }
 
@@ -241,6 +249,10 @@ func describe(thing) -> Dictionary:
 			stats.append("Repairs %d/s" % int(u.repair_power))
 		if u.flying:
 			stats.append("Flying")
+		if u.has_meta("fuel"):
+			stats.append("Fuel %d / %ds" % [ceili(u.get_meta("fuel")), int(u.get_meta("max_fuel"))])
+		if u.air_only:
+			stats.append("Air targets only")
 		if u.damage_mult > 1.0 or u.cooldown_mult < 1.0 or u.armor > 0.0:
 			stats.append("Boosted by nearby defenses")
 		if not u.buff_ids().is_empty():

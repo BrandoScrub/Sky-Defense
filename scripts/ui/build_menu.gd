@@ -32,7 +32,13 @@ const TABS := {
 	"Economy": ["dynamo", "walkway"],
 	"Storm": ["harvester"],
 	# Turbine Engines, and the order to steer a turbine island with 4 of them.
-	"Ships": ["turbine_engine", "steer"],
+	# Row 1 islands, row 2 the patrol network, row 3 the ships (V picks the
+	# utility ship's job).
+	"Ships": [
+		"turbine_engine", "steer", "", "",
+		"airship_hangar", "relay_station", "refuel_point", "patrol_route",
+		"ship:interceptor", "ship:gunboat", "ship:utility", "utility_job",
+	],
 }
 
 const DEFAULT_HINT := "Tab: next tab   Shift + WASD: move camera   Del: demolish   Space: start wave   P: pause   F1-F3: speed"
@@ -40,6 +46,7 @@ const DEFAULT_HINT := "Tab: next tab   Shift + WASD: move camera   Del: demolish
 var building: BuildController
 var walkways: WalkwayBuilder
 var steering: IslandSteering
+var patrols: AirPatrols
 var recruiter: Recruiter
 var resources: PlayerResources
 
@@ -111,6 +118,8 @@ func _ready() -> void:
 		walkways.mode_changed.connect(_on_walkway_mode_changed)
 	if steering:
 		steering.mode_changed.connect(func(_a): refresh())
+	if patrols:
+		patrols.mode_changed.connect(func(_a): refresh())
 	if resources:
 		resources.changed.connect(refresh)
 	show_tab(TABS.keys()[0])
@@ -146,7 +155,7 @@ static func entry_at(tab_name: String, slot: int) -> String:
 
 func _process(_delta: float) -> void:
 	# The training counts change over time, so keep the Army buttons live.
-	if current_tab == "Army":
+	if current_tab == "Army" or current_tab == "Ships":
 		for entry in _entry_buttons:
 			_update_button(entry)
 
@@ -201,7 +210,24 @@ func activate(entry: String) -> void:
 		recruiter.notice.emit(problem if problem != "" else "%s queued (%d in training)" % [unit_name, recruiter.queued])
 		refresh()
 		return
+	if entry.begins_with("ship:"):
+		var problem := patrols.queue_ship(entry.trim_prefix("ship:")) if patrols else "No hangar"
+		var kind := entry.trim_prefix("ship:")
+		patrols.notice.emit(problem if problem != "" else "%s ordered" % patrols.ship_name(kind))
+		refresh()
+		return
 	match entry:
+		"utility_job":
+			if patrols:
+				patrols.next_utility_job()
+		"patrol_route":
+			if building:
+				building.cancel_placing()
+			if patrols:
+				if patrols.editing:
+					patrols.cancel_route()
+				else:
+					patrols.begin_route()
 		"walkway":
 			if building:
 				building.cancel_placing()
@@ -270,7 +296,30 @@ func _update_button(entry: String) -> void:
 	var cost := 0
 	var details := ""
 	var active := false
-	if entry.begins_with("unit:"):
+	if entry.begins_with("ship:"):
+		var kind := entry.trim_prefix("ship:")
+		var spec: Dictionary = AirPatrols.SHIPS[kind]
+		title = patrols.ship_name(kind) if patrols else spec.name
+		cost = spec.cost
+		details = "%s airship, built at an Airship Hangar (%ds). Patrols your route of Relay Stations and Refuel Points.\nHealth %d, fuel %ds" % [spec.role, int(spec.build_seconds), int(spec.hp), int(spec.fuel)]
+		if kind == "utility":
+			details += "\nJob (V to change): repair mends buildings it flies over, scout sees far through the fog, troops drops Riveteers where enemies land."
+		if patrols and patrols.ship_count(kind) > 0:
+			title += " (%d)" % patrols.ship_count(kind)
+	elif entry == "utility_job" or entry == "patrol_route":
+		if entry == "utility_job":
+			title = "Job: " + (String(patrols.utility_job).capitalize() if patrols else "Repair")
+			details = "Picks the job of the next utility ship: Repair, Scout or Troops."
+		else:
+			title = "Patrol Route"
+			details = "Click an Airship Hangar, then Relay Stations and Refuel Points in order. Right click to finish.\nWithout a route, ships visit all of them, nearest first."
+			active = patrols != null and patrols.editing
+		button.text = "\n%s" % title
+		button.tooltip_text = "%s  [%s]\n%s" % [title, _hotkey(entry), details]
+		button.set_pressed_no_signal(active)
+		button.modulate = Color(1.0, 0.85, 0.4) if active else Color.WHITE
+		return
+	elif entry.begins_with("unit:"):
 		var type_id := entry.trim_prefix("unit:")
 		var unit := UnitCatalog.get_data(type_id)
 		title = unit.name

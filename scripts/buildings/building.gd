@@ -149,6 +149,36 @@ func _build_shape() -> void:
 				blade.size = Vector3(0.18, 1.6, 0.06)
 				var part := _add(blade, Vector3(0, 1.1, 0.85), Color(0.2, 0.19, 0.18))
 				part.rotation.z = k * TAU / 3.0
+		"airship_hangar":
+			# A long barrel-roofed shed with a mooring mast.
+			var hull := BoxMesh.new()
+			hull.size = Vector3(1.9, 1.2, 1.9)
+			_add(hull, Vector3(0, 0.6, 0), color)
+			var vault := _add(_cylinder(0.95, 0.95, 1.9, 14), Vector3(0, 1.2, 0), color.darkened(0.3))
+			vault.rotation.z = PI / 2.0
+			_add(_cylinder(0.08, 0.1, 2.6, 6), Vector3(0.75, 2.2, 0.75), Color(0.25, 0.23, 0.22))
+			var tip := SphereMesh.new()
+			tip.radius = 0.16
+			tip.height = 0.32
+			_add(tip, Vector3(0.75, 3.55, 0.75), Color(1.0, 0.8, 0.4))
+		"relay":
+			# A lattice mast with a dish and a beacon.
+			_add(_cylinder(0.12, 0.3, 3.2, 4), Vector3(0, 1.6, 0), Color(0.3, 0.28, 0.26))
+			var dish := _add(_cylinder(0.7, 0.15, 0.3, 12), Vector3(0, 2.6, 0.25), color)
+			dish.rotation.x = -0.9
+			var beacon := SphereMesh.new()
+			beacon.radius = 0.2
+			beacon.height = 0.4
+			_add(beacon, Vector3(0, 3.35, 0), Color(0.5, 0.9, 1.0))
+		"refuel":
+			# Fuel tanks with a hose boom.
+			for x in [-0.4, 0.4]:
+				_add(_cylinder(0.38, 0.38, 1.3, 10), Vector3(x, 0.65, 0), color)
+			var boom := BoxMesh.new()
+			boom.size = Vector3(0.12, 0.12, 1.6)
+			var arm := _add(boom, Vector3(0, 1.7, 0.4), Color(0.25, 0.23, 0.22))
+			arm.rotation.x = 0.5
+			_add(_cylinder(0.1, 0.1, 1.2, 6), Vector3(0, 1.0, 0), Color(0.25, 0.23, 0.22))
 		"coil":
 			_add(_cylinder(0.35, 0.6, 2.4, 8), Vector3(0, 1.2, 0), Color(0.55, 0.4, 0.25))
 			var top := TorusMesh.new()

@@ -50,6 +50,7 @@ func _initialize() -> void:
 	await _check_rival_airships(main)
 	await _check_combat_and_waves(main)
 	await _check_island_steering(main)
+	await _check_air_patrols(main)
 	if _failures == 0:
 		print("Smoke test passed")
 	else:
@@ -1510,6 +1511,102 @@ func _check_island_steering(main: Node) -> void:
 	_expect(region.engine_draw == 0, "engines stop drawing power once it stops")
 	_expect(steer.engines_on(turbine) == 4, "still 4 engines aboard")
 	region.storm_bonus -= 200
+
+
+## Player airships: built at an Airship Hangar, patrolling Relay Stations and
+## Refuel Points, with fuel and three roles.
+func _check_air_patrols(main: Node) -> void:
+	var region: SkyRegion = main.region
+	var patrols: AirPatrols = main.patrols
+	var build: BuildController = main.building
+	var combat: CombatSystem = main.combat
+	patrols.set_process(false)
+	main.resources.add_scrap(3000)
+	region.storm_bonus += 200
+	_expect(patrols.queue_ship("interceptor").contains("Hangar"), "ships need a hangar first")
+	var spots: Array[Vector2i] = []
+	for hex in region.tiles_of_platform("Hub"):
+		if region.build_problem(AirPatrols.HANGAR, hex) == "" and HexGrid.distance(hex, region.platforms["Hub"].center) >= 2:
+			spots.append(hex)
+	_expect(spots.size() >= 3, "room on the Hub for a hangar and two patrol points")
+	if spots.size() < 3:
+		return
+	_expect(build.try_place(AirPatrols.HANGAR, spots[0]) == "", "build an Airship Hangar")
+	_expect(build.try_place(AirPatrols.RELAY, spots[spots.size() - 1]) == "", "build a Relay Station")
+	_expect(build.try_place(AirPatrols.REFUEL, spots[spots.size() / 2]) == "", "build a Refuel Point")
+	var hangar: Building = region.buildings[spots[0]]
+	var relay: Building = region.buildings[spots[spots.size() - 1]]
+	var refuel: Building = region.buildings[spots[spots.size() / 2]]
+	_expect(patrols.queue_ship("interceptor") == "", "order an interceptor")
+	patrols.step(AirPatrols.SHIPS.interceptor.build_seconds + 0.1)
+	_expect(patrols.hangars.has(hangar) and patrols.hangars[hangar].ships.size() == 1, "the hangar launches the ship")
+	var ship: Unit = patrols.hangars[hangar].ships[0]
+	_expect(ship.flying and ship.is_drone and ship.air_only and ship.faction == "player", "an interceptor is a player airship that hits only aircraft")
+	_expect(not main.selection.all_units().has(ship), "patrol ships fly themselves")
+	_expect(patrols.route_of(hangar).size() == 2, "without a set route, ships visit every patrol point")
+	patrols.set_route(hangar, [refuel])
+	_expect(patrols.route_of(hangar) == [refuel], "a set route is followed")
+	patrols.step(0.1)
+	_expect(ship.is_moving(), "the ship sets out on patrol")
+	# Air-to-air ignores ground troops.
+	var walker := UnitCatalog.make("walker", "rival")
+	walker.position = Vector3(ship.position.x + 2, 0, ship.position.z)
+	main.get_node("Units").add_child(walker)
+	_expect(combat.nearest_enemy(ship.global_position, "player", 10.0, ship.hits_air, ship.targets_units, ship.air_only) == null, "interceptors ignore ground troops")
+	# Fuel: a ship far out and nearly dry breaks off for a refuel.
+	ship.stop()
+	ship.position = refuel.global_position + Vector3(30, AirPatrols.ALTITUDE, 0)
+	ship.set_meta("fuel", 3.0)
+	patrols.step(0.1)
+	_expect(ship.get_meta("state") == "refuel" and ship.is_moving(), "a ship low on fuel heads for a Refuel Point")
+	ship.position = refuel.global_position + Vector3.UP * AirPatrols.ALTITUDE
+	patrols.step(0.1)
+	_expect(is_equal_approx(ship.get_meta("fuel"), ship.get_meta("max_fuel")) and ship.get_meta("state") == "patrol", "it fills up and goes back on patrol")
+	_expect(patrols.hunt_radius(ship) == AirPatrols.HUNT_RADIUS or relay.global_position.distance_to(ship.global_position) <= AirPatrols.RELAY_RADIUS + 7, "hunt radius without a relay")
+	ship.position = relay.global_position + Vector3.UP * AirPatrols.ALTITUDE
+	_expect(patrols.hunt_radius(ship) == AirPatrols.HUNT_RADIUS * 2.0, "near a Relay Station, ships spot twice as far")
+	# Gunboat: air-to-ground.
+	_expect(patrols.queue_ship("gunboat") == "", "order a gunboat")
+	patrols.step(AirPatrols.SHIPS.gunboat.build_seconds + 0.1)
+	var gunboat: Unit = patrols.hangars[hangar].ships[1]
+	_expect(not gunboat.hits_air and gunboat.targets_units, "a gunboat hits the ground, not the air")
+	gunboat.position = walker.position + Vector3(1, AirPatrols.ALTITUDE, 0)
+	_expect(combat.nearest_enemy(gunboat.global_position, "player", gunboat.attack_range, gunboat.hits_air, gunboat.targets_units, gunboat.air_only) == walker, "a gunboat targets ground troops")
+	walker.free()
+	# Utility: pick the job first.
+	_expect(patrols.next_utility_job() == "scout", "the utility job cycles to scout")
+	_expect(patrols.queue_ship("utility") == "", "order a scout tender")
+	patrols.utility_job = "troops"
+	_expect(patrols.queue_ship("utility") == "", "order a troop tender")
+	patrols.step(AirPatrols.SHIPS.utility.build_seconds + 0.1)
+	patrols.step(AirPatrols.SHIPS.utility.build_seconds + 0.1)
+	var ships: Array = patrols.hangars[hangar].ships
+	_expect(ships.size() == 4, "the hangar holds 4 ships")
+	_expect(patrols.queue_ship("interceptor").contains("full"), "a full hangar takes no more")
+	var scout: Unit = ships[2]
+	var troop: Unit = ships[3]
+	_expect(scout.display_name == "Scout Tender" and scout.get_meta("sight") > main.fog.unit_sight, "a scout tender sees further")
+	_expect(troop.display_name == "Troop Tender" and troop.get_meta("troops") == 3, "a troop tender carries 3 troops")
+	troop.position = region.get_platform_position("Hub") + Vector3.UP * AirPatrols.ALTITUDE
+	var dropped := patrols.drop_troops(troop)
+	_expect(dropped.size() == 3 and dropped.all(func(u): return region.platform_at(u.position) == "Hub"), "troops land on the deck below")
+	_expect(troop.get_meta("state") == "reload", "an empty troop tender flies home to reload")
+	for u in dropped:
+		u.free()
+	# Damaged buildings get mended by a repair tender.
+	var repairer: Unit = patrols._launch(hangar, "utility:repair")
+	repairer.position = hangar.global_position + Vector3.UP * AirPatrols.ALTITUDE
+	hangar.take_damage(50.0)
+	var hp := hangar.hp
+	patrols._repair_near(repairer, 1.0)
+	_expect(hangar.hp > hp, "a repair tender mends buildings below")
+	# Losing the only hangar downs its ships.
+	build.demolish(spots[0])
+	patrols.step(0.1)
+	await process_frame
+	_expect(not is_instance_valid(ship) or not ship.is_alive(), "ships go down with their only hangar")
+	region.storm_bonus -= 200
+	patrols.set_process(true)
 
 
 ## First platform (other than `allowed`) that a flight along `route` from
