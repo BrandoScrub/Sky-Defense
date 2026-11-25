@@ -298,9 +298,13 @@ func platform_capacity(platform_name: String) -> int:
 	return platforms[platform_name].capacity
 
 
-## Electricity supplied by the player's buildings.
+## Extra power from storm clouds the player controls (set by StormSystem).
+var storm_bonus := 0
+
+
+## Electricity supplied by the player's buildings and controlled storms.
 func power_supply() -> int:
-	var total := 0
+	var total := storm_bonus
 	for b in buildings.values():
 		if b.power > 0 and owners.get(b.platform) == "player":
 			total += b.power
@@ -459,6 +463,9 @@ func _lay_features(p: Dictionary) -> void:
 		else:
 			hex = _rim_toward(p, _center_of(feature[1]))
 		tiles[hex] = {"type": feature[0], "platform": p.name}
+		if feature[1] is String:
+			# What the feature faces, e.g. the storm a harvester anchor taps.
+			tiles[hex].target = feature[1]
 
 
 func _lay_walkway(a_name: String, b_name: String) -> void:

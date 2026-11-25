@@ -3,6 +3,22 @@
 extends Node3D
 
 const SQUAD_SIZE := 4
+## Seconds before a fallen Commander is back on the Hub.
+const HERO_RESPAWN_SECONDS := 15.0
+
+const HOW_TO_PLAY := """How to play
+Goal: destroy Ironbell HQ (far north) before Ironbell destroys your Hub.
+
+1. Build during the build phase: C Rivet Turrets guard the walkway to Midway.
+   Z Dynamo Generators power them; watch the power number at the top.
+2. Each wave of Ironbell walkers comes down the walkway. Kills pay scrap.
+3. Send units to a neutral platform to claim it (the Foundry gives scrap).
+4. Put X Cloud Harvesters on storm anchors. Hold more harvesters on a storm
+   than Ironbell to get its power; if Ironbell holds it, lightning strikes.
+5. Right click the Crystal Spire to send units there by airship ferry.
+6. Keep platforms under their weight limit or they sag and shed buildings.
+
+When you're ready, gather your squad and attack-move (Alt + right click) north."""
 
 @onready var camera: RtsCamera = $RtsCamera
 @onready var region: SkyRegion = $Region
@@ -16,6 +32,9 @@ var loads: LoadSystem
 var economy: EconomySystem
 var combat: CombatSystem
 var waves: WaveManager
+var ferry: FerrySystem
+var storms: StormSystem
+var recruiter: Recruiter
 var _phase_label: Label
 var _banner: Label
 var resources: PlayerResources
@@ -24,6 +43,9 @@ var _resource_bar: Label
 var _build_bar: Label
 var _notice: Label
 var _notice_tween: Tween
+var _help: PanelContainer
+var _hero_respawn_left := 0.0
+var _game_over := false
 
 
 func _ready() -> void:
@@ -93,6 +115,30 @@ func _ready() -> void:
 	waves.combat = combat
 	add_child(waves)
 
+	ferry = FerrySystem.new()
+	ferry.name = "FerrySystem"
+	ferry.region = region
+	add_child(ferry)
+	selection.ferry = ferry
+
+	storms = StormSystem.new()
+	storms.name = "StormSystem"
+	storms.region = region
+	storms.combat = combat
+	storms.waves = waves
+	add_child(storms)
+	storms.control_changed.connect(_on_storm_control_changed)
+	storms.rival_harvester_built.connect(func(p): show_notice("Ironbell built a Cloud Harvester on %s" % p))
+
+	recruiter = Recruiter.new()
+	recruiter.name = "Recruiter"
+	recruiter.region = region
+	recruiter.resources = resources
+	recruiter.units_root = get_node("Units")
+	add_child(recruiter)
+	recruiter.notice.connect(show_notice)
+	recruiter.recruited.connect(func(_u): show_notice("A Riveteer is ready on the Hub"))
+
 	_build_hud()
 	selection.selection_changed.connect(_on_selection_changed)
 	_on_selection_changed(selection.selected)
@@ -104,16 +150,36 @@ func _ready() -> void:
 	walkways.mode_changed.connect(_on_walkway_mode_changed)
 	capture.platform_claimed.connect(_on_platform_claimed)
 	raids.raid_sent.connect(func(n): show_notice("Wave %d: Ironbell sent %d walkers toward your Hub" % [waves.wave, n]))
-	combat.building_destroyed.connect(func(n): show_notice("Your %s was destroyed" % n))
+	combat.building_destroyed.connect(func(n, f): show_notice(("Your %s was destroyed" if f == "player" else "Destroyed Ironbell's %s") % n))
 	waves.game_over.connect(_on_game_over)
+	ferry.departed.connect(_on_ferry_departed)
 	loads.building_lost.connect(func(b, p): show_notice("%s is overloaded: a %s broke off and fell!" % [p, b]))
 	economy.grid_changed.connect(func(_e): _refresh_resources())
 	_refresh_resources()
 	_on_build_mode_changed("")
 
 
+func _on_storm_control_changed(cloud: String, controller: String) -> void:
+	match controller:
+		"player":
+			show_notice("You control the %s: +%d power" % [cloud, storms.power_per_storm])
+		"rival":
+			show_notice("Ironbell controls the %s: expect lightning near it" % cloud)
+		_:
+			show_notice("Nobody controls the %s now" % cloud)
+	_refresh_resources()
+
+
+func _on_ferry_departed(from_platform: String, to_platform: String, passengers: int) -> void:
+	if passengers > 0:
+		show_notice("Ferry left %s for %s with %d aboard" % [from_platform, to_platform, passengers])
+
+
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("camera_focus_hub"):
+	if _game_over and event is InputEventKey and event.pressed and event.keycode in [KEY_ENTER, KEY_KP_ENTER]:
+		restart()
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("camera_focus_hub"):
 		camera.focus_on(region.get_platform_position("Hub"))
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("time_pause"):
@@ -132,7 +198,18 @@ func set_game_speed(speed: float) -> void:
 	show_notice("Paused" if speed == 0.0 else "Speed %dx" % int(speed))
 
 
-func _process(_delta: float) -> void:
+## Starts a fresh game.
+func restart() -> void:
+	Engine.time_scale = 1.0
+	get_tree().reload_current_scene()
+
+
+func _process(delta: float) -> void:
+	if _hero_respawn_left > 0.0:
+		_hero_respawn_left -= delta
+		if _hero_respawn_left <= 0.0:
+			_spawn_hero()
+			show_notice("The Commander is back on the Hub")
 	if _phase_label == null or waves == null:
 		return
 	match waves.phase:
@@ -142,12 +219,17 @@ func _process(_delta: float) -> void:
 			_phase_label.text = "Wave %d: %d Ironbell walkers left" % [waves.wave, waves.remaining()]
 		_:
 			_phase_label.text = ""
+	if recruiter and recruiter.queued > 0:
+		_phase_label.text += "   Training %d (%ds)" % [recruiter.queued, ceili(recruiter.time_left)]
+	if _hero_respawn_left > 0.0:
+		_phase_label.text += "   Commander back in %ds" % ceili(_hero_respawn_left)
 	if Engine.time_scale != 1.0:
 		_phase_label.text += "   [%s]" % ("Paused" if Engine.time_scale == 0.0 else "%dx" % int(Engine.time_scale))
 
 
 func _on_game_over(won: bool) -> void:
-	_banner.text = "Victory! Ironbell HQ has fallen." if won else "Defeat. Your Hub has fallen."
+	_game_over = true
+	_banner.text = ("Victory! Ironbell HQ has fallen." if won else "Defeat. Your Hub has fallen.") + "\nPress Enter to play again"
 	_banner.modulate = Color(1.0, 0.85, 0.4) if won else Color(1.0, 0.4, 0.35)
 	_banner.visible = true
 
@@ -156,8 +238,20 @@ func _spawn_starting_units() -> void:
 	var units := Node3D.new()
 	units.name = "Units"
 	add_child(units)
-	var hub: Vector3 = region.get_platform_position("Hub")
+	var hub_hex := region.hex_at(region.get_platform_position("Hub"))
+	_spawn_hero()
 
+	var spots: Array[Vector2i] = [Vector2i(-1, 2), Vector2i(0, 2), Vector2i(1, 1), Vector2i(-1, 1)]
+	for i in SQUAD_SIZE:
+		var r := Unit.new()
+		r.name = "Riveteer%d" % (i + 1)
+		r.position = region.hex_center(hub_hex + spots[i % spots.size()])
+		units.add_child(r)
+
+
+## Puts the Commander (the hero) on the Hub. When they fall, they come back
+## after HERO_RESPAWN_SECONDS.
+func _spawn_hero() -> Unit:
 	var hero := Unit.new()
 	hero.name = "Commander"
 	hero.display_name = "Commander"
@@ -169,16 +263,24 @@ func _spawn_starting_units() -> void:
 	hero.attack_range = 6.0
 	hero.body_color = Color(0.85, 0.65, 0.3)
 	# Start just south of the Hub's core, on open deck tiles.
-	var hub_hex := region.hex_at(hub)
-	hero.position = region.hex_center(hub_hex + Vector2i(0, 1))
-	units.add_child(hero)
+	var hub_hex := region.hex_at(region.get_platform_position("Hub"))
+	hero.position = region.snap_to_walkable(region.hex_center(hub_hex + Vector2i(0, 1)))
+	get_node("Units").add_child(hero)
+	hero.died.connect(_on_hero_died)
+	return hero
 
-	var spots: Array[Vector2i] = [Vector2i(-1, 2), Vector2i(0, 2), Vector2i(1, 1), Vector2i(-1, 1)]
-	for i in SQUAD_SIZE:
-		var r := Unit.new()
-		r.name = "Riveteer%d" % (i + 1)
-		r.position = region.hex_center(hub_hex + spots[i % spots.size()])
-		units.add_child(r)
+
+## The how-to-play panel goes away once the first wave starts.
+func _on_phase_changed(phase: String, _wave: int) -> void:
+	if phase == WaveManager.WAVE and _help:
+		_help.visible = false
+
+
+func _on_hero_died(_hero: Unit) -> void:
+	if _game_over:
+		return
+	_hero_respawn_left = HERO_RESPAWN_SECONDS
+	show_notice("The Commander has fallen! Back in %d seconds" % int(HERO_RESPAWN_SECONDS))
 
 
 func _build_hud() -> void:
@@ -225,6 +327,22 @@ func _build_hud() -> void:
 	_phase_label.position.y = 48
 	_phase_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	layer.add_child(_phase_label)
+
+	_help = PanelContainer.new()
+	_help.name = "HowToPlay"
+	_help.set_anchors_preset(Control.PRESET_CENTER_LEFT)
+	_help.position = Vector2(16, -170)
+	var help_box := VBoxContainer.new()
+	_help.add_child(help_box)
+	var help_text := Label.new()
+	help_text.text = HOW_TO_PLAY
+	help_box.add_child(help_text)
+	var got_it := Button.new()
+	got_it.text = "Got it"
+	got_it.pressed.connect(func(): _help.visible = false)
+	help_box.add_child(got_it)
+	layer.add_child(_help)
+	waves.phase_changed.connect(_on_phase_changed)
 
 	_banner = _hud_label("Banner", 48)
 	_banner.set_anchors_preset(Control.PRESET_CENTER)
@@ -274,7 +392,7 @@ func _on_build_mode_changed(type_id: String) -> void:
 	for i in BuildingCatalog.HOTKEY_ORDER.size():
 		var data := BuildingCatalog.get_data(BuildingCatalog.HOTKEY_ORDER[i])
 		parts.append("%s %s (%d)" % [BuildingCatalog.HOTKEY_LABELS[i], data.name, data.cost])
-	_build_bar.text = "    ".join(parts) + "    T Walkway    Del: demolish    P pause, F1-F3 speed"
+	_build_bar.text = "    ".join(parts) + "    T Walkway    Y Recruit Riveteer (%d)    Del: demolish    P pause, F1-F3 speed" % recruiter.cost
 
 
 func _on_walkway_mode_changed(active: bool) -> void:

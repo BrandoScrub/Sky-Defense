@@ -120,6 +120,41 @@ func _initialize() -> void:
 		main.combat.step(0.1)
 		await process_frame
 	_save(out_dir + "/combat.png")
+
+	# Ferry and storms: the Commander rides to the Crystal Spire while the
+	# North Storm feeds your grid.
+	main.storms.set_process(false)
+	main.ferry.set_process(false)
+	for e in main.get_tree().get_nodes_in_group(Unit.ENEMY_GROUP):
+		e.free()
+	var anchor_hex := Vector2i.ZERO
+	for hex in region.tiles_of_platform("Hub"):
+		if region.get_tile(hex).type == "harvester_anchor":
+			anchor_hex = hex
+	if not region.buildings.has(anchor_hex):
+		main.resources.add_scrap(100)
+		main.building.try_place("harvester", anchor_hex)
+	region.set_platform_owner("Midway", "rival")
+	while main.storms.rival_build() != "":
+		pass
+	main.storms.refresh()
+	var hero: Unit = main.selection.find_hero()
+	main.selection.select_units([hero])
+	var f: Dictionary = main.ferry.ferries[0]
+	# (The network shot built a walkway to the Spire, so board directly.)
+	hero.position = main.ferry.dock_point(f, 0)
+	main.ferry.send(hero, region.get_platform_position("Crystal Spire") + Vector3(1, 0, 0))
+	for i in 2000:
+		hero._process(0.05)
+		main.ferry.step(0.05)
+		if hero.riding and f.flying and f.timer < main.ferry.trip_seconds * 0.45:
+			break
+	cam.position = (region.get_platform_position("Hub") + region.get_platform_position("Crystal Spire")) / 2.0 + Vector3(0, 0, -2)
+	cam.zoom = 0.45
+	cam._target_zoom = 0.45
+	cam._apply_zoom()
+	await _settle()
+	_save(out_dir + "/ferry-and-storms.png")
 	quit(0)
 
 
