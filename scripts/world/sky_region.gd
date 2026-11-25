@@ -24,6 +24,7 @@ const COLORS := {
 	"hub": Color(0.72, 0.56, 0.3),
 	"neutral": Color(0.5, 0.52, 0.55),
 	"rival": Color(0.5, 0.2, 0.18),
+	"vesper": Color(0.25, 0.33, 0.55),
 	"walkway": Color(0.3, 0.31, 0.33),
 	"core": Color(0.45, 0.28, 0.12),
 	"rival_core": Color(0.25, 0.08, 0.06),
@@ -42,7 +43,7 @@ const COLORS := {
 ## Human-readable names for the legend.
 const LEGEND := [
 	["hub", "Your platform"], ["core", "Your headquarters"], ["neutral", "Neutral platform"],
-	["rival", "Rival platform"], ["rival_core", "Rival headquarters"],
+	["rival", "Ironbell platform"], ["vesper", "Vesper platform"], ["rival_core", "Rival headquarters"],
 	["walkway", "Walkway"], ["generator_socket", "Generator socket"],
 	["harvester_anchor", "Storm harvester anchor"], ["scrap_heap", "Scrap heap"],
 	["crystal_seam", "Crystal seam"], ["dock", "Ferry dock"], ["spawn", "Rival wave spawn"],
@@ -280,7 +281,7 @@ func platform_load(platform_name: String, include_units := true) -> int:
 	if include_units and is_inside_tree():
 		for group in [Unit.GROUP, Unit.ENEMY_GROUP]:
 			for node in get_tree().get_nodes_in_group(group):
-				if platform_at((node as Node3D).global_position) == platform_name:
+				if not node.flying and platform_at((node as Node3D).global_position) == platform_name:
 					total += (node as Unit).weight
 	return total
 
@@ -390,6 +391,9 @@ func set_platform_status(platform_name: String, status: String) -> void:
 func units_on_platform(platform_name: String, group: String) -> Array[Node3D]:
 	var out: Array[Node3D] = []
 	for node in get_tree().get_nodes_in_group(group):
+		# Aircraft overhead and ferry passengers aren't standing on it.
+		if node.flying or node.riding:
+			continue
 		if platform_at((node as Node3D).global_position) == platform_name:
 			out.append(node)
 	return out
@@ -569,6 +573,8 @@ func _build_tiles() -> void:
 func _make_tile(hex: Vector2i) -> void:
 	var t: Dictionary = tiles[hex]
 	var kind: String = platforms[t.platform].kind if t.platform != "" else "walkway"
+	if t.platform != "" and platforms[t.platform].get("corp", "") == "Vesper":
+		kind = "vesper"
 	var is_walkway: bool = t.type == "walkway"
 	var height := WALKWAY_HEIGHT if is_walkway else DECK_HEIGHT
 	var tile := MeshInstance3D.new()

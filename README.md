@@ -16,7 +16,9 @@ Weight matters: buildings and units both add to a platform's load. Over capacity
 
 Park units on a neutral platform to claim it (it's contested while both sides have units there), then build on it. Ironbell raiding parties march along walkways, claim platforms on the way, and attack whatever they meet. If you wall off a walkway with buildings they smash through the wall instead of stopping.
 
-The game runs in waves. You get 45 seconds to build before wave 1 (25 seconds before later waves), then Ironbell sends a growing party of walkers; clear it to start the next build phase. Turrets, units and both headquarters shoot automatically, and each kill pays 15 scrap. You lose if your Hub headquarters falls and win if you destroy Ironbell HQ; press Enter on the end screen to play again. Press Y to train more Riveteers at the Hub (30 scrap each). If your Commander falls, they return to the Hub after 15 seconds. A how-to-play panel is shown until the first wave starts.
+The game runs in waves. You get 45 seconds to build before wave 1 (25 seconds before later waves), then Ironbell sends a growing party of walkers; clear it to start the next build phase. Turrets, units and both headquarters shoot automatically, and each kill pays 15 scrap. You lose if your Hub headquarters falls and win once both rival headquarters are destroyed; press Enter on the end screen to play again. Press Y to train more Riveteers at the Hub (30 scrap each). If your Commander falls, they return to the Hub after 15 seconds. A how-to-play panel is shown until the first wave starts.
+
+There are two rival corporations. Ironbell Consolidated walks: its walkers come down the walkway from Midway. Vesper Aeronautics flies: from wave 2 its bomber airships leave the Vesper Aerodrome (far east), fly the red air lanes, and bomb your buildings or your Hub. Bombers ignore your units, and only anti-air weapons can hit them. Flak Batteries are built for this, Rivet Turrets only scratch them, and the Commander and headquarters guns can shoot them too. Arc Coils and Riveteers can't. Reach the Aerodrome on foot over the long walkway from the Outpost. When one rival's headquarters falls, that rival stops attacking.
 
 Storm clouds are worth fighting over. Each Cloud Harvester taps the storm its anchor faces, and whoever has more harvesters on a storm controls it. Your storms add 15 power to the grid. Ironbell builds harvesters on anchors of platforms it holds, and a storm it controls throws lightning at your nearby units and buildings and makes its walkers tougher. Destroy Ironbell's harvesters (they're tinted red) to break its hold.
 
@@ -60,7 +62,7 @@ The full default key map (selection, control groups, build shortcuts, game speed
 | `scripts/selection/` | Selection, orders and control groups |
 | `scripts/buildings/` | Building catalog (costs, power, weight), placed buildings and build mode |
 | `scripts/economy/` | The player's scrap and crystals, income and the power grid |
-| `scripts/rivals/` | Ironbell raiding parties |
+| `scripts/rivals/` | Ironbell raiding parties and Vesper bomber flights |
 | `scripts/combat/` | Health bars, headquarters, targeting and damage, and the wave timer |
 | `tools/` | Developer scripts: input map generator and the smoke test |
 

@@ -155,6 +155,38 @@ func _initialize() -> void:
 	cam._apply_zoom()
 	await _settle()
 	_save(out_dir + "/ferry-and-storms.png")
+
+	# Vesper Aeronautics: a bomber flight comes in over the Generator Rig.
+	main.fleet.set_process(false)
+	main.waves.set_process(false)
+	main.resources.add_scrap(200)
+	var rig_c: Vector2i = region.platforms["Generator Rig"].center
+	main.building.try_place("flak_battery", hubc + Vector2i(3, 0))
+	main.building.try_place("flak_battery", hubc + Vector2i(2, 1))
+	var flight: Array[Unit] = []
+	main.fleet._next_lane = 1
+	flight.append_array(main.fleet.send_flight(3))
+	for i in 400:
+		for u in flight:
+			if is_instance_valid(u):
+				u._process(0.05)
+		main.fleet.step()
+		main.combat.step(0.05)
+		var near := false
+		for u in flight:
+			if is_instance_valid(u) and Vector2(u.position.x, u.position.z).distance_to(Vector2(region.hex_center(rig_c).x, region.hex_center(rig_c).z)) < 9.0:
+				near = true
+		if near:
+			break
+	cam.position = region.hex_center(rig_c) + Vector3(0, 0, -4)
+	cam.zoom = 0.2
+	cam._target_zoom = 0.2
+	cam._apply_zoom()
+	await _settle()
+	for i in 4:
+		main.combat.step(0.1)
+		await process_frame
+	_save(out_dir + "/vesper-bombers.png")
 	quit(0)
 
 

@@ -7,11 +7,14 @@ const SQUAD_SIZE := 4
 const HERO_RESPAWN_SECONDS := 15.0
 
 const HOW_TO_PLAY := """How to play
-Goal: destroy Ironbell HQ (far north) before Ironbell destroys your Hub.
+Goal: destroy Ironbell HQ (far north) and the Vesper Aerodrome (far east)
+before they destroy your Hub. Ironbell walks; Vesper flies bombers.
 
 1. Build during the build phase: C Rivet Turrets guard the walkway to Midway.
    Z Dynamo Generators power them; watch the power number at the top.
 2. Each wave of Ironbell walkers comes down the walkway. Kills pay scrap.
+   From wave 2 Vesper bombers fly in along the red air lanes and bomb your
+   buildings: V Flak Batteries shred them, Rivet Turrets only scratch them.
 3. Send units to a neutral platform to claim it (the Foundry gives scrap).
 4. Put X Cloud Harvesters on storm anchors. Hold more harvesters on a storm
    than Ironbell to get its power; if Ironbell holds it, lightning strikes.
@@ -35,6 +38,7 @@ var waves: WaveManager
 var ferry: FerrySystem
 var storms: StormSystem
 var recruiter: Recruiter
+var fleet: VesperFleet
 var _phase_label: Label
 var _banner: Label
 var resources: PlayerResources
@@ -109,9 +113,16 @@ func _ready() -> void:
 	combat.spawn_headquarters()
 	raids.combat = combat
 
+	fleet = VesperFleet.new()
+	fleet.name = "VesperFleet"
+	fleet.region = region
+	fleet.combat = combat
+	add_child(fleet)
+
 	waves = WaveManager.new()
 	waves.name = "WaveManager"
 	waves.raids = raids
+	waves.fleet = fleet
 	waves.combat = combat
 	add_child(waves)
 
@@ -152,6 +163,8 @@ func _ready() -> void:
 	raids.raid_sent.connect(func(n): show_notice("Wave %d: Ironbell sent %d walkers toward your Hub" % [waves.wave, n]))
 	combat.building_destroyed.connect(func(n, f): show_notice(("Your %s was destroyed" if f == "player" else "Destroyed Ironbell's %s") % n))
 	waves.game_over.connect(_on_game_over)
+	waves.rival_defeated.connect(func(p): show_notice("%s has fallen! Its attacks stop" % p))
+	fleet.flight_sent.connect(func(n): show_notice("Vesper bombers inbound: %d airship%s on the air lane" % [n, "" if n == 1 else "s"]))
 	ferry.departed.connect(_on_ferry_departed)
 	loads.building_lost.connect(func(b, p): show_notice("%s is overloaded: a %s broke off and fell!" % [p, b]))
 	economy.grid_changed.connect(func(_e): _refresh_resources())
@@ -216,7 +229,7 @@ func _process(delta: float) -> void:
 		WaveManager.BUILD:
 			_phase_label.text = "Build phase: wave %d in %ds (G to start now)" % [waves.wave, ceili(waves.time_left)]
 		WaveManager.WAVE:
-			_phase_label.text = "Wave %d: %d Ironbell walkers left" % [waves.wave, waves.remaining()]
+			_phase_label.text = "Wave %d: %d attackers left" % [waves.wave, waves.remaining()]
 		_:
 			_phase_label.text = ""
 	if recruiter and recruiter.queued > 0:
@@ -229,7 +242,7 @@ func _process(delta: float) -> void:
 
 func _on_game_over(won: bool) -> void:
 	_game_over = true
-	_banner.text = ("Victory! Ironbell HQ has fallen." if won else "Defeat. Your Hub has fallen.") + "\nPress Enter to play again"
+	_banner.text = ("Victory! Ironbell and Vesper are grounded." if won else "Defeat. Your Hub has fallen.") + "\nPress Enter to play again"
 	_banner.modulate = Color(1.0, 0.85, 0.4) if won else Color(1.0, 0.4, 0.35)
 	_banner.visible = true
 
@@ -261,6 +274,7 @@ func _spawn_hero() -> Unit:
 	hero.max_hp = 220.0
 	hero.damage = 18.0
 	hero.attack_range = 6.0
+	hero.hits_air = true
 	hero.body_color = Color(0.85, 0.65, 0.3)
 	# Start just south of the Hub's core, on open deck tiles.
 	var hub_hex := region.hex_at(region.get_platform_position("Hub"))

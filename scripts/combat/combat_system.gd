@@ -11,7 +11,7 @@ class_name CombatSystem
 extends Node
 
 signal building_destroyed(building_name: String, faction: String)
-signal headquarters_destroyed(faction: String)
+signal headquarters_destroyed(faction: String, platform: String)
 signal unit_killed(unit: Unit)
 
 ## Chance to miss for towers on a platform in each overload state.
@@ -63,15 +63,15 @@ func step(delta: float) -> void:
 			if not unit.is_alive() or unit.riding:
 				continue
 			unit.cooldown_left -= delta
-			var target = nearest_enemy(unit.global_position, faction, unit.attack_range)
+			var target = nearest_enemy(unit.global_position, faction, unit.attack_range, unit.hits_air, unit.targets_units)
 			if target != null:
 				if not unit.is_moving() or unit.attack_move:
 					unit.stop()
 				if unit.cooldown_left <= 0.0 and not unit.is_moving():
 					unit.cooldown_left = unit.attack_cooldown
 					_hit(unit, target, unit.damage, Color(1.0, 0.85, 0.4))
-			elif chase and (not unit.is_moving() or unit.attack_move):
-				var prey = nearest_enemy(unit.global_position, faction, unit.aggro_range)
+			elif chase and not unit.flying and (not unit.is_moving() or unit.attack_move):
+				var prey = nearest_enemy(unit.global_position, faction, unit.aggro_range, unit.hits_air, unit.targets_units)
 				if prey == null and faction == "player" and not unit.is_moving():
 					prey = _intruder_on_platform(unit)
 				if prey != null:
@@ -86,17 +86,18 @@ func step(delta: float) -> void:
 		b.cooldown_left -= delta * maxf(b.efficiency, 0.05)
 		if b.cooldown_left > 0.0:
 			continue
-		var target = nearest_enemy(b.global_position, b.faction, attack.range)
+		var target = nearest_enemy(b.global_position, b.faction, attack.range, attack.has("air"))
 		if target == null:
 			continue
+		var amount: float = attack.air if target is Unit and target.flying else attack.damage
 		b.cooldown_left = attack.cooldown
 		var miss: float = MISS_CHANCE.get(loads.state_of(b.platform) if loads else "Stable", 0.0)
 		if rng.randf() < miss:
 			_tracer(b.global_position + Vector3.UP * 1.2, target.global_position + Vector3(1.5, 1, 0), Color(0.7, 0.7, 0.7))
 			continue
-		_hit(b, target, attack.damage, Color(0.6, 0.7, 1.0) if attack.has("chain") else Color(1.0, 0.85, 0.4))
+		_hit(b, target, amount, Color(0.6, 0.7, 1.0) if attack.has("chain") else Color(1.0, 0.85, 0.4))
 		if attack.has("chain"):
-			_chain(target, b.faction, attack.damage * 0.7, int(attack.chain) - 1)
+			_chain(target, b.faction, amount * 0.7, int(attack.chain) - 1)
 
 	for hq in get_tree().get_nodes_in_group(Headquarters.GROUP):
 		if not hq.is_alive():
@@ -104,19 +105,22 @@ func step(delta: float) -> void:
 		hq.cooldown_left -= delta
 		if hq.cooldown_left > 0.0:
 			continue
-		var target = nearest_enemy(hq.global_position, hq.faction, hq.attack.range)
+		var target = nearest_enemy(hq.global_position, hq.faction, hq.attack.range, true)
 		if target != null:
 			hq.cooldown_left = hq.attack.cooldown
 			_hit(hq, target, hq.attack.damage, Color(1.0, 0.6, 0.3))
 
 
 ## The closest living enemy of `faction` within `max_range`: a unit, a
-## building or a headquarters. Null if none.
-func nearest_enemy(from: Vector3, faction: String, max_range: float):
+## building or a headquarters. Null if none. Aircraft only count when
+## `hits_air`; bombers pass `hits_units` false to ignore units entirely.
+func nearest_enemy(from: Vector3, faction: String, max_range: float, hits_air := false, hits_units := true):
 	var best = null
 	var best_d := max_range
 	var other := "rival" if faction == "player" else "player"
 	for unit in _units(other):
+		if not hits_units or (unit.flying and not hits_air):
+			continue
 		if unit.is_alive() and not unit.riding:
 			var d := _flat_distance(from, unit.global_position)
 			if d <= best_d:
@@ -147,7 +151,7 @@ func _intruder_on_platform(unit: Unit):
 	var best = null
 	var best_d := INF
 	for foe in _units("rival"):
-		if foe.is_alive() and not foe.riding and region.platform_at(foe.position) == here:
+		if foe.is_alive() and not foe.riding and (not foe.flying or unit.hits_air) and region.platform_at(foe.position) == here:
 			var d := _flat_distance(unit.global_position, foe.global_position)
 			if d < best_d:
 				best_d = d
@@ -182,7 +186,7 @@ func _chain(first: Node3D, faction: String, amount: float, jumps: int) -> void:
 		var next = null
 		var best := CHAIN_JUMP
 		for unit in _units("rival" if faction == "player" else "player"):
-			if unit.is_alive() and not hit.has(unit):
+			if unit.is_alive() and not unit.flying and not hit.has(unit):
 				var d := _flat_distance(from.global_position, unit.global_position)
 				if d <= best:
 					best = d
@@ -205,8 +209,16 @@ func _flat_distance(a: Vector3, b: Vector3) -> float:
 	return Vector2(a.x, a.z).distance_to(Vector2(b.x, b.z))
 
 
+## The living headquarters on a platform, or null.
+func headquarters_on(platform_name: String) -> Headquarters:
+	for hq in get_tree().get_nodes_in_group(Headquarters.GROUP):
+		if hq.platform == platform_name and hq.is_alive():
+			return hq
+	return null
+
+
 func _on_headquarters_destroyed(hq: Headquarters) -> void:
-	headquarters_destroyed.emit(hq.faction)
+	headquarters_destroyed.emit(hq.faction, hq.platform)
 
 
 ## A short-lived line from shooter to target.

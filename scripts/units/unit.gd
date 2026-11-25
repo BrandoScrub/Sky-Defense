@@ -32,6 +32,12 @@ var speed_multiplier := 1.0
 @export var aggro_range := 9.0
 ## Scrap the player gets for destroying this unit.
 @export var bounty := 0
+## Aircraft fly over the map; only anti-air weapons can hit them.
+@export var flying := false
+## Can this unit shoot aircraft?
+@export var hits_air := false
+## False for bombers, which only attack buildings and headquarters.
+@export var targets_units := true
 
 var hp := 60.0
 var cooldown_left := 0.0
@@ -110,6 +116,9 @@ func _process(delta: float) -> void:
 
 
 func _build_visuals() -> void:
+	if flying:
+		_build_aircraft()
+		return
 	var height := 2.2 if is_hero else 1.6
 	var radius := footprint * (1.0 if is_hero else 0.8)
 
@@ -150,3 +159,48 @@ func _build_visuals() -> void:
 	_ring.material_override = ring_mat
 	_ring.visible = selected
 	add_child(_ring)
+
+
+## Placeholder bomber airship, plus a shadow on the deck below so it's easy to
+## see where it is from the top-down camera.
+func _build_aircraft() -> void:
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = body_color
+	mat.roughness = 0.5
+	var envelope := MeshInstance3D.new()
+	envelope.name = "Body"
+	var balloon := CapsuleMesh.new()
+	balloon.radius = footprint
+	balloon.height = footprint * 4.0
+	envelope.mesh = balloon
+	envelope.rotation.x = PI / 2.0
+	envelope.material_override = mat
+	add_child(envelope)
+	var gondola := MeshInstance3D.new()
+	var box := BoxMesh.new()
+	box.size = Vector3(footprint * 0.8, footprint * 0.5, footprint * 1.6)
+	gondola.mesh = box
+	gondola.position.y = -footprint * 1.1
+	gondola.material_override = mat
+	add_child(gondola)
+	var fin := MeshInstance3D.new()
+	var fin_box := BoxMesh.new()
+	fin_box.size = Vector3(0.1, footprint * 1.2, footprint)
+	fin.mesh = fin_box
+	fin.position = Vector3(0, footprint * 0.5, -footprint * 1.8)
+	fin.material_override = mat
+	add_child(fin)
+	var shadow := MeshInstance3D.new()
+	shadow.name = "Shadow"
+	var disc := CylinderMesh.new()
+	disc.top_radius = footprint * 1.4
+	disc.bottom_radius = footprint * 1.4
+	disc.height = 0.02
+	shadow.mesh = disc
+	var shadow_mat := StandardMaterial3D.new()
+	shadow_mat.albedo_color = Color(0, 0, 0, 0.35)
+	shadow_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	shadow_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	shadow.material_override = shadow_mat
+	shadow.position.y = -position.y + 0.08
+	add_child(shadow)

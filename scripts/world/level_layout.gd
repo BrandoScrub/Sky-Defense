@@ -57,11 +57,19 @@ const PLATFORMS := [
 		],
 	},
 	{
-		"name": "Ironbell HQ", "kind": "rival", "center": Vector2i(10, -17), "radius": 3, "capacity": 40,
+		"name": "Ironbell HQ", "kind": "rival", "corp": "Ironbell", "center": Vector2i(10, -17), "radius": 3, "capacity": 40,
 		"features": [
 			["rival_core", Vector2i(0, 0)],
 			["spawn", "Midway"],
 			["harvester_anchor", "East Storm"],
+		],
+	},
+	{
+		# Vesper Aeronautics' airfield. Its airships fly the air lanes; the only
+		# way in on foot is the long walkway from the Outpost.
+		"name": "Vesper Aerodrome", "kind": "rival", "corp": "Vesper", "center": Vector2i(17, -1), "radius": 2, "capacity": 30,
+		"features": [
+			["rival_core", Vector2i(0, 0)],
 		],
 	},
 ]
@@ -73,6 +81,7 @@ const WALKWAYS := [
 	["Hub", "Generator Rig"],
 	["Midway", "Ironbell HQ"],
 	["Midway", "Outpost"],
+	["Outpost", "Vesper Aerodrome"],
 ]
 
 ## Airship ferry routes between docks. Not walkable: units ride the ferry.
@@ -88,6 +97,6 @@ const CLOUDS := [
 
 ## Rival air routes, drawn high above the deck.
 const AIR_LANES := [
-	["Ironbell HQ", "Outpost"],
-	["Ironbell HQ", "Hub"],
+	["Vesper Aerodrome", "Hub"],
+	["Vesper Aerodrome", "Generator Rig"],
 ]

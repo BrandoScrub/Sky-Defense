@@ -28,7 +28,8 @@ const BUILDINGS := {
 		"tiles": ["deck"], "shape": "turret",
 		"color": Color(0.6, 0.62, 0.66),
 		"hp": 150.0,
-		"attack": {"damage": 15.0, "range": 10.0, "cooldown": 0.8},
+		# "air": damage against aircraft (no "air" key = can't hit aircraft).
+		"attack": {"damage": 15.0, "range": 10.0, "cooldown": 0.8, "air": 7.0},
 	},
 	"flak_battery": {
 		"name": "Flak Battery", "cost": 50, "power": -3, "weight": 3,
@@ -36,7 +37,7 @@ const BUILDINGS := {
 		"color": Color(0.45, 0.55, 0.4),
 		"hp": 150.0,
 		# Built for aircraft; against ground units it fires fast but weak.
-		"attack": {"damage": 5.0, "range": 12.0, "cooldown": 0.35},
+		"attack": {"damage": 5.0, "range": 12.0, "cooldown": 0.35, "air": 22.0},
 	},
 	"arc_coil": {
 		"name": "Arc Coil", "cost": 70, "power": -8, "weight": 4,
