@@ -32,6 +32,17 @@ func _initialize() -> void:
 	cam._target_zoom = 0.25
 	cam._apply_zoom()
 	main.selection.select_units(main.selection.all_units())
+	# A few sample buildings so the shot shows build mode's results.
+	var hub: Vector2i = region.platforms["Hub"].center
+	main.resources.add_scrap(300)
+	main.building.try_place("dynamo", hub + Vector2i(2, -1))
+	main.building.try_place("rivet_turret", hub + Vector2i(2, 0), 1)
+	main.building.try_place("flak_battery", hub + Vector2i(-2, 0))
+	main.building.try_place("arc_coil", hub + Vector2i(1, -2))
+	for hex in region.tiles_of_platform("Hub"):
+		if region.get_tile(hex).type == "harvester_anchor":
+			main.building.try_place("harvester", hex)
+	main.building.start_placing("rivet_turret")
 	await _settle()
 	_save(out_dir + "/hub.png")
 	quit(0)
