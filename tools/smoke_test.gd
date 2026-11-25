@@ -21,6 +21,7 @@ func _initialize() -> void:
 	await _check_open_map()
 	# The rest of the checks use a map with every planned walkway built.
 	SkyRegion.prebuilt_walkways = true
+	SkyRegion.instant_walkways = true
 	var main: Node = load("res://scenes/main.tscn").instantiate()
 	root.add_child(main)
 	await process_frame
@@ -72,13 +73,28 @@ func _check_open_map() -> void:
 	var hub: Dictionary = region.platforms["Hub"]
 	var foundry: Dictionary = region.platforms["Foundry"]
 	main.resources.add_scrap(200)
+	region.crew.set_process(false)
 	var err: String = main.walkways.try_build(region._rim_toward(hub, foundry.center, true), region._rim_toward(foundry, hub.center, true))
 	_expect(err == "", "the player should be able to bridge to the Foundry (%s)" % err)
+	# Harpoons first, then the tiles one at a time.
+	_expect(region.crew.jobs.size() == 1, "building a walkway should start a harpoon crew job")
+	var job: Dictionary = region.crew.jobs[0] if not region.crew.jobs.is_empty() else {}
+	_expect(not region.platforms_linked("Hub", "Foundry"), "the walkway shouldn't be there before the harpoons land")
+	_expect(region.get_node("WalkwayCrew").get_child_count() == 1, "the harpoon rig should be in the scene")
+	if not job.is_empty():
+		region.crew.step(region.crew.harpoon_seconds + region.crew.player_tile_seconds * 0.5)
+		_expect(job.laid == 1, "one tile should be down just after the harpoons land, got %d" % job.laid)
+		_expect(main.walkways.try_build(region._rim_toward(hub, foundry.center, true), region._rim_toward(foundry, hub.center, true)) != "",
+			"a second walkway can't go up over one being built")
+		region.crew.step(region.crew.job_seconds(job))
+	_expect(region.crew.jobs.is_empty(), "the walkway should finish")
 	_expect(region.platforms_linked("Hub", "Foundry"), "the new walkway should join the Hub and Foundry")
 
 	# Ironbell's crews: a span every span_seconds, starting at its HQ.
 	var path: Array = region.layout.paths["Ironbell"]
 	main.bridges.step(main.bridges.span_seconds + 0.1)
+	_expect(main.bridges.spans_built("Ironbell") == 0, "Ironbell's span should still be going up")
+	region.crew.step(30.0)
 	_expect(main.bridges.spans_built("Ironbell") == 1, "Ironbell should finish one span after span_seconds")
 	_expect(region.platforms_linked("Ironbell HQ", path[path.size() - 2]), "the first span should leave Ironbell HQ")
 	_expect(main.bridges.frontier("Ironbell") == path[path.size() - 2], "the bridge should end at the next platform")
@@ -98,6 +114,7 @@ func _check_open_map() -> void:
 	main.bridges.reached_player.connect(func(_c, p): reached.append(p))
 	var guard := 0
 	while main.bridges.build_next_span("Ironbell") and guard < 20:
+		region.crew.finish_all()
 		guard += 1
 	_expect(main.bridges.is_done("Ironbell"), "Ironbell's bridge should finish")
 	_expect(region.platforms_linked("Ironbell HQ", "Hub"), "the finished bridge should reach the Hub")

@@ -25,7 +25,7 @@ signal reached_player(corp: String, platform_name: String)
 @export var fliers: Array[String] = ["Vesper"]
 
 ## corp -> {path: Array (HQ first, Hub last), next: index of the next span,
-## progress: seconds}
+## progress: seconds, building: true while a span is going up}
 var crews := {}
 
 
@@ -35,7 +35,7 @@ func _ready() -> void:
 			continue
 		var path: Array = region.layout.paths[corp].duplicate()
 		path.reverse()
-		crews[corp] = {"path": path, "next": 0, "progress": 0.0}
+		crews[corp] = {"path": path, "next": 0, "progress": 0.0, "building": false}
 		_skip_linked(corp)
 
 
@@ -48,7 +48,7 @@ func step(delta: float) -> void:
 	var speed := wave_speedup if waves and waves.phase == WaveManager.WAVE else 1.0
 	for corp in crews:
 		var crew: Dictionary = crews[corp]
-		if is_done(corp) or not _hq_alive(crew.path[0]):
+		if is_done(corp) or crew.building or not _hq_alive(crew.path[0]):
 			continue
 		crew.progress += delta * speed
 		if crew.progress >= span_seconds:
@@ -56,23 +56,34 @@ func step(delta: float) -> void:
 			build_next_span(corp)
 
 
-## Finishes the next span right away. Returns false if the bridge is done.
+## Starts the next span: harpoons fire and the tiles go down one by one
+## (at once with SkyRegion.instant_walkways). Returns false if the bridge is
+## done or a span is already going up.
 func build_next_span(corp: String) -> bool:
 	_skip_linked(corp)
-	if is_done(corp):
-		return false
 	var crew: Dictionary = crews[corp]
+	if is_done(corp) or crew.building:
+		return false
 	var from: String = crew.path[crew.next]
 	var to: String = crew.path[crew.next + 1]
 	var span := region.planned_span_tiles(from, to)
-	if not span.is_empty():
-		region.add_walkway(span, "rival")
+	var a: Dictionary = region.platforms[from]
+	var b: Dictionary = region.platforms[to]
+	crew.building = true
+	var done := func(): _span_done(corp, from, to)
+	region.build_walkway(span, "rival", region.hex_center(region._rim_toward(a, b.center, true)),
+		region.hex_center(region._rim_toward(b, a.center, true)), done)
+	return true
+
+
+func _span_done(corp: String, from: String, to: String) -> void:
+	var crew: Dictionary = crews[corp]
+	crew.building = false
 	crew.next += 1
 	span_built.emit(corp, from, to)
 	if region.platform_owner(to) == "player":
 		reached_player.emit(corp, to)
 	_skip_linked(corp)
-	return true
 
 
 func is_done(corp: String) -> bool:

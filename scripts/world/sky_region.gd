@@ -66,6 +66,9 @@ static var rivals_override: Array = []
 ## and Ironbell bridges its way toward you (RivalBridges). Tests set this to
 ## lay every planned walkway up front instead.
 static var prebuilt_walkways := false
+## Walkways normally go up with harpoons and are laid tile by tile
+## (WalkwayCrew). Tests set this to lay them in one go.
+static var instant_walkways := false
 ## The generated layout (see LevelLayout.generate).
 var layout := {}
 
@@ -85,6 +88,8 @@ signal buildings_changed
 signal owner_changed(platform_name: String, new_owner: String)
 ## Emitted when a walkway is added at runtime.
 signal walkways_changed
+## One walkway tile was laid (walkways under construction go tile by tile).
+signal walkway_tile_added(hex: Vector2i)
 ## Emitted when the drawn rival air lanes change (the wind turned).
 signal air_routes_changed
 
@@ -140,6 +145,10 @@ func _ready() -> void:
 
 	_build_tiles()
 	_build_walk_graph()
+	crew = WalkwayCrew.new()
+	crew.name = "WalkwayCrew"
+	crew.region = self
+	add_child(crew)
 	# Air lanes curve around islands, so they need the tiles first. Calm
 	# until the wind picks up (VesperFleet redraws them when it turns).
 	var nav := AirNav.new(self)
@@ -478,6 +487,9 @@ func plan_walkway(from_hex: Vector2i, to_hex: Vector2i) -> Dictionary:
 			if reserved_hexes.has(hex):
 				plan.problem = "That's a balloon platform's flight path"
 				return plan
+			if pending_hexes.has(hex):
+				plan.problem = "A walkway is already going up there"
+				return plan
 			left_start = true
 			new_tiles.append(hex)
 		elif left_start and t.platform != b.platform:
@@ -498,13 +510,35 @@ func plan_walkway(from_hex: Vector2i, to_hex: Vector2i) -> Dictionary:
 ## `builder` is "player" or "rival" (rival bridges are tinted).
 func add_walkway(new_tiles: Array, builder := "player") -> void:
 	for hex in new_tiles:
-		tiles[hex] = {"type": "walkway", "platform": ""}
-		if builder == "rival":
-			tiles[hex].builder = "rival"
-		_make_tile(hex)
-		_add_walk_point(hex)
-	for hex in new_tiles:
-		_connect_walk_point(hex)
+		add_walkway_tile(hex, builder)
+	finish_walkway()
+
+
+## Builds a walkway the proper way: harpoons fire from `from` to `to`, then
+## the tiles are laid one at a time (see WalkwayCrew). `on_done` is called
+## when the last tile is down. Lays it at once with instant_walkways.
+func build_walkway(new_tiles: Array, builder: String, from: Vector3, to: Vector3, on_done = null) -> void:
+	if instant_walkways or crew == null:
+		add_walkway(new_tiles, builder)
+		if on_done is Callable:
+			on_done.call()
+		return
+	crew.start(new_tiles, builder, from, to, on_done)
+
+
+## Lays one walkway tile and links it to its neighbours.
+func add_walkway_tile(hex: Vector2i, builder := "player") -> void:
+	tiles[hex] = {"type": "walkway", "platform": ""}
+	if builder == "rival":
+		tiles[hex].builder = "rival"
+	_make_tile(hex)
+	_add_walk_point(hex)
+	_connect_walk_point(hex)
+	walkway_tile_added.emit(hex)
+
+
+## Counts a finished walkway.
+func finish_walkway() -> void:
 	walkway_count += 1
 	walkways_changed.emit()
 
@@ -1218,6 +1252,10 @@ func _material(color: Color, glow := false) -> StandardMaterial3D:
 ## Open-sky hexes a balloon platform flies through. Walkways can't be built
 ## across them.
 var reserved_hexes := {}
+## Sky hexes where a walkway is being built right now.
+var pending_hexes := {}
+## Builds walkways tile by tile.
+var crew: WalkwayCrew
 ## Sky hexes that planned walkways (built or not) run over, so balloon tracks
 ## keep clear of them.
 var planned_hexes := {}
