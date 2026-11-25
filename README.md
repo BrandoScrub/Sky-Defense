@@ -10,7 +10,7 @@ Built with [Godot 4.3](https://godotengine.org/download/archive/4.3-stable/) (st
 2. In the Project Manager, choose **Import** and pick `project.godot` in this folder.
 3. Press **F5** to play.
 
-The current build is a gray-box sky region: the Hub (gold), four neutral platforms (gray), a rival HQ (red), walkways and a storm cloud (blue). Only the camera works so far.
+The current build is a gray-box sky region: the Hub (gold), four neutral platforms (gray), a rival HQ (red), walkways and a storm cloud (blue). Your Commander (gold) and a squad of four Riveteers start on the Hub and can be selected and sent across walkways.
 
 ## Controls
 
@@ -20,6 +20,12 @@ The current build is a gray-box sky region: the Hub (gold), four neutral platfor
 | Rotate camera | Hold middle mouse and drag |
 | Zoom | Scroll wheel |
 | Jump to Hub | Home |
+| Select | Left click, or drag a box; Shift adds to the selection |
+| Move | Right click on a platform |
+| Attack-move | Alt + right click |
+| Select all units on screen | Q |
+| Select hero | H (double-tap to move the camera to them) |
+| Control groups | Ctrl + 1 to 5 saves, 1 to 5 selects, double-tap to move the camera |
 
 The full default key map (selection, control groups, build shortcuts, game speed) is defined in `tools/input_bindings.gd` and already written into `project.godot`. Those actions will be hooked up as each system is built.
 
@@ -29,7 +35,9 @@ The full default key map (selection, control groups, build shortcuts, game speed
 | --- | --- |
 | `scenes/` | Godot scenes; `main.tscn` is the entry point |
 | `scripts/camera/` | The RTS camera |
-| `scripts/world/` | Sky region, platforms and connections |
+| `scripts/world/` | Sky region, platforms, connections and routing |
+| `scripts/units/` | Player units and the hero |
+| `scripts/selection/` | Selection, orders and control groups |
 | `tools/` | Developer scripts: input map generator and the smoke test |
 
 ## Developer tools
