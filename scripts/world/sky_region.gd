@@ -27,6 +27,8 @@ const COLORS := {
 	"vesper": Color(0.25, 0.33, 0.55),
 	"walkway": Color(0.3, 0.31, 0.33),
 	"rival_walkway": Color(0.42, 0.2, 0.16),
+	"grassy": Color(0.36, 0.56, 0.26),
+	"overcharged": Color(0.42, 0.34, 0.62),
 	"core": Color(0.45, 0.28, 0.12),
 	"rival_core": Color(0.25, 0.08, 0.06),
 	"generator_socket": Color(0.95, 0.85, 0.2),
@@ -43,7 +45,7 @@ const COLORS := {
 
 ## Human-readable names for the legend.
 const LEGEND := [
-	["hub", "Your platform"], ["core", "Your headquarters"], ["neutral", "Neutral platform"],
+	["hub", "Your platform"], ["core", "Your headquarters"], ["neutral", "Neutral platform"], ["grassy", "Grassy crystal island"], ["overcharged", "Overcharged crystal island"],
 	["rival", "Ironbell platform"], ["vesper", "Vesper platform"], ["rival_core", "Rival headquarters"],
 	["walkway", "Walkway"], ["rival_walkway", "Ironbell bridge"], ["generator_socket", "Generator socket"],
 	["harvester_anchor", "Storm harvester anchor"], ["scrap_heap", "Scrap heap"],
@@ -181,6 +183,24 @@ func snap_to_walkable(point: Vector3) -> Vector3:
 		return Vector3(point.x, 0.0, point.z)
 	var id := _astar.get_closest_point(Vector3(point.x, 0.0, point.z))
 	return _astar.get_point_position(id)
+
+
+## Like snap_to_walkable, but stays on one platform: the nearest open hex of
+## `platform_name` (so a squad sent to an odd-shaped island all lands on it).
+func snap_to_platform(point: Vector3, platform_name: String) -> Vector3:
+	if is_walkable(point) and platform_at(point) == platform_name:
+		return Vector3(point.x, 0.0, point.z)
+	var best := snap_to_walkable(point)
+	var best_d := INF
+	for hex in tiles_of_platform(platform_name):
+		if not is_hex_walkable(hex):
+			continue
+		var c := hex_center(hex)
+		var d := Vector2(c.x - point.x, c.z - point.z).length()
+		if d < best_d:
+			best_d = d
+			best = Vector3(c.x, 0.0, c.z)
+	return best
 
 
 ## Waypoints from one point to another across decks and walkways, ending at
@@ -392,7 +412,7 @@ func set_platform_owner(platform_name: String, new_owner: String) -> void:
 	if owners.get(platform_name) == new_owner:
 		return
 	owners[platform_name] = new_owner
-	var color: Color = COLORS[{"player": "hub", "rival": "rival"}.get(new_owner, "neutral")]
+	var color: Color = COLORS[{"player": "hub", "rival": "rival"}.get(new_owner, _neutral_kind(platform_name))]
 	for hex in tiles_of_platform(platform_name):
 		var node: MeshInstance3D = _tile_nodes.get(hex)
 		if node:
@@ -482,8 +502,33 @@ func add_walkway(new_tiles: Array, builder := "player") -> void:
 # --- Layout -----------------------------------------------------------------
 
 func _lay_platform(p: Dictionary) -> void:
-	for hex in HexGrid.disk(p.center, p.radius):
+	for hex in shape_of(p):
 		tiles[hex] = {"type": "deck", "platform": p.name}
+
+
+## A platform's hexes: its island outline, or a full hexagon of its radius.
+func shape_of(p: Dictionary) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	if p.has("shape"):
+		for off in p.shape:
+			out.append(p.center + off)
+	else:
+		out = HexGrid.disk(p.center, p.radius)
+	return out
+
+
+## A platform's edge hexes: those with open sky (or anything else) beside them.
+func rim_of(p: Dictionary) -> Array[Vector2i]:
+	var own := {}
+	for hex in shape_of(p):
+		own[hex] = true
+	var out: Array[Vector2i] = []
+	for hex in own:
+		for n in HexGrid.neighbors(hex):
+			if not own.has(n):
+				out.append(hex)
+				break
+	return out
 
 
 func _lay_features(p: Dictionary) -> void:
@@ -562,7 +607,7 @@ func _rim_toward(p: Dictionary, target: Vector2i, allow_used := false) -> Vector
 	var target_world := hex_center(target)
 	var best := p.center as Vector2i
 	var best_d := INF
-	for hex in HexGrid.ring(p.center, p.radius):
+	for hex in rim_of(p):
 		if not allow_used and tiles.get(hex, {}).get("type", "deck") != "deck":
 			continue
 		var d := hex_center(hex).distance_to(target_world)
@@ -649,6 +694,8 @@ func _make_tile(hex: Vector2i) -> void:
 	var kind: String = platforms[t.platform].kind if t.platform != "" else "walkway"
 	if t.get("builder", "") == "rival":
 		kind = "rival_walkway"
+	if kind == "neutral":
+		kind = _neutral_kind(t.platform)
 	if t.platform != "" and platforms[t.platform].get("corp", "") == "Vesper":
 		kind = "vesper"
 	var is_walkway: bool = t.type == "walkway"
@@ -778,6 +825,9 @@ func _cylinder_mesh(top: float, bottom: float, height: float, sides: int) -> Cyl
 
 
 func _add_underside(p: Dictionary) -> void:
+	if p.get("style", "city") != "city":
+		_add_island_underside(p)
+		return
 	# An inverted cone of rock and machinery so platforms read as floating.
 	var cone := MeshInstance3D.new()
 	cone.name = "Underside_" + p.name.replace(" ", "")
@@ -836,6 +886,9 @@ func _add_underside(p: Dictionary) -> void:
 
 ## A riveted brass band around the deck's edge and lamp posts at its corners.
 func _add_trim(p: Dictionary) -> void:
+	if p.get("style", "city") != "city":
+		_add_island_trim(p)
+		return
 	var band := MeshInstance3D.new()
 	band.name = "Trim_" + p.name.replace(" ", "")
 	var ring := CylinderMesh.new()
@@ -877,6 +930,142 @@ func _add_trim(p: Dictionary) -> void:
 		light.material_override = glow
 		light.position = post.position + Vector3.UP * 1.2
 		add_child(light)
+
+
+## Island colours under the deck, by style.
+const UNDERSIDE_COLORS := {
+	"rock": Color(0.34, 0.28, 0.23),
+	"turbine": Color(0.27, 0.27, 0.29),
+	"crystal": Color(0.2, 0.22, 0.28),
+	"grassy": Color(0.38, 0.27, 0.17),
+	"overcharged": Color(0.18, 0.17, 0.26),
+}
+
+
+## Under an irregular island: a column of rock or ironwork beneath every
+## hex, deepest in the middle, so the outline reads from any angle. Turbine
+## islands get lift engines under their blades, crystal islands glowing
+## shards hanging below, rocks a few loose boulders.
+func _add_island_underside(p: Dictionary) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(p.name)
+	var root := Node3D.new()
+	root.name = "Underside_" + p.name.replace(" ", "")
+	root.position = hex_center(p.center)
+	add_child(root)
+	var style: String = p.style
+	var variant: String = p.get("variant", "")
+	var mat := _material(UNDERSIDE_COLORS.get(variant if variant != "" else style, COLORS.underside))
+	var root_mat := _material(Color(0.22, 0.16, 0.1))
+	var crystal := _material(Color(0.35, 0.95, 1.0), true)
+	var brass := _material(Color(0.7, 0.52, 0.25))
+	var rim := {}
+	for hex in rim_of(p):
+		rim[hex] = true
+	for hex in shape_of(p):
+		var depth: float = 1.2 + (p.radius + 1 - HexGrid.distance(hex, p.center)) * 1.6 + rng.randf_range(0.0, 1.6)
+		depth = snappedf(depth, 0.5)
+		var col := MeshInstance3D.new()
+		col.mesh = _column_mesh(depth)
+		col.material_override = mat
+		col.position = hex_center(hex) - root.position + Vector3.DOWN * (DECK_HEIGHT + depth / 2.0)
+		root.add_child(col)
+		var bottom := col.position + Vector3.DOWN * depth / 2.0
+		match style:
+			"crystal":
+				if variant == "grassy" and rng.randf() < 0.5:
+					# Roots trailing from earth the crystals tore out of the ground.
+					var root_line := MeshInstance3D.new()
+					root_line.mesh = _cylinder_mesh(0.08, 0.02, rng.randf_range(1.5, 3.5), 4)
+					root_line.material_override = root_mat
+					root_line.position = bottom + Vector3(rng.randf_range(-0.5, 0.5), -1.0, rng.randf_range(-0.5, 0.5))
+					root_line.rotation = Vector3(rng.randf_range(-0.4, 0.4), 0, rng.randf_range(-0.4, 0.4))
+					root.add_child(root_line)
+				if rng.randf() < (0.2 if variant == "grassy" else 0.7):
+					var shard := MeshInstance3D.new()
+					shard.mesh = _cylinder_mesh(0.45, 0.0, rng.randf_range(1.5, 3.0), 5)
+					shard.material_override = crystal
+					shard.position = bottom + Vector3.DOWN * 1.0
+					shard.rotation = Vector3(rng.randf_range(-0.3, 0.3), 0, rng.randf_range(-0.3, 0.3))
+					root.add_child(shard)
+			"rock":
+				if rng.randf() < 0.2:
+					var boulder := MeshInstance3D.new()
+					var sphere := SphereMesh.new()
+					sphere.radius = rng.randf_range(0.5, 0.9)
+					sphere.height = sphere.radius * 1.6
+					boulder.mesh = sphere
+					boulder.material_override = mat
+					boulder.position = bottom + Vector3(rng.randf_range(-0.6, 0.6), -0.4, rng.randf_range(-0.6, 0.6))
+					root.add_child(boulder)
+			"turbine":
+				if rim.has(hex) and HexGrid.distance(hex, p.center) == p.radius:
+					var engine := MeshInstance3D.new()
+					engine.mesh = _cylinder_mesh(0.7, 0.9, 1.3, 10)
+					engine.material_override = brass
+					engine.position = col.position + Vector3.DOWN * 0.3
+					engine.rotation.z = PI / 2.0
+					root.add_child(engine)
+
+
+## Deck dressing for irregular islands: lamp posts on turbine blade tips and
+## crystal spikes poking up from crystal islands' edges.
+func _add_island_trim(p: Dictionary) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(p.name) + 1
+	var post_mat := _material(Color(0.2, 0.19, 0.18))
+	var glow := _material(Color(1.0, 0.8, 0.45), true)
+	var crystal := _material(Color(0.35, 0.95, 1.0), true)
+	for hex in rim_of(p):
+		if tiles.get(hex, {}).get("type", "deck") != "deck":
+			continue
+		var pos := hex_center(hex)
+		var out := pos - hex_center(p.center)
+		out = out.normalized() if out.length() > 0.01 else Vector3.ZERO
+		if p.style == "turbine" and HexGrid.distance(hex, p.center) == p.radius:
+			var post := MeshInstance3D.new()
+			post.mesh = _cylinder_mesh(0.07, 0.1, 2.2, 6)
+			post.material_override = post_mat
+			post.position = pos + out * tile_size * 0.7 + Vector3.UP * 1.1
+			add_child(post)
+			var light := MeshInstance3D.new()
+			var bulb := SphereMesh.new()
+			bulb.radius = 0.2
+			bulb.height = 0.4
+			light.mesh = bulb
+			light.material_override = glow
+			light.position = post.position + Vector3.UP * 1.2
+			add_child(light)
+		elif p.get("variant", "") == "grassy" and rng.randf() < 0.45:
+			var bush := MeshInstance3D.new()
+			var ball := SphereMesh.new()
+			ball.radius = rng.randf_range(0.35, 0.6)
+			ball.height = ball.radius * 1.5
+			bush.mesh = ball
+			bush.material_override = _material(Color(0.25, 0.45, 0.18))
+			bush.position = pos + out * tile_size * 0.55 + Vector3.UP * 0.25
+			add_child(bush)
+		elif p.style == "crystal" and p.get("variant", "") != "grassy" and rng.randf() < 0.7:
+			var spike := MeshInstance3D.new()
+			spike.mesh = _cylinder_mesh(0.0, 0.3, rng.randf_range(0.8, 1.6), 5)
+			spike.material_override = crystal
+			spike.position = pos + out * tile_size * 0.75 + Vector3.UP * 0.4
+			spike.rotation = Vector3(out.z * 0.4, 0, -out.x * 0.4)
+			add_child(spike)
+
+
+## A hex column that narrows toward the bottom, for island undersides.
+func _column_mesh(depth: float) -> CylinderMesh:
+	var key := Vector2(depth, -1.0)
+	if not _hex_mesh_cache.has(key):
+		var mesh := CylinderMesh.new()
+		mesh.top_radius = tile_size * TILE_GAP
+		mesh.bottom_radius = tile_size * TILE_GAP * 0.55
+		mesh.height = depth
+		mesh.radial_segments = 6
+		mesh.rings = 1
+		_hex_mesh_cache[key] = mesh
+	return _hex_mesh_cache[key]
 
 
 func _add_label(p: Dictionary) -> void:
@@ -1001,6 +1190,13 @@ func platform_label(platform_name: String) -> Label3D:
 ## The placeholder mesh of a tile, or null.
 func tile_node(hex: Vector2i) -> MeshInstance3D:
 	return _tile_nodes.get(hex)
+
+
+## The colour key for an unowned platform: crystal islands are either grassy
+## (lifted from the ground by their crystals) or overcharged.
+func _neutral_kind(platform_name: String) -> String:
+	var p: Dictionary = platforms.get(platform_name, {})
+	return p.get("variant", "neutral") if p.get("style", "") == "crystal" else "neutral"
 
 
 ## Adds tiles ({hex: {"type", "platform"}}) with their meshes, and links the
