@@ -28,6 +28,7 @@ func _initialize() -> void:
 	await _check_selection_and_orders(main)
 	_check_building(main)
 	_check_build_menu(main)
+	_check_info_panel(main)
 	_check_ferry(main)
 	await _check_claiming_walkways_and_raids(main)
 	_check_weight_power_income(main)
@@ -278,6 +279,59 @@ func _check_build_menu(main: Node) -> void:
 	_expect(not main._legend_entries.visible, "the legend should fold away")
 	main.set_legend_open(true)
 	_expect(main._legend_entries.visible, "the legend should open again")
+
+
+func _check_info_panel(main: Node) -> void:
+	var info: InfoPanel = main.info_panel
+	var region: SkyRegion = main.get_node("Region")
+	var cam: Camera3D = main.camera.camera
+	# Every kind of thing has a title and a summary.
+	var things: Array = [main.selection.find_hero(), {"kind": "platform", "name": "Foundry"},
+		{"kind": "tile", "type": "scrap_heap", "platform": "Foundry", "target": ""}]
+	for cloud in region.clouds:
+		things.append({"kind": "cloud", "name": cloud})
+	for hq in main.get_tree().get_nodes_in_group(Headquarters.GROUP):
+		things.append(hq)
+	for pair in region.layout.air_lanes:
+		things.append({"kind": "air_lane", "a": pair[0], "b": pair[1]})
+	for pair in region.layout.ferry_routes:
+		things.append({"kind": "ferry", "a": pair[0], "b": pair[1]})
+	for thing in things:
+		var d := info.describe(thing)
+		_expect(d.title != "" and d.body != "", "info card is missing text for %s" % str(thing))
+	for type_id in BuildingCatalog.BUILDINGS:
+		_expect(InfoPanel.BUILDING_INFO.has(type_id), "no info card summary for %s" % type_id)
+
+	# Clicking picks the thing under the mouse.
+	main.camera.position = region.get_platform_position("Hub")
+	main.camera._apply_zoom()
+	var hero: Unit = main.selection.find_hero()
+	var picked = info.pick(cam.unproject_position(hero.global_position + Vector3.UP))
+	_expect(picked == hero, "clicking the Commander should describe the Commander, got %s" % str(picked))
+	var hub: Vector2i = region.platforms["Hub"].center
+	# A free deck tile away from the squad, so a unit doesn't win the click.
+	var deck := Vector2i(999, 999)
+	for hex in region.tiles_of_platform("Hub"):
+		if region.get_tile(hex).type != "deck" or region.buildings.has(hex):
+			continue
+		var clear := true
+		for u in main.selection.all_units():
+			if u.global_position.distance_to(region.hex_center(hex)) < 4.0:
+				clear = false
+		if clear:
+			deck = hex
+			break
+	main.resources.add_scrap(40)
+	_expect(main.building.try_place("dynamo", deck) == "", "info card test needs a Dynamo on the Hub")
+	picked = info.pick(cam.unproject_position(region.hex_center(deck)))
+	_expect(picked is Building and picked.type_id == "dynamo", "clicking a Dynamo should describe it, got %s" % str(picked))
+	info.show_thing(picked)
+	_expect(info.visible and info._title.text == "Dynamo Generator", "the info card should show the Dynamo")
+	info.show_at(Vector2(-5000, -5000))
+	_expect(not info.visible, "clicking empty sky should hide the info card")
+	main.building.demolish(deck)
+	# Put scrap back where it was for the checks that follow.
+	main.resources.scrap -= BuildingCatalog.refund_for("dynamo")
 
 
 func _key(keycode: Key, shift := false) -> InputEventKey:

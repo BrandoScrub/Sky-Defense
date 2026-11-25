@@ -22,6 +22,7 @@ before they destroy your Hub. Ironbell walks; Vesper flies bombers.
 5. Right click the Crystal Spire to send units there by airship ferry.
 6. Keep platforms under their weight limit or they sag and shed buildings.
 
+Click anything to see what it is and what it does.
 When you're ready, gather your squad and attack-move (Alt + right click) north."""
 
 @onready var camera: RtsCamera = $RtsCamera
@@ -46,6 +47,7 @@ var resources: PlayerResources
 var _status: Label
 var _resource_bar: Label
 var build_menu: BuildMenu
+var info_panel: InfoPanel
 var _notice: Label
 var _notice_tween: Tween
 var _help: PanelContainer
@@ -332,6 +334,17 @@ func _build_hud() -> void:
 	build_menu.recruiter = recruiter
 	build_menu.resources = resources
 	layer.add_child(build_menu)
+
+	info_panel = InfoPanel.new()
+	info_panel.region = region
+	info_panel.camera = camera
+	info_panel.selection = selection
+	info_panel.building = building
+	info_panel.walkways = walkways
+	info_panel.combat = combat
+	info_panel.storms = storms
+	info_panel.loads = loads
+	layer.add_child(info_panel)
 
 	_notice = _hud_label("Notice", 18)
 	_notice.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
