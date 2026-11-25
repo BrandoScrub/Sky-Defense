@@ -1,5 +1,5 @@
 ## Build phase, then wave phase, like the reference game. Each build phase
-## runs on a timer (G ends it early). Each wave sends a bigger Ironbell party
+## runs on a timer (Space ends it early). Each wave sends a bigger Ironbell party
 ## and, from wave 2, a flight of Vesper bombers; once every attacker is
 ## destroyed the next build phase starts. A rival whose headquarters falls
 ## stops attacking. Destroying both wins; losing the Hub's headquarters loses.

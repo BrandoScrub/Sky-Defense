@@ -1,16 +1,26 @@
 ## The build menu in the bottom-left corner: a row of tabs (Army, Defense,
-## Economy, Storm) above a 3 x 3 grid of buttons. Clicking a button does the
-## same thing as its hotkey, which is shown in the button's corner. Tab cycles
-## the tabs. Pressing a hotkey also jumps to the tab that holds it.
+## Economy, Storm) above a 4 x 4 command grid, like a classic RTS. Each grid
+## slot has a fixed key that matches its place on the keyboard:
+##   Q W E R
+##   A S D F
+##   Z X C V
+##   T G B N
+## What a slot does depends on the tab, so Q is a Rivet Turret on the Defense
+## tab and a Dynamo on the Economy tab. Tab cycles the tabs. Keys pressed with
+## Shift, Ctrl or Alt are left alone (Shift + W A S D pans the camera).
 class_name BuildMenu
 extends PanelContainer
 
-const COLUMNS := 3
-const SLOTS := 9
-const BUTTON_SIZE := Vector2(120, 72)
+const COLUMNS := 4
+const SLOTS := 16
+const BUTTON_SIZE := Vector2(100, 64)
+## The key for each slot, left to right and top to bottom. The real bindings
+## are the grid_slot_1 to grid_slot_16 actions in tools/input_bindings.gd.
+const SLOT_KEYS := ["Q", "W", "E", "R", "A", "S", "D", "F", "Z", "X", "C", "V", "T", "G", "B", "N"]
 
-## Tab name -> entries. An entry is either a building type id from
-## BuildingCatalog, or one of the special actions "walkway" and "recruit".
+## Tab name -> what is in each slot, in slot order ("" leaves a slot empty).
+## An entry is a building type id from BuildingCatalog, or one of the special
+## actions "walkway" and "recruit".
 const TABS := {
 	"Army": ["recruit"],
 	"Defense": ["rivet_turret", "flak_battery", "arc_coil"],
@@ -18,7 +28,7 @@ const TABS := {
 	"Storm": ["harvester"],
 }
 
-const DEFAULT_HINT := "Del: demolish   G: start wave   P: pause   F1-F3: speed   Tab: next tab"
+const DEFAULT_HINT := "Tab: next tab   Shift + WASD: move camera   Del: demolish   Space: start wave   P: pause   F1-F3: speed"
 
 var building: BuildController
 var walkways: WalkwayBuilder
@@ -101,9 +111,27 @@ func _unhandled_input(event: InputEvent) -> void:
 		var names: Array = TABS.keys()
 		show_tab(names[(names.find(current_tab) + 1) % names.size()])
 		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed("recruit_unit"):
-		# The Recruiter handles the key itself; just show where it lives.
-		show_tab(tab_of("recruit"))
+		return
+	if not (event is InputEventKey) or not event.pressed or event.echo:
+		return
+	if event.shift_pressed or event.ctrl_pressed or event.alt_pressed or event.meta_pressed:
+		return
+	# While placing, R rotates the building instead.
+	if building and building.placing != "" and event.is_action_pressed("building_rotate"):
+		return
+	for i in SLOTS:
+		if event.is_action_pressed("grid_slot_%d" % (i + 1)):
+			var entry := entry_at(current_tab, i)
+			if entry != "":
+				activate(entry)
+			get_viewport().set_input_as_handled()
+			return
+
+
+## What is in a slot of a tab, or "" if the slot is empty.
+static func entry_at(tab_name: String, slot: int) -> String:
+	var entries: Array = TABS[tab_name]
+	return entries[slot] if slot < entries.size() else ""
 
 
 func _process(_delta: float) -> void:
@@ -135,17 +163,20 @@ func show_tab(tab_name: String) -> void:
 		_grid.remove_child(child)
 		child.queue_free()
 	_entry_buttons.clear()
-	var entries: Array = TABS[tab_name]
 	for i in SLOTS:
-		if i < entries.size():
-			var button := _make_button(entries[i])
+		var entry := entry_at(tab_name, i)
+		if entry != "":
+			var button := _make_button(entry, SLOT_KEYS[i])
 			_grid.add_child(button)
-			_entry_buttons[entries[i]] = button
+			_entry_buttons[entry] = button
 		else:
 			var empty := Panel.new()
 			empty.custom_minimum_size = BUTTON_SIZE
 			empty.modulate = Color(1, 1, 1, 0.35)
 			empty.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			var key := _key_label(SLOT_KEYS[i])
+			key.modulate.a = 0.5
+			empty.add_child(key)
 			_grid.add_child(empty)
 	refresh()
 
@@ -179,7 +210,7 @@ func refresh() -> void:
 		_update_button(entry)
 
 
-func _make_button(entry: String) -> Button:
+func _make_button(entry: String, key_text: String) -> Button:
 	var button := Button.new()
 	button.name = entry
 	button.custom_minimum_size = BUTTON_SIZE
@@ -189,15 +220,19 @@ func _make_button(entry: String) -> Button:
 	button.add_theme_font_size_override("font_size", 13)
 	button.pressed.connect(activate.bind(entry))
 
+	button.add_child(_key_label(key_text))
+	return button
+
+
+func _key_label(key_text: String) -> Label:
 	var key := Label.new()
 	key.name = "Key"
-	key.text = _hotkey(entry)
+	key.text = key_text
 	key.position = Vector2(6, 2)
 	key.add_theme_font_size_override("font_size", 12)
 	key.modulate = Color(1.0, 0.85, 0.45)
 	key.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	button.add_child(key)
-	return button
+	return key
 
 
 func _update_button(entry: String) -> void:
@@ -253,14 +288,10 @@ func _building_details(data: Dictionary) -> String:
 	return "\n".join(lines)
 
 
+## The key for an entry on its own tab.
 func _hotkey(entry: String) -> String:
-	match entry:
-		"walkway":
-			return "T"
-		"recruit":
-			return "Y"
-	var i := BuildingCatalog.HOTKEY_ORDER.find(entry)
-	return BuildingCatalog.HOTKEY_LABELS[i] if i >= 0 else ""
+	var tab_name := tab_of(entry)
+	return SLOT_KEYS[TABS[tab_name].find(entry)] if tab_name != "" else ""
 
 
 func _on_build_mode_changed(type_id: String) -> void:

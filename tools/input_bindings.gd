@@ -13,10 +13,16 @@ const MOUSE := "mouse"
 static func bindings() -> Dictionary:
 	return {
 		# Camera
-		"camera_pan_up": [[KEY, KEY_W, []], [KEY, KEY_UP, []]],
-		"camera_pan_down": [[KEY, KEY_S, []], [KEY, KEY_DOWN, []]],
-		"camera_pan_left": [[KEY, KEY_A, []], [KEY, KEY_LEFT, []]],
-		"camera_pan_right": [[KEY, KEY_D, []], [KEY, KEY_RIGHT, []]],
+		# Arrow keys always pan. W A S D are build-grid keys, so they pan only
+		# while Shift is held (the camera checks Shift itself).
+		"camera_pan_up": [[KEY, KEY_UP, []]],
+		"camera_pan_down": [[KEY, KEY_DOWN, []]],
+		"camera_pan_left": [[KEY, KEY_LEFT, []]],
+		"camera_pan_right": [[KEY, KEY_RIGHT, []]],
+		"camera_shift_pan_up": [[KEY, KEY_W, []]],
+		"camera_shift_pan_down": [[KEY, KEY_S, []]],
+		"camera_shift_pan_left": [[KEY, KEY_A, []]],
+		"camera_shift_pan_right": [[KEY, KEY_D, []]],
 		"camera_rotate": [[MOUSE, MOUSE_BUTTON_MIDDLE, []]],
 		"camera_zoom_in": [[MOUSE, MOUSE_BUTTON_WHEEL_UP, []]],
 		"camera_zoom_out": [[MOUSE, MOUSE_BUTTON_WHEEL_DOWN, []]],
@@ -28,7 +34,7 @@ static func bindings() -> Dictionary:
 		"command": [[MOUSE, MOUSE_BUTTON_RIGHT, []]],
 		"modifier_additive": [[KEY, KEY_SHIFT, []]],
 		"modifier_attack_move": [[KEY, KEY_ALT, []]],
-		"select_units_on_screen": [[KEY, KEY_Q, []]],
+		"select_units_on_screen": [[KEY, KEY_A, ["ctrl"]]],
 		"select_hero": [[KEY, KEY_H, []]],
 
 		# Control groups (Ctrl + number assigns, number selects)
@@ -40,20 +46,33 @@ static func bindings() -> Dictionary:
 		"control_group_5": [[KEY, KEY_5, []]],
 
 		# Building
-		"context_hotkey_1": [[KEY, KEY_Z, []]],
-		"context_hotkey_2": [[KEY, KEY_X, []]],
-		"context_hotkey_3": [[KEY, KEY_C, []]],
-		"context_hotkey_4": [[KEY, KEY_V, []]],
-		"context_hotkey_5": [[KEY, KEY_B, []]],
+		# Build command grid, 4 x 4, read left to right and top to bottom:
+		#   Q W E R / A S D F / Z X C V / T G B N
+		# What each slot does depends on the build menu's tab.
+		"grid_slot_1": [[KEY, KEY_Q, []]],
+		"grid_slot_2": [[KEY, KEY_W, []]],
+		"grid_slot_3": [[KEY, KEY_E, []]],
+		"grid_slot_4": [[KEY, KEY_R, []]],
+		"grid_slot_5": [[KEY, KEY_A, []]],
+		"grid_slot_6": [[KEY, KEY_S, []]],
+		"grid_slot_7": [[KEY, KEY_D, []]],
+		"grid_slot_8": [[KEY, KEY_F, []]],
+		"grid_slot_9": [[KEY, KEY_Z, []]],
+		"grid_slot_10": [[KEY, KEY_X, []]],
+		"grid_slot_11": [[KEY, KEY_C, []]],
+		"grid_slot_12": [[KEY, KEY_V, []]],
+		"grid_slot_13": [[KEY, KEY_T, []]],
+		"grid_slot_14": [[KEY, KEY_G, []]],
+		"grid_slot_15": [[KEY, KEY_B, []]],
+		"grid_slot_16": [[KEY, KEY_N, []]],
 		"building_rotate": [[KEY, KEY_R, []]],
 		"building_cancel": [[KEY, KEY_ESCAPE, []]],
 		"demolish": [[KEY, KEY_DELETE, []]],
-		"build_walkway": [[KEY, KEY_T, []]],
-		"recruit_unit": [[KEY, KEY_Y, []]],
 		"build_menu_next_tab": [[KEY, KEY_TAB, []]],
+		"toggle_legend": [[KEY, KEY_L, []]],
 
 		# Game flow
-		"start_wave_early": [[KEY, KEY_G, []]],
+		"start_wave_early": [[KEY, KEY_SPACE, []]],
 		"time_pause": [[KEY, KEY_P, []]],
 		"time_normal": [[KEY, KEY_F1, []]],
 		"time_double": [[KEY, KEY_F2, []]],

@@ -10,13 +10,14 @@ const HOW_TO_PLAY := """How to play
 Goal: destroy Ironbell HQ (far north) and the Vesper Aerodrome (far east)
 before they destroy your Hub. Ironbell walks; Vesper flies bombers.
 
-1. Build during the build phase: C Rivet Turrets guard the walkway to Midway.
-   Z Dynamo Generators power them; watch the power number at the top.
+1. Build during the build phase with the menu in the bottom left (Tab
+   switches tabs). Rivet Turrets (Defense, Q) guard the walkway to Midway.
+   Dynamo Generators (Economy, Q) power them; watch the power number at the top.
 2. Each wave of Ironbell walkers comes down the walkway. Kills pay scrap.
    From wave 2 Vesper bombers fly in along the red air lanes and bomb your
-   buildings: V Flak Batteries shred them, Rivet Turrets only scratch them.
+   buildings: Flak Batteries (Defense, W) shred them, Rivet Turrets only scratch them.
 3. Send units to a neutral platform to claim it (the Foundry gives scrap).
-4. Put X Cloud Harvesters on storm anchors. Hold more harvesters on a storm
+4. Put Cloud Harvesters (Storm, Q) on storm anchors. Hold more harvesters on a storm
    than Ironbell to get its power; if Ironbell holds it, lightning strikes.
 5. Right click the Crystal Spire to send units there by airship ferry.
 6. Keep platforms under their weight limit or they sag and shed buildings.
@@ -48,6 +49,8 @@ var build_menu: BuildMenu
 var _notice: Label
 var _notice_tween: Tween
 var _help: PanelContainer
+var _legend_entries: VBoxContainer
+var _legend_toggle: Button
 var _hero_respawn_left := 0.0
 var _game_over := false
 
@@ -192,6 +195,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _game_over and event is InputEventKey and event.pressed and event.keycode in [KEY_ENTER, KEY_KP_ENTER]:
 		restart()
 		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("toggle_legend") and _legend_entries:
+		set_legend_open(not _legend_entries.visible)
+		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("camera_focus_hub"):
 		camera.focus_on(region.get_platform_position("Hub"))
 		get_viewport().set_input_as_handled()
@@ -227,7 +233,7 @@ func _process(delta: float) -> void:
 		return
 	match waves.phase:
 		WaveManager.BUILD:
-			_phase_label.text = "Build phase: wave %d in %ds (G to start now)" % [waves.wave, ceili(waves.time_left)]
+			_phase_label.text = "Build phase: wave %d in %ds (Space to start now)" % [waves.wave, ceili(waves.time_left)]
 		WaveManager.WAVE:
 			_phase_label.text = "Wave %d: %d attackers left" % [waves.wave, waves.remaining()]
 		_:
@@ -418,15 +424,26 @@ func _on_platform_claimed(platform_name: String, new_owner: String) -> void:
 		show_notice("Ironbell claimed %s" % platform_name)
 
 
-## Colour key for the placeholder tiles, top right.
+## Colour key for the placeholder tiles, top right. Click its title (or
+## press L) to fold it away.
 func _build_legend() -> Control:
 	var panel := PanelContainer.new()
 	panel.name = "Legend"
 	panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	panel.position = Vector2(-16, 16)
 	panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	var outer := VBoxContainer.new()
+	panel.add_child(outer)
+	var toggle := Button.new()
+	toggle.name = "Toggle"
+	toggle.flat = true
+	toggle.focus_mode = Control.FOCUS_NONE
+	toggle.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	toggle.tooltip_text = "Show or hide the legend (L)"
+	outer.add_child(toggle)
 	var box := VBoxContainer.new()
-	panel.add_child(box)
+	box.name = "Entries"
+	outer.add_child(box)
 	for entry in SkyRegion.LEGEND:
 		var row := HBoxContainer.new()
 		var swatch := ColorRect.new()
@@ -439,11 +456,27 @@ func _build_legend() -> Control:
 		label.text = entry[1]
 		row.add_child(label)
 		box.add_child(row)
+	_legend_entries = box
+	_legend_toggle = toggle
+	toggle.pressed.connect(func(): set_legend_open(not box.visible))
+	set_legend_open(true)
 	return panel
 
 
+## Shows or folds away the legend's list.
+func set_legend_open(open: bool) -> void:
+	_legend_entries.visible = open
+	_legend_toggle.text = ("v  Legend" if open else ">  Legend")
+	# Shrink the panel back down when it folds.
+	# Zero the size: with the right edge pinned, the panel then grows left and
+	# down to exactly fit what is showing.
+	var panel := _legend_entries.get_parent().get_parent() as Control
+	panel.offset_left = panel.offset_right
+	panel.offset_bottom = panel.offset_top
+
+
 func _on_selection_changed(units: Array[Unit]) -> void:
-	var help := "Left click or drag to select, right click to move, Alt + right click to attack-move.\nQ: all on screen   H: hero   Ctrl + 1-5: save group   1-5: recall group"
+	var help := "Left click or drag to select, right click to move, Alt + right click to attack-move.\nCtrl + A: all on screen   H: hero   Ctrl + 1-5: save group   1-5: recall group"
 	if units.is_empty():
 		_status.text = "Nothing selected\n" + help
 		return

@@ -16,7 +16,7 @@ Weight matters: buildings and units both add to a platform's load. Over capacity
 
 Park units on a neutral platform to claim it (it's contested while both sides have units there), then build on it. Ironbell raiding parties march along walkways, claim platforms on the way, and attack whatever they meet. If you wall off a walkway with buildings they smash through the wall instead of stopping.
 
-The game runs in waves. You get 45 seconds to build before wave 1 (25 seconds before later waves), then Ironbell sends a growing party of walkers; clear it to start the next build phase. Turrets, units and both headquarters shoot automatically, and each kill pays 15 scrap. You lose if your Hub headquarters falls and win once both rival headquarters are destroyed; press Enter on the end screen to play again. Press Y to train more Riveteers at the Hub (30 scrap each). If your Commander falls, they return to the Hub after 15 seconds. A how-to-play panel is shown until the first wave starts.
+The game runs in waves. You get 45 seconds to build before wave 1 (25 seconds before later waves), then Ironbell sends a growing party of walkers; clear it to start the next build phase. Turrets, units and both headquarters shoot automatically, and each kill pays 15 scrap. You lose if your Hub headquarters falls and win once both rival headquarters are destroyed; press Enter on the end screen to play again. Use the Army tab (Q) to train more Riveteers at the Hub (30 scrap each). If your Commander falls, they return to the Hub after 15 seconds. A how-to-play panel is shown until the first wave starts.
 
 There are two rival corporations. Ironbell Consolidated walks: its walkers come down the walkway from Midway. Vesper Aeronautics flies: from wave 2 its bomber airships leave the Vesper Aerodrome (far east), fly the red air lanes, and bomb your buildings or your Hub. Bombers ignore your units, and only anti-air weapons can hit them. Flak Batteries are built for this, Rivet Turrets only scratch them, and the Commander and headquarters guns can shoot them too. Arc Coils and Riveteers can't. Reach the Aerodrome on foot over the long walkway from the Outpost. When one rival's headquarters falls, that rival stops attacking.
 
@@ -30,23 +30,24 @@ To change the map, edit `scripts/world/level_layout.gd`: platforms, features, wa
 
 | Action | Default |
 | --- | --- |
-| Pan camera | WASD, arrow keys, or mouse at the screen edge |
+| Pan camera | Arrow keys, Shift + W A S D, or mouse at the screen edge |
 | Rotate camera | Hold middle mouse and drag |
 | Zoom | Scroll wheel |
 | Jump to Hub | Home |
 | Select | Left click, or drag a box; Shift adds to the selection |
 | Move | Right click on a platform |
 | Attack-move | Alt + right click |
-| Select all units on screen | Q |
+| Select all units on screen | Ctrl + A |
 | Select hero | H (double-tap to move the camera to them) |
 | Control groups | Ctrl + 1 to 5 saves, 1 to 5 selects, double-tap to move the camera |
-| Build menu | Bottom left: click a tab (Army, Defense, Economy, Storm), then a building. Tab cycles the tabs. Hover a button for its stats |
-| Build | Z Dynamo Generator, X Cloud Harvester, C Rivet Turret, V Flak Battery, B Arc Coil |
+| Build menu | Bottom left: tabs (Army, Defense, Economy, Storm) over a 4 x 4 command grid. Tab cycles the tabs. The grid keys match their spots on the keyboard: Q W E R / A S D F / Z X C V / T G B N, and what each does depends on the tab |
+| Build | Defense: Q Rivet Turret, W Flak Battery, E Arc Coil. Economy: Q Dynamo Generator, W Walkway. Storm: Q Cloud Harvester |
 | While placing | Left click places, Shift keeps placing, R rotates, Esc or right click cancels |
 | Demolish | Delete over a building (refunds 75%) |
-| Build a walkway | T, click a tile on your platform, then a tile on another platform (15 scrap per tile) |
-| Train a Riveteer | Y (30 scrap, 5 seconds) |
-| Start the next wave early | G |
+| Build a walkway | Economy tab, W, then click a tile on your platform, then a tile on another platform (15 scrap per tile) |
+| Train a Riveteer | Army tab, Q (30 scrap, 5 seconds) |
+| Start the next wave early | Space |
+| Show or hide the legend | L, or click its title |
 | Pause | P |
 | Game speed | F1 normal, F2 double, F3 triple |
 

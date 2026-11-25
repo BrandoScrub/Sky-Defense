@@ -1,4 +1,4 @@
-## Building new walkways. Press T, click a tile on a platform you own, then
+## Building new walkways. Pick Walkway in the build menu, click a tile on a platform you own, then
 ## click a tile on another platform. A preview shows the planned tiles in green
 ## (or red if it can't be built) with the scrap cost. Esc or right click cancels.
 class_name WalkwayBuilder
@@ -20,13 +20,6 @@ var _preview_key := ""
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("build_walkway"):
-		if active:
-			cancel()
-		else:
-			begin()
-		_handled()
-		return
 	if not active:
 		return
 	if event.is_action_pressed("select"):
