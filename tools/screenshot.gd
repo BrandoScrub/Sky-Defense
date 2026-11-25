@@ -10,6 +10,7 @@ func _initialize() -> void:
 	DirAccess.make_dir_recursive_absolute(out_dir)
 	root.size = Vector2i(1600, 900)
 
+	SkyRegion.seed_override = 3
 	var main: Node = load("res://scenes/main.tscn").instantiate()
 	root.add_child(main)
 	var cam: RtsCamera = main.get_node("RtsCamera")

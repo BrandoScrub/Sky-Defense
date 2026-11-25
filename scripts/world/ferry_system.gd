@@ -1,4 +1,4 @@
-## Airship ferries between docks (LevelLayout.FERRY_ROUTES). Each ferry
+## Airship ferries between docks (region.layout.ferry_routes). Each ferry
 ## shuttles back and forth on a timer: it waits at a dock, then flies to the
 ## other one. Units sent somewhere they can't walk to are routed to the nearer
 ## dock, board when the ferry is in, ride across, and walk on to their goal.
@@ -26,7 +26,7 @@ var _trips := {}
 
 
 func _ready() -> void:
-	for f in LevelLayout.FERRY_ROUTES:
+	for f in region.layout.ferry_routes:
 		var docks := [region._find_feature(f[0], "dock"), region._find_feature(f[1], "dock")]
 		var ferry := {
 			"names": [f[0], f[1]], "docks": docks, "at": 0, "flying": false,

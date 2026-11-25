@@ -1,6 +1,6 @@
 ## Vesper Aeronautics, the second rival corporation. It fights from the air:
 ## each flight of bomber airships takes off from the Vesper Aerodrome, flies
-## an air lane (LevelLayout.AIR_LANES), then bombs the nearest of your
+## an air lane (region.layout.air_lanes), then bombs the nearest of your
 ## buildings, or your Hub's headquarters if there are none.
 ##
 ## Bombers ignore your units, and only anti-air weapons can hit them: Flak
@@ -41,7 +41,7 @@ func step() -> void:
 
 ## Lanes that start at the aerodrome, as [from, to] platform names.
 func lanes() -> Array:
-	return LevelLayout.AIR_LANES.filter(func(l): return l[0] == home)
+	return region.layout.air_lanes.filter(func(l): return l[0] == home)
 
 
 ## Launches `size` bombers along the next air lane. Returns them.

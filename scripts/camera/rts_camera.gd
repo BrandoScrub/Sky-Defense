@@ -19,7 +19,7 @@ extends Node3D
 
 @export_group("Zoom")
 @export var distance_min := 12.0
-@export var distance_max := 90.0
+@export var distance_max := 120.0
 ## Fraction of the zoom range moved per wheel step.
 @export_range(0.01, 0.5) var zoom_step := 0.1
 @export var zoom_smoothing := 10.0
