@@ -736,12 +736,18 @@ func _check_weight_power_income(main: Node) -> void:
 	_expect(build.try_place("harvester", anchor) == "", "rebuild the Hub harvester")
 	var scrap_before := res.scrap
 	var crystals_before := res.crystals
-	economy.step(10.0)
-	_expect(res.scrap == scrap_before + 15, "2 heaps should give 15 scrap in 10 s, got %d" % (res.scrap - scrap_before))
-	_expect(res.crystals == crystals_before + 1, "1 harvester should form 1 crystal in 10 s")
+	economy.step(30.0)
+	_expect(res.scrap == scrap_before and res.crystals == crystals_before, "income waits for the end of the round")
+	var preview := economy.round_income()
+	_expect(preview.scrap == 2 * economy.scrap_per_heap_per_round, "2 heaps should pay %d scrap a round, got %d" % [2 * economy.scrap_per_heap_per_round, preview.scrap])
+	var paid := economy.pay_round(1)
+	_expect(res.scrap == scrap_before + paid.scrap and paid.scrap == preview.scrap, "the round payout should add the heaps' scrap")
+	_expect(res.crystals == crystals_before + economy.crystals_per_harvester_per_round, "1 harvester should pay %d crystals a round" % economy.crystals_per_harvester_per_round)
+	_expect(paid.sources.size() == 2, "the payout should list heaps and harvesters")
+	_expect(main.payout_popup.visible and main.payout_popup._lines.text.contains("scrap heap"), "the payout popup should list the income")
 	region.set_platform_owner("Foundry", "")
 	scrap_before = res.scrap
-	economy.step(10.0)
+	economy.pay_round(2)
 	_expect(res.scrap == scrap_before, "unowned scrap heaps give nothing")
 
 

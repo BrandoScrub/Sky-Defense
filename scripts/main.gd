@@ -62,6 +62,7 @@ var _banner: Label
 var resources: PlayerResources
 var _status: Label
 var top_bar: TopBar
+var payout_popup: PayoutPopup
 var build_menu: BuildMenu
 var info_panel: InfoPanel
 var _notice: Label
@@ -256,6 +257,7 @@ func _ready() -> void:
 	ferry.departed.connect(_on_ferry_departed)
 	loads.building_lost.connect(func(b, p): show_notice("%s is overloaded: a %s broke off and fell!" % [p, b]))
 	economy.grid_changed.connect(func(_e): _refresh_resources())
+	economy.watch(waves)
 	wind.wind_changed.connect(func(_i, first):
 		if not first:
 			show_notice("The wind turned: it now blows from the %s. Vesper's air lanes have moved" % wind.from_name()))
@@ -447,7 +449,12 @@ func _build_hud() -> void:
 	top_bar.region = region
 	top_bar.resources = resources
 	top_bar.waves = waves
+	top_bar.economy = economy
 	layer.add_child(top_bar)
+
+	payout_popup = PayoutPopup.new()
+	layer.add_child(payout_popup)
+	economy.paid_out.connect(payout_popup.show_income)
 
 	build_menu = BuildMenu.new()
 	build_menu.building = building

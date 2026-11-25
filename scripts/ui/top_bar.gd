@@ -18,6 +18,8 @@ const CORP_COLORS := {
 var region: SkyRegion
 var resources: PlayerResources
 var waves: WaveManager
+## Optional: shows next round's income next to scrap and crystals.
+var economy: EconomySystem
 
 var _scrap: Label
 var _power: Label
@@ -54,9 +56,9 @@ func _ready() -> void:
 	res.name = "Resources"
 	res.add_theme_constant_override("separation", 22)
 	row.add_child(res)
-	_scrap = _stat(res, "Scrap", "Scrap: the main currency. Spend it on buildings, walkways and troops. Kills and scrap heaps earn more.")
+	_scrap = _stat(res, "Scrap", "Scrap: the main currency. Spend it on buildings, walkways and troops. Kills pay scrap on the spot; scrap heaps on your platforms pay at the end of each wave (shown as +N).")
 	_power = _stat(res, "Power", "Power: used / made. Towers need power; if they use more than your generators and storms make, they brown out and slow down.")
-	_crystals = _stat(res, "Crystals", "Crystals: an advanced resource. Cloud Harvesters slowly form them.")
+	_crystals = _stat(res, "Crystals", "Crystals: an advanced resource. Your Cloud Harvesters pay crystals at the end of each wave (shown as +N).")
 	_weight = _stat(res, "Weight", "Weight: load / capacity across all your platforms. Overloaded platforms sway, sag and drop buildings. Click a platform to see its own load.")
 
 	var spacer := Control.new()
@@ -88,14 +90,15 @@ func _process(_delta: float) -> void:
 
 func refresh() -> void:
 	if resources and region:
-		_scrap.text = "Scrap %d" % resources.scrap
+		var income := economy.round_income() if economy else {}
+		_scrap.text = "Scrap %d" % resources.scrap + _income_text(income.get("scrap", 0))
 		var supply := region.power_supply()
 		var demand := region.power_demand()
 		_power.text = "Power %d / %d" % [demand, supply]
 		if demand > supply:
 			_power.text += " (brownout: towers at %d%%)" % int(region.grid_efficiency() * 100)
 		_power.modulate = Color(1.0, 0.55, 0.45) if demand > supply else Color.WHITE
-		_crystals.text = "Crystals %d" % resources.crystals
+		_crystals.text = "Crystals %d" % resources.crystals + _income_text(income.get("crystals", 0))
 		var load := 0
 		var capacity := 0
 		for platform_name in region.platforms:
@@ -105,6 +108,11 @@ func refresh() -> void:
 		_weight.text = "Weight %d / %d" % [load, capacity]
 	if waves:
 		_refresh_rivals()
+
+
+## " (+N)" for next round's income, or "" when there is none.
+static func _income_text(amount: int) -> String:
+	return "  (+%d)" % amount if amount > 0 else ""
 
 
 func _refresh_rivals() -> void:
