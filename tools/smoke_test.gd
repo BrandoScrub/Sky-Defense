@@ -18,6 +18,9 @@ func _initialize() -> void:
 	# A fixed map so results repeat (seed 3: Ironbell southeast, Vesper northeast).
 	SkyRegion.seed_override = 3
 	_check_layout_rules()
+	await _check_open_map()
+	# The rest of the checks use a map with every planned walkway built.
+	SkyRegion.prebuilt_walkways = true
 	var main: Node = load("res://scenes/main.tscn").instantiate()
 	root.add_child(main)
 	await process_frame
@@ -47,6 +50,61 @@ func _initialize() -> void:
 	else:
 		printerr("Smoke test failed: %d problem(s)" % _failures)
 	quit(1 if _failures > 0 else 0)
+
+
+## A real game's map: islands start unconnected, the player builds walkways
+## to expand, and Ironbell bridges its way to the Hub.
+func _check_open_map() -> void:
+	SkyRegion.prebuilt_walkways = false
+	var main: Node = load("res://scenes/main.tscn").instantiate()
+	root.add_child(main)
+	await process_frame
+	main.drift.set_process(false)
+	main.waves.set_process(false)
+	main.bridges.set_process(false)
+	var region: SkyRegion = main.get_node("Region")
+	for w in region.layout.walkways:
+		_expect(not region.platforms_linked(w[0], w[1]), "%s and %s should start unconnected" % [w[0], w[1]])
+	_expect(main.bridges.crews.has("Ironbell"), "Ironbell should bridge")
+	_expect(not main.bridges.crews.has("Vesper"), "Vesper flies, it shouldn't bridge")
+
+	# Expanding: a walkway from the Hub to the Foundry.
+	var hub: Dictionary = region.platforms["Hub"]
+	var foundry: Dictionary = region.platforms["Foundry"]
+	main.resources.add_scrap(200)
+	var err: String = main.walkways.try_build(region._rim_toward(hub, foundry.center, true), region._rim_toward(foundry, hub.center, true))
+	_expect(err == "", "the player should be able to bridge to the Foundry (%s)" % err)
+	_expect(region.platforms_linked("Hub", "Foundry"), "the new walkway should join the Hub and Foundry")
+
+	# Ironbell's crews: a span every span_seconds, starting at its HQ.
+	var path: Array = region.layout.paths["Ironbell"]
+	main.bridges.step(main.bridges.span_seconds + 0.1)
+	_expect(main.bridges.spans_built("Ironbell") == 1, "Ironbell should finish one span after span_seconds")
+	_expect(region.platforms_linked("Ironbell HQ", path[path.size() - 2]), "the first span should leave Ironbell HQ")
+	_expect(main.bridges.frontier("Ironbell") == path[path.size() - 2], "the bridge should end at the next platform")
+	var rival_tiles := 0
+	for hex in region.tiles:
+		if region.tiles[hex].get("builder", "") == "rival":
+			rival_tiles += 1
+	_expect(rival_tiles > 0, "Ironbell's bridge tiles should be marked as rival-built")
+
+	# Raiders head for the end of the bridge while it's unfinished.
+	var party: Array[Unit] = main.raids.send_party(2)
+	main.raids._process(0.05)
+	for u in party:
+		_expect(u.is_moving(), "a raider should walk to the end of Ironbell's bridge")
+
+	var reached := []
+	main.bridges.reached_player.connect(func(_c, p): reached.append(p))
+	var guard := 0
+	while main.bridges.build_next_span("Ironbell") and guard < 20:
+		guard += 1
+	_expect(main.bridges.is_done("Ironbell"), "Ironbell's bridge should finish")
+	_expect(region.platforms_linked("Ironbell HQ", "Hub"), "the finished bridge should reach the Hub")
+	_expect(reached.has("Hub"), "the bridge reaching the Hub should be announced")
+	main.queue_free()
+	await process_frame
+	await process_frame
 
 
 func _expect(condition: bool, message: String) -> void:

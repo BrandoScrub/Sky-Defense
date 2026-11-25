@@ -10,7 +10,7 @@ Built with [Godot 4.3](https://godotengine.org/download/archive/4.3-stable/) (st
 2. In the Project Manager, choose **Import** and pick `project.godot` in this folder.
 3. Press **F5** to play.
 
-The current build is a placeholder sky region on hexagonal tiles: your Hub, five neutral platforms, the rival Ironbell HQ, walkways, a ferry route, two storm clouds and a rival air lane. A legend in the top right explains the tile colours. Your Commander (gold) and a squad of four Riveteers start on the Hub and can be selected and sent across walkways. You start with 250 scrap and can build on the Hub; the top bar shows scrap and the power grid, and each platform's label shows its load.
+The current build is a placeholder sky region on hexagonal tiles: your Hub, five neutral platforms, the rival HQs, unconnected islands you link with walkways, a ferry route, two storm clouds and a rival air lane. A legend in the top right explains the tile colours. Your Commander (gold) and a squad of four Riveteers start on the Hub and can be selected and sent across walkways. You start with 250 scrap and can build on the Hub; the top bar shows scrap and the power grid, and each platform's label shows its load.
 
 Weight matters: buildings and units both add to a platform's load. Over capacity a platform sways (over 100%), sags and slows units (over 115%), then fails (over 130%), dropping its newest building every few seconds. If towers draw more power than generators and harvesters supply, the grid browns out and towers run at reduced efficiency. Scrap heaps on platforms you own produce scrap, and Cloud Harvesters slowly form crystals.
 
@@ -18,7 +18,7 @@ Park units on a neutral platform to claim it (it's contested while both sides ha
 
 The game runs in waves. You get 45 seconds to build before wave 1 (25 seconds before later waves), then Ironbell sends a growing party of walkers; clear it to start the next build phase. Turrets, units and both headquarters shoot automatically, and each kill pays 15 scrap. You lose if your Hub headquarters falls and win once both rival headquarters are destroyed; press Enter on the end screen to play again. Use the Army tab to train more units at the Hub (see Ground units below). If your Commander falls, they return to the Hub after 15 seconds. A how-to-play panel is shown until the first wave starts.
 
-There are two rival corporations. Ironbell Consolidated walks: its walkers come down the walkway from Midway. Vesper Aeronautics flies: from wave 2 its bomber airships leave the Vesper Aerodrome (far east), fly the red air lanes, and bomb your buildings or your Hub. Bombers ignore your units, and only anti-air weapons can hit them. Flak towers and hangar drones are built for this, and the Commander and headquarters guns can shoot them too. Ground defenses and Riveteers can't. Reach the Aerodrome on foot over the long walkway from the Outpost. When one rival's headquarters falls, that rival stops attacking.
+There are two rival corporations. Ironbell Consolidated walks: its crews bridge toward your Hub and its walkers come down that bridge. Vesper Aeronautics flies: from wave 2 its bomber airships leave the Vesper Aerodrome (far east), fly the red air lanes, and bomb your buildings or your Hub. Bombers ignore your units, and only anti-air weapons can hit them. Flak towers and hangar drones are built for this, and the Commander and headquarters guns can shoot them too. Ground defenses and Riveteers can't. Reach the Aerodrome on foot by building walkways out to it. When one rival's headquarters falls, that rival stops attacking.
 
 Defenses come in three roles (`scripts/buildings/building_catalog.gd`, run by `scripts/combat/combat_system.gd` and `scripts/combat/defense_system.gd`):
 
@@ -34,7 +34,7 @@ Some maps have one or two balloon platforms (the Zephyr Barge and the Gasbag Wha
 
 All art is placeholder geometry built in code: brass-trimmed decks with lamp posts, lift engines under each platform, a clock-tower headquarters, helmeted Riveteers, a top-hatted Commander, boxy Ironbell walkers and Vesper blimps. Below the city a stormy sea of cloud drifts past, with lightning flickering through it (`scripts/world/sky_backdrop.gd` and `shaders/cloud_sea.gdshader`).
 
-The map is generated each game from a seed (`scripts/world/level_layout.gd`). Your Hub is in the middle. Each rival headquarters sits in its own compass direction (one of the 8, at least 90 degrees apart), with a chain of 4 to 9 platforms between it and the Hub, plus a few side platforms. The Foundry, Generator Rig and ferry-only Crystal Spire sit near the Hub, and a storm cloud hangs beside the middle of each rival's chain. The generator already handles up to 4 rivals for future factions. To replay one map, set `map_seed` on the Region node in `scenes/main.tscn`. To compare maps, run `tools/map_preview.gd` (instructions at the top of the file).
+The map is generated each game from a seed (`scripts/world/level_layout.gd`). Your Hub is in the middle. Each rival headquarters sits in its own compass direction (one of the 8, at least 90 degrees apart), with a chain of 4 to 9 platforms between it and the Hub, plus a few side platforms. The Foundry, Generator Rig and ferry-only Crystal Spire sit near the Hub, and a storm cloud hangs beside the middle of each rival's chain. The generator already handles up to 4 rivals for future factions. Islands start unconnected: the walkways in the layout are only planned routes. You expand by building walkways (Economy tab) from platforms you own, so where you go first is your call. Ironbell's bridge crews build its planned chain one span at a time from its HQ toward your Hub (a span every 10 seconds, three times as fast while a wave is out, `scripts/rivals/rival_bridges.gd`), and its walkers wait at the end of the bridge until it reaches you. Ironbell's spans are tinted red-brown. Vesper doesn't bridge; its bombers fly. To replay one map, set `map_seed` on the Region node in `scenes/main.tscn`. To compare maps, run `tools/map_preview.gd` (instructions at the top of the file).
 
 ## Ground units
 
@@ -93,7 +93,7 @@ Dark storm clouds hide every part of the sky you haven't scouted (`scripts/world
 | `scripts/selection/` | Selection, orders and control groups |
 | `scripts/buildings/` | Building catalog (costs, power, weight), placed buildings and build mode |
 | `scripts/economy/` | The player's scrap and crystals, income and the power grid |
-| `scripts/rivals/` | Ironbell raiding parties and Vesper bomber flights |
+| `scripts/rivals/` | Ironbell raiding parties and bridge crews, and Vesper bomber flights |
 | `scripts/combat/` | Health bars, headquarters, targeting and damage, and the wave timer |
 | `tools/` | Developer scripts: input map generator and the smoke test |
 

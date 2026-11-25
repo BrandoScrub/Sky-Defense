@@ -40,7 +40,8 @@ const TILE_INFO := {
 	"crystal_seam": ["Crystal seam", "A seam of energized crystals. Mining it comes in a later update."],
 	"dock": ["Ferry dock", "Airships stop here. Right click a platform with no walkway and your units ride the ferry there."],
 	"spawn": ["Rival wave spawn", "Rival walkers set out from here when a wave starts."],
-	"walkway": ["Walkway", "A metal walkway between platforms. Units walk along it. Build more from the Economy tab."],
+	"walkway": ["Walkway", "A metal walkway between platforms. Units walk along it. Islands start unconnected: build walkways from the Economy tab to expand."],
+	"rival_walkway": ["Ironbell bridge", "A span Ironbell's crews bridged toward your Hub. Its walkers march along it. Your units can use it too."],
 }
 
 var region: SkyRegion
@@ -189,8 +190,9 @@ func pick(screen: Vector2):
 				var hq := combat.headquarters_on(tile.platform)
 				if hq and is_instance_valid(hq):
 					return hq
-			if TILE_INFO.has(tile.type):
-				return {"kind": "tile", "type": tile.type, "platform": tile.platform, "target": tile.get("target", "")}
+			var tile_type: String = "rival_walkway" if tile.get("builder", "") == "rival" else tile.type
+			if TILE_INFO.has(tile_type):
+				return {"kind": "tile", "type": tile_type, "platform": tile.platform, "target": tile.get("target", "")}
 			return {"kind": "platform", "name": tile.platform}
 	var route := _route_at(screen)
 	if not route.is_empty():
