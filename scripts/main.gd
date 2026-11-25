@@ -12,6 +12,8 @@ var building: BuildController
 var walkways: WalkwayBuilder
 var capture: CaptureSystem
 var raids: RivalRaids
+var loads: LoadSystem
+var economy: EconomySystem
 var resources: PlayerResources
 var _status: Label
 var _resource_bar: Label
@@ -61,6 +63,17 @@ func _ready() -> void:
 	raids.capture = capture
 	add_child(raids)
 
+	loads = LoadSystem.new()
+	loads.name = "LoadSystem"
+	loads.region = region
+	add_child(loads)
+
+	economy = EconomySystem.new()
+	economy.name = "EconomySystem"
+	economy.region = region
+	economy.resources = resources
+	add_child(economy)
+
 	_build_hud()
 	selection.selection_changed.connect(_on_selection_changed)
 	_on_selection_changed(selection.selected)
@@ -72,6 +85,8 @@ func _ready() -> void:
 	walkways.mode_changed.connect(_on_walkway_mode_changed)
 	capture.platform_claimed.connect(_on_platform_claimed)
 	raids.raid_sent.connect(func(n): show_notice("Ironbell sent %d walkers toward your Hub" % n))
+	loads.building_lost.connect(func(b, p): show_notice("%s is overloaded: a %s broke off and fell!" % [p, b]))
+	economy.grid_changed.connect(func(_e): _refresh_resources())
 	_refresh_resources()
 	_on_build_mode_changed("")
 
@@ -93,6 +108,7 @@ func _spawn_starting_units() -> void:
 	hero.display_name = "Commander"
 	hero.is_hero = true
 	hero.move_speed = 7.0
+	hero.weight = 2
 	hero.body_color = Color(0.85, 0.65, 0.3)
 	# Start just south of the Hub's core, on open deck tiles.
 	var hub_hex := region.hex_at(hub)
@@ -172,7 +188,7 @@ func _refresh_resources() -> void:
 	var demand := region.power_demand()
 	var power := "Power %d / %d" % [demand, supply]
 	if demand > supply:
-		power += " (brownout)"
+		power += " (brownout: towers at %d%%)" % int(region.grid_efficiency() * 100)
 	_resource_bar.text = "Scrap %d      %s      Crystals %d" % [resources.scrap, power, resources.crystals]
 
 

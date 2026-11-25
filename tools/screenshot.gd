@@ -68,6 +68,29 @@ func _initialize() -> void:
 	cam._apply_zoom()
 	await _settle()
 	_save(out_dir + "/network.png")
+
+	# Weight and power: an overloaded Generator Rig and a browned-out grid.
+	region.set_platform_owner("Generator Rig", "player")
+	var rig: Vector2i = region.platforms["Generator Rig"].center
+	main.resources.add_scrap(400)
+	main.building.try_place("arc_coil", rig)
+	main.building.try_place("flak_battery", rig + Vector2i(1, 0))
+	main.building.try_place("arc_coil", rig + Vector2i(-1, 0))
+	main.building.try_place("arc_coil", rig + Vector2i(0, -1))
+	main.building.try_place("arc_coil", rig + Vector2i(1, -1))
+	main.building.try_place("arc_coil", region.platforms["Hub"].center + Vector2i(-1, -1))
+	var units: Array[Unit] = main.selection.all_units()
+	for i in units.size():
+		units[i].position = region.hex_center(rig + [Vector2i(-1, 1), Vector2i(0, 1), Vector2i(0, 1), Vector2i(-1, 1), Vector2i(-1, 1)][i]) + Vector3(i * 0.4 - 0.8, 0, 0)
+	main.loads.step(0.5)
+	main.economy.step(0.1)
+	main._refresh_resources()
+	cam.position = region.get_platform_position("Generator Rig") + Vector3(-4, 0, -2)
+	cam.zoom = 0.2
+	cam._target_zoom = 0.2
+	cam._apply_zoom()
+	await _settle()
+	_save(out_dir + "/systems.png")
 	quit(0)
 
 

@@ -24,7 +24,8 @@ func _initialize() -> void:
 	_check_routing(main.get_node("Region"))
 	await _check_selection_and_orders(main)
 	_check_building(main)
-	_check_claiming_walkways_and_raids(main)
+	await _check_claiming_walkways_and_raids(main)
+	_check_weight_power_income(main)
 	if _failures == 0:
 		print("Smoke test passed")
 	else:
@@ -292,3 +293,76 @@ func _check_claiming_walkways_and_raids(main: Node) -> void:
 		_expect(region.platform_at(u.position) == "Hub", "%s should end on the Hub, is at %s" % [u.name, u.position])
 	capture.set_process(true)
 	raids.set_process(true)
+
+
+func _check_weight_power_income(main: Node) -> void:
+	var region: SkyRegion = main.get_node("Region")
+	var loads: LoadSystem = main.loads
+	var economy: EconomySystem = main.economy
+	var build: BuildController = main.building
+	var res: PlayerResources = main.resources
+	loads.set_process(false)
+	economy.set_process(false)
+	for e in get_root().get_tree().get_nodes_in_group(Unit.ENEMY_GROUP):
+		e.free()
+
+	_expect(LoadSystem.state_for(40, 40) == LoadSystem.STABLE, "100% is stable")
+	_expect(LoadSystem.state_for(41, 40) == LoadSystem.SWAYING, "102% sways")
+	_expect(LoadSystem.state_for(47, 40) == LoadSystem.SAGGING, "117% sags")
+	_expect(LoadSystem.state_for(53, 40) == LoadSystem.FAILING, "132% fails")
+
+	# Overload the small Generator Rig (capacity 10) with units and buildings.
+	region.set_platform_owner("Generator Rig", "player")
+	var rig: Vector2i = region.platforms["Generator Rig"].center
+	res.add_scrap(500)
+	_expect(build.try_place("dynamo", rig) == "", "Dynamo on the Rig socket")
+	_expect(build.try_place("rivet_turret", rig + Vector2i(1, 0)) == "", "turret on the Rig")
+	_expect(build.try_place("flak_battery", rig + Vector2i(-1, 0)) == "", "flak on the Rig")
+	_expect(region.platform_load("Generator Rig") == 8, "Rig buildings weigh 8")
+	var units: Array[Unit] = main.selection.all_units()
+	var spots := [Vector2i(0, 1), Vector2i(0, -1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(0, 1)]
+	for i in units.size():
+		units[i].position = region.hex_center(rig + spots[i])
+	_expect(region.platform_load("Generator Rig") == 14, "units add their weight (hero 2 + 4 x 1)")
+	loads.step(0.1)
+	_expect(loads.state_of("Generator Rig") == LoadSystem.FAILING, "140% load should be failing")
+	_expect(is_equal_approx(units[0].speed_multiplier, 0.4), "units on a failing platform move at 40%")
+	loads.step(6.0)
+	_expect(region.buildings_on("Generator Rig").size() == 2, "the newest building should break off")
+	_expect(not region.buildings.has(rig + Vector2i(-1, 0)), "the Flak Battery (newest) is the one lost")
+	loads.step(0.1)
+	_expect(loads.state_of("Generator Rig") == LoadSystem.SWAYING, "110% load should sway")
+	_expect(is_equal_approx(units[0].speed_multiplier, 1.0), "swaying doesn't slow units")
+
+	# Brownout: remove every power source, then restore one.
+	for b in region.buildings.values().duplicate():
+		if b.power > 0:
+			build.demolish(b.hex)
+	_expect(region.power_supply() == 0 and region.power_demand() > 0, "no supply left")
+	economy.step(0.1)
+	_expect(region.grid_efficiency() == 0.0 and economy.efficiency == 0.0, "no supply means 0% efficiency")
+	var consumer: Building = null
+	for b in region.buildings.values():
+		if b.power < 0:
+			consumer = b
+	_expect(consumer != null and consumer.efficiency == 0.0, "consumers dim in a brownout")
+	_expect(build.try_place("dynamo", rig) == "", "rebuild a Dynamo")
+	economy.step(0.1)
+	_expect(economy.efficiency == 1.0 and consumer.efficiency == 1.0, "power restored")
+
+	# Income: the Foundry (claimed earlier) has 2 scrap heaps; a harvester forms crystals.
+	_expect(region.platform_owner("Foundry") == "player", "Foundry should still be ours")
+	var anchor := Vector2i(999, 999)
+	for hex in region.tiles_of_platform("Hub"):
+		if region.get_tile(hex).type == "harvester_anchor":
+			anchor = hex
+	_expect(build.try_place("harvester", anchor) == "", "rebuild the Hub harvester")
+	var scrap_before := res.scrap
+	var crystals_before := res.crystals
+	economy.step(10.0)
+	_expect(res.scrap == scrap_before + 10, "2 heaps should give 10 scrap in 10 s, got %d" % (res.scrap - scrap_before))
+	_expect(res.crystals == crystals_before + 1, "1 harvester should form 1 crystal in 10 s")
+	region.set_platform_owner("Foundry", "")
+	scrap_before = res.scrap
+	economy.step(10.0)
+	_expect(res.scrap == scrap_before, "unowned scrap heaps give nothing")

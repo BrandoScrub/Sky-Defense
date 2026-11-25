@@ -6,7 +6,7 @@ extends Node
 signal changed
 
 @export var scrap := 200
-## Counted but not used until a later milestone.
+## Formed by Cloud Harvesters; spent on advanced upgrades in a later milestone.
 @export var crystals := 0
 
 
@@ -25,4 +25,9 @@ func spend_scrap(amount: int) -> bool:
 
 func add_scrap(amount: int) -> void:
 	scrap += amount
+	changed.emit()
+
+
+func add_crystals(amount: int) -> void:
+	crystals += amount
 	changed.emit()

@@ -12,6 +12,8 @@ Built with [Godot 4.3](https://godotengine.org/download/archive/4.3-stable/) (st
 
 The current build is a placeholder sky region on hexagonal tiles: your Hub, five neutral platforms, the rival Ironbell HQ, walkways, a ferry route, two storm clouds and a rival air lane. A legend in the top right explains the tile colours. Your Commander (gold) and a squad of four Riveteers start on the Hub and can be selected and sent across walkways. You start with 200 scrap and can build on the Hub; the top bar shows scrap and the power grid, and each platform's label shows its load.
 
+Weight matters: buildings and units both add to a platform's load. Over capacity a platform sways (over 100%), sags and slows units (over 115%), then fails (over 130%), dropping its newest building every few seconds. If towers draw more power than generators and harvesters supply, the grid browns out and towers run at reduced efficiency. Scrap heaps on platforms you own produce scrap, and Cloud Harvesters slowly form crystals.
+
 Park units on a neutral platform to claim it (it's contested while both sides have units there), then build on it. Ironbell raiding parties march along walkways, claim platforms on the way, and gather at your Hub; there's no combat yet.
 
 To change the map, edit `scripts/world/level_layout.gd`: platforms, features, walkways, ferry routes, clouds and air lanes are all plain tables there.
@@ -44,11 +46,11 @@ The full default key map (selection, control groups, build shortcuts, game speed
 | --- | --- |
 | `scenes/` | Godot scenes; `main.tscn` is the entry point |
 | `scripts/camera/` | The RTS camera |
-| `scripts/world/` | Hex grid math, the level layout data, and the sky region builder with routing |
+| `scripts/world/` | Hex grid math, level layout data, the sky region builder with routing, claiming, and platform load |
 | `scripts/units/` | Player units and the hero |
 | `scripts/selection/` | Selection, orders and control groups |
 | `scripts/buildings/` | Building catalog (costs, power, weight), placed buildings and build mode |
-| `scripts/economy/` | The player's scrap and crystals |
+| `scripts/economy/` | The player's scrap and crystals, income and the power grid |
 | `scripts/rivals/` | Ironbell raiding parties |
 | `tools/` | Developer scripts: input map generator and the smoke test |
 

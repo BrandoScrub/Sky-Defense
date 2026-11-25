@@ -77,6 +77,8 @@ var owners := {}
 ## hex -> Building standing on it.
 var buildings := {}
 
+## platform name -> overload state written by LoadSystem ("Stable" etc.)
+var load_states := {}
 var _labels := {}
 ## platform name -> extra status line for its label (claim progress etc.)
 var _label_status := {}
@@ -253,13 +255,29 @@ func remove_building(hex: Vector2i) -> Building:
 
 
 ## Total weight of everything built on a platform.
-func platform_load(platform_name: String) -> int:
+## Total weight on a platform: its buildings, plus units standing on it
+## unless `include_units` is false.
+func platform_load(platform_name: String, include_units := true) -> int:
 	var total := 0
 	for hex in buildings:
 		var b: Building = buildings[hex]
 		if b.platform == platform_name:
 			total += b.get_data().weight
+	if include_units and is_inside_tree():
+		for group in [Unit.GROUP, Unit.ENEMY_GROUP]:
+			for node in get_tree().get_nodes_in_group(group):
+				if platform_at((node as Node3D).global_position) == platform_name:
+					total += (node as Unit).weight
 	return total
+
+
+## Buildings on a platform, oldest first.
+func buildings_on(platform_name: String) -> Array[Building]:
+	var out: Array[Building] = []
+	for b in buildings.values():
+		if b.platform == platform_name:
+			out.append(b)
+	return out
 
 
 func platform_capacity(platform_name: String) -> int:
@@ -273,6 +291,14 @@ func power_supply() -> int:
 		if b.power > 0 and owners.get(b.platform) == "player":
 			total += b.power
 	return total
+
+
+## Share of demand the grid can meet: 1.0 when supply covers demand.
+func grid_efficiency() -> float:
+	var demand := power_demand()
+	if demand == 0:
+		return 1.0
+	return minf(1.0, float(power_supply()) / demand)
 
 
 ## Electricity drawn by the player's buildings.
@@ -293,6 +319,10 @@ func _buildings_root() -> Node3D:
 	return root
 
 
+func refresh_label(platform_name: String) -> void:
+	_refresh_label(platform_name)
+
+
 func _refresh_label(platform_name: String) -> void:
 	var label: Label3D = _labels.get(platform_name)
 	if label == null:
@@ -300,10 +330,15 @@ func _refresh_label(platform_name: String) -> void:
 	var used := platform_load(platform_name)
 	var cap := platform_capacity(platform_name)
 	label.text = "%s\nLoad %d / %d" % [platform_name, used, cap]
+	var state: String = load_states.get(platform_name, "Stable")
+	if state != "Stable":
+		label.text += "  (%s)" % state
 	var status: String = _label_status.get(platform_name, "")
 	if status != "":
 		label.text += "\n" + status
-	label.modulate = Color(1.0, 0.45, 0.4) if used > cap else Color.WHITE
+	label.modulate = {
+		"Swaying": Color(1.0, 0.9, 0.4), "Sagging": Color(1.0, 0.6, 0.3), "Failing": Color(1.0, 0.35, 0.3),
+	}.get(state, Color.WHITE)
 
 
 # --- Ownership --------------------------------------------------------------
