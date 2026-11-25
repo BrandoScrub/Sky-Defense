@@ -38,6 +38,7 @@ func _initialize() -> void:
 	_check_weight_power_income(main)
 	_check_storms(main)
 	await _check_hero_respawn(main)
+	await _check_unit_roster(main)
 	await _check_defense_roles(main)
 	await _check_combat_and_waves(main)
 	if _failures == 0:
@@ -736,8 +737,8 @@ func _check_hero_respawn(main: Node) -> void:
 	main.resources.add_scrap(100)
 	var scrap: int = main.resources.scrap
 	_expect(rec.queue_one() == "", "queue a Riveteer")
-	_expect(main.resources.scrap == scrap - rec.cost, "recruiting costs scrap up front")
-	rec.step(rec.train_seconds - 0.5)
+	_expect(main.resources.scrap == scrap - Recruiter.cost_of("riveteer"), "recruiting costs scrap up front")
+	rec.step(Recruiter.train_seconds_of("riveteer") - 0.5)
 	await process_frame
 	_expect(main.selection.all_units().size() == before, "no Riveteer before training ends")
 	rec.step(1.0)
@@ -745,6 +746,128 @@ func _check_hero_respawn(main: Node) -> void:
 	_expect(main.selection.all_units().size() == before + 1, "a trained Riveteer joins the squad")
 	main.resources.scrap = 0
 	_expect(rec.queue_one() != "", "recruiting needs scrap")
+
+
+func _check_unit_roster(main: Node) -> void:
+	var region: SkyRegion = main.get_node("Region")
+	var combat: CombatSystem = main.combat
+	var units_root: Node3D = main.get_node("Units")
+	# These checks drive combat by hand.
+	combat.set_process(false)
+	main.raids.set_process(false)
+
+	# Every trainable unit has an Army button and distinct stats.
+	for type_id in UnitCatalog.TRAINABLE:
+		_expect(BuildMenu.tab_of("unit:" + type_id) == "Army", "%s should be on the Army tab" % type_id)
+		_expect(UnitCatalog.get_data(type_id).blurb != "", "%s needs a description" % type_id)
+	var riot := UnitCatalog.make("shieldbearer")
+	_expect(riot.shield > 0.5 and not riot.is_ranged() and riot.max_hp > 100.0, "Shieldbearers are shielded melee tanks")
+	riot.free()
+	var rifle_stats := UnitCatalog.get_data("rifleman")
+	_expect(rifle_stats.range > UnitCatalog.get_data("walker").range, "Riflemen outrange walkers")
+	var rival_rifle := UnitCatalog.make("rifleman", "rival")
+	_expect(rival_rifle.faction == "rival" and rival_rifle.bounty > 0, "rivals can field the same units")
+	rival_rifle.free()
+	_expect(main.raids.unit_for_slot(0) == "walker" and main.raids.party_mix.has("shieldbearer"), "Ironbell mixes base troops into bigger parties")
+
+	# The training queue takes mixed unit types in order.
+	var rec: Recruiter = main.recruiter
+	main.resources.add_scrap(500)
+	var scrap: int = main.resources.scrap
+	_expect(rec.queue_one("rifleman") == "" and rec.queue_one("shieldbearer") == "", "queue a Rifleman and a Shieldbearer")
+	_expect(main.resources.scrap == scrap - Recruiter.cost_of("rifleman") - Recruiter.cost_of("shieldbearer"), "each unit costs its own price")
+	var trained: Array[Unit] = []
+	var grab := func(u: Unit): trained.append(u)
+	rec.recruited.connect(grab)
+	rec.step(Recruiter.train_seconds_of("rifleman") + 0.01)
+	rec.step(Recruiter.train_seconds_of("shieldbearer") + 0.01)
+	rec.recruited.disconnect(grab)
+	_expect(trained.size() == 2 and trained[0].unit_type == "rifleman" and trained[1].unit_type == "shieldbearer", "units train in queue order")
+	for u in trained:
+		u.free()
+	_expect(rec.queue_one("nonsense") != "", "unknown unit types are refused")
+
+	# Test squad on an empty strip of sky, far from everything else.
+	var base := region.get_platform_position("Hub") + Vector3(0, 0, -400)
+	var spawn := func(type_id: String, faction: String, offset: Vector3) -> Unit:
+		var u := UnitCatalog.make(type_id, faction)
+		u.position = base + offset
+		units_root.add_child(u)
+		return u
+	var shooter: Unit = spawn.call("walker", "rival", Vector3(0, 0, 0))
+	var rifle: Unit = spawn.call("rifleman", "player", Vector3(0, 0, 6))
+	var shield: Unit = spawn.call("shieldbearer", "player", Vector3(0, 0, 3))
+	await process_frame
+
+	# A shield catches a shot flying past it, and stops most of it.
+	_expect(combat.shield_in_path(shooter.global_position, rifle) == shield, "the Shieldbearer stands in the line of fire")
+	combat._hit(shooter, rifle, 20.0, Color.WHITE)
+	_expect(rifle.hp == rifle.max_hp, "the Rifleman behind the shield is untouched")
+	_expect(is_equal_approx(shield.max_hp - shield.hp, 20.0 * (1.0 - shield.shield)), "the shield stops %d%% of a shot" % int(shield.shield * 100))
+	# Off to the side, the shield doesn't help.
+	shield.position.x += 4.0
+	_expect(combat.shield_in_path(shooter.global_position, rifle) == null, "a shield off to the side doesn't block")
+	combat._hit(shooter, rifle, 20.0, Color.WHITE)
+	_expect(is_equal_approx(rifle.max_hp - rifle.hp, 20.0), "an unshielded Rifleman takes the full shot")
+	# Melee isn't a projectile, so a shield doesn't stop it.
+	var brawler: Unit = spawn.call("shieldbearer", "rival", Vector3(4, 0, 2))
+	shield.hp = shield.max_hp
+	combat._hit(brawler, shield, 14.0, Color.WHITE)
+	_expect(is_equal_approx(shield.max_hp - shield.hp, 14.0), "melee hits go around shields")
+	brawler.free()
+
+	# Lancers wreck armor.
+	var lancer: Unit = spawn.call("lancer", "player", Vector3(-3, 0, 0))
+	var walker_hp := shooter.hp
+	combat._hit(lancer, shooter, lancer.damage, Color.WHITE)
+	_expect(is_equal_approx(walker_hp - shooter.hp, lancer.damage * lancer.vs_armor), "a Lancer does bonus damage to armored walkers")
+
+	# Medics heal the most wounded ally in range.
+	var medic: Unit = spawn.call("medic", "player", Vector3(1, 0, 6))
+	rifle.hp = 10.0
+	combat._tend(medic, "player", 1.0)
+	_expect(is_equal_approx(rifle.hp, 10.0 + medic.heal_power), "a Medic heals a wounded ally")
+
+	# Buffs: stat multipliers, refresh, expiry and auras.
+	rifle.add_buff("test_drill", {"damage": 1.5, "range": 2.0, "attack_speed": 2.0}, 1.0)
+	_expect(is_equal_approx(rifle.get_damage(), rifle.damage * 1.5), "a damage buff raises damage")
+	_expect(is_equal_approx(rifle.get_attack_range(), rifle.attack_range * 2.0), "a range buff raises range")
+	_expect(is_equal_approx(rifle.get_attack_cooldown(), rifle.attack_cooldown / 2.0), "an attack speed buff shortens the cooldown")
+	rifle.tick_buffs(1.5)
+	_expect(not rifle.has_buff("test_drill") and is_equal_approx(rifle.get_damage(), rifle.damage), "timed buffs run out")
+	var reached := Unit.buff_allies_near(main, rifle.global_position, 3.0, "player", "test_aura", {"armor": 0.5, "regen": 4.0}, 0.5)
+	_expect(reached >= 2 and rifle.has_buff("test_aura") and medic.has_buff("test_aura") and not lancer.has_buff("test_aura"), "an aura buffs allies in its radius only")
+	var hp_before := rifle.hp
+	rifle.take_damage(10.0)
+	_expect(is_equal_approx(hp_before - rifle.hp, 5.0), "an armor buff cuts damage taken")
+	hp_before = rifle.hp
+	rifle.tick_buffs(0.25)
+	_expect(is_equal_approx(rifle.hp - hp_before, 1.0), "a regen buff heals over time")
+	rifle.remove_buff("test_aura")
+	_expect(not rifle.has_buff("test_aura"), "buffs can be removed")
+
+	for u in [shooter, rifle, shield, lancer, medic]:
+		u.free()
+
+	# Sappers repair damaged buildings.
+	var hub: Vector2i = region.platforms["Hub"].center
+	main.resources.add_scrap(200)
+	var hex := hub + Vector2i(2, -2)
+	if region.buildings.has(hex):
+		main.building.demolish(hex)
+	_expect(main.building.try_place("rivet_turret", hex) == "", "place a turret to repair")
+	var turret: Building = region.buildings[hex]
+	turret.hp = turret.max_hp * 0.5
+	var sapper := UnitCatalog.make("sapper")
+	sapper.position = turret.global_position + Vector3(1.5, 0, 0)
+	units_root.add_child(sapper)
+	_expect(combat._repair(sapper, "player", 1.0) and is_equal_approx(turret.hp, turret.max_hp * 0.5 + sapper.repair_power), "a Sapper repairs a damaged building")
+	_expect(is_equal_approx(UnitCatalog.get_data("sapper").vs_buildings, sapper.vs_buildings) and sapper.vs_buildings > 1.0, "Sappers hit buildings harder")
+	sapper.free()
+	main.building.demolish(hex)
+	combat.set_process(true)
+	main.raids.set_process(true)
+	await process_frame
 
 
 ## Flak only shoots aircraft, ground defenses only shoot the ground and buff

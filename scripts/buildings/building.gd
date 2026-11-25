@@ -55,6 +55,14 @@ func take_damage(amount: float) -> bool:
 	return hp <= 0.0
 
 
+## Restores hit points, up to the maximum (Sappers do this).
+func repair(amount: float) -> void:
+	if hp <= 0.0:
+		return
+	hp = minf(max_hp, hp + amount)
+	_health_bar.set_ratio(hp / max_hp)
+
+
 func get_data() -> Dictionary:
 	return BuildingCatalog.get_data(type_id)
 

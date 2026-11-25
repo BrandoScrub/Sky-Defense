@@ -1,6 +1,13 @@
 ## A unit that moves along routes and fights. Player units can be selected and
 ## ordered; rival units are driven by RivalRaids. CombatSystem does the
-## targeting and damage.
+## targeting and damage. UnitCatalog holds the stats for each kind of unit.
+##
+## Buffs: anything (a banner tower, a spell, a storm) can boost a unit with
+##   unit.add_buff("drill_banner", {"damage": 1.25, "armor": 0.8}, 1.0)
+## Each value multiplies a stat while the buff lasts; see BUFF_STATS. Adding
+## a buff with an id the unit already has refreshes it, so an aura can simply
+## re-add a short buff every frame (or use Unit.buff_allies_near). Seconds
+## below 0 keep the buff until remove_buff() is called.
 class_name Unit
 extends Node3D
 
@@ -9,11 +16,26 @@ signal died(unit: Unit)
 
 const GROUP := "player_units"
 const ENEMY_GROUP := "enemy_units"
+## Units with a longer reach than this fire projectiles, which shields can block.
+const MELEE_RANGE := 2.5
+## What a buff can change. All are multipliers (1.0 = no change), except
+## "regen", which adds hit points per second.
+const BUFF_STATS := {
+	"damage": "damage dealt",
+	"attack_speed": "attacks per second",
+	"range": "attack range",
+	"speed": "move speed",
+	"armor": "damage taken (below 1 is tougher)",
+	"healing": "healing and repair done",
+	"regen": "hit points regained per second",
+}
 ## Defensive drones from hangars (either faction). They fight like units but
 ## can't be selected, claim platforms or weigh anything down.
 const DRONE_GROUP := "drones"
 
 @export var display_name := "Riveteer"
+## UnitCatalog id: riveteer, shieldbearer, rifleman, sapper, lancer, medic, walker.
+@export var unit_type := "riveteer"
 @export var is_hero := false
 ## "player" or "rival". Rival units aren't selectable.
 @export var faction := "player"
@@ -41,6 +63,19 @@ var speed_multiplier := 1.0
 @export var hits_air := false
 ## False for bombers, which only attack buildings and headquarters.
 @export var targets_units := true
+## Armored units take extra damage from anti-armor weapons (vs_armor).
+@export var armored := false
+## Share of a projectile's damage this unit's shield stops, 0 to 1. Shields
+## also catch enemy shots flying past toward allies behind them.
+@export var shield := 0.0
+## Damage multiplier against armored units.
+@export var vs_armor := 1.0
+## Damage multiplier against buildings and headquarters.
+@export var vs_buildings := 1.0
+## Hit points per second healed on one wounded ally in range (medics).
+@export var heal_power := 0.0
+## Hit points per second repaired on one damaged friendly building (sappers).
+@export var repair_power := 0.0
 ## Launched from a Drone Hangar; DefenseSystem flies it.
 @export var is_drone := false
 
@@ -70,6 +105,8 @@ var riding := false
 
 var _route := PackedVector3Array()
 var _ring: MeshInstance3D
+## Buff id -> {"mods": Dictionary, "time_left": float}.
+var _buffs := {}
 
 
 func _ready() -> void:
@@ -91,7 +128,7 @@ func is_alive() -> bool:
 func take_damage(amount: float) -> void:
 	if hp <= 0.0:
 		return
-	hp -= amount * (1.0 - clampf(armor, 0.0, 0.9))
+	hp -= amount * (1.0 - clampf(armor, 0.0, 0.9)) * buff_multiplier("armor")
 	_health_bar.set_ratio(hp / max_hp, faction != "player")
 	if hp <= 0.0:
 		hp = 0.0
@@ -99,12 +136,101 @@ func take_damage(amount: float) -> void:
 		queue_free()
 
 
-## Restores hit points, up to the maximum.
-func heal(amount: float) -> void:
-	if hp <= 0.0 or hp >= max_hp:
+## Restores hit points, up to the maximum. Returns how much was healed.
+func heal(amount: float) -> float:
+	if hp <= 0.0 or amount <= 0.0:
+		return 0.0
+	var before := hp
+	hp = minf(max_hp, hp + amount)
+	if _health_bar:
+		_health_bar.set_ratio(hp / max_hp, faction != "player")
+	return hp - before
+
+
+## True for units that shoot from range (their shots can be blocked by shields).
+func is_ranged() -> bool:
+	return attack_range > MELEE_RANGE
+
+
+## Damage per hit after buffs and support bonuses.
+func get_damage() -> float:
+	return damage * damage_mult * buff_multiplier("damage")
+
+
+## Attack range after buffs.
+func get_attack_range() -> float:
+	return attack_range * buff_multiplier("range")
+
+
+## Seconds between attacks after buffs and support bonuses.
+func get_attack_cooldown() -> float:
+	return attack_cooldown * cooldown_mult / maxf(buff_multiplier("attack_speed"), 0.05)
+
+
+# --- Buffs -------------------------------------------------------------------
+
+## Adds or refreshes a buff. `mods` maps BUFF_STATS keys to values, for
+## example {"damage": 1.2}. Lasts `seconds`, or until removed if below 0.
+func add_buff(id: String, mods: Dictionary, seconds := -1.0) -> void:
+	_buffs[id] = {"mods": mods, "time_left": seconds}
+
+
+func remove_buff(id: String) -> void:
+	_buffs.erase(id)
+
+
+func has_buff(id: String) -> bool:
+	return _buffs.has(id)
+
+
+## Ids of the buffs on this unit.
+func buff_ids() -> Array:
+	return _buffs.keys()
+
+
+## The combined multiplier for a stat from every buff (1.0 with none).
+## For "regen" it is the summed bonus instead.
+func buff_multiplier(stat: String) -> float:
+	var total := 0.0 if stat == "regen" else 1.0
+	for buff in _buffs.values():
+		if buff.mods.has(stat):
+			if stat == "regen":
+				total += float(buff.mods[stat])
+			else:
+				total *= float(buff.mods[stat])
+	return total
+
+
+## Counts buffs down, drops expired ones and applies regen. Called every frame.
+func tick_buffs(delta: float) -> void:
+	if _buffs.is_empty():
 		return
-	hp = minf(hp + amount, max_hp)
-	_health_bar.set_ratio(hp / max_hp, faction != "player")
+	for id in _buffs.keys():
+		var buff: Dictionary = _buffs[id]
+		if buff.time_left >= 0.0:
+			buff.time_left -= delta
+			if buff.time_left < 0.0:
+				_buffs.erase(id)
+	var regen := buff_multiplier("regen")
+	if regen > 0.0:
+		heal(regen * delta)
+
+
+## Gives every living ground unit of `faction` within `radius` of `center` a
+## buff for `seconds`. Handy for aura buildings: call it every frame (or every
+## few frames) with a short duration and the buff fades soon after a unit
+## walks away or the building is destroyed. Returns how many units it reached.
+static func buff_allies_near(tree_node: Node, center: Vector3, radius: float, faction: String, id: String, mods: Dictionary, seconds := 0.5) -> int:
+	var count := 0
+	var group := GROUP if faction == "player" else ENEMY_GROUP
+	for node in tree_node.get_tree().get_nodes_in_group(group):
+		var u := node as Unit
+		if u == null or not u.is_alive() or u.flying:
+			continue
+		if Vector2(u.global_position.x - center.x, u.global_position.z - center.z).length() <= radius:
+			u.add_buff(id, mods, seconds)
+			count += 1
+	return count
 
 
 ## Clears support bonuses back to normal.
@@ -129,12 +255,13 @@ func stop() -> void:
 
 
 func _process(delta: float) -> void:
+	tick_buffs(delta)
 	if _route.is_empty() or riding:
 		return
 	var target := _route[0]
 	var to_target := target - position
 	to_target.y = 0.0
-	var step := move_speed * speed_multiplier * delta
+	var step := move_speed * speed_multiplier * buff_multiplier("speed") * delta
 	if to_target.length() <= step:
 		position = Vector3(target.x, position.y, target.z)
 		_route.remove_at(0)
@@ -151,7 +278,7 @@ func _build_visuals() -> void:
 	if flying:
 		_build_aircraft()
 		return
-	if faction == "rival":
+	if unit_type == "walker":
 		_build_walker()
 		return
 	var height := 2.2 if is_hero else 1.6
@@ -283,13 +410,53 @@ func _add_gear(height: float, radius: float) -> void:
 	pack.position = Vector3(0, height * 0.6, -radius * 0.9)
 	pack.material_override = leather
 	add_child(pack)
-	var rifle := MeshInstance3D.new()
-	var barrel := BoxMesh.new()
-	barrel.size = Vector3(0.1, 0.1, radius * 2.4)
-	rifle.mesh = barrel
-	rifle.position = Vector3(radius * 0.8, height * 0.55, radius * 0.7)
-	rifle.material_override = _plain(Color(0.2, 0.2, 0.22))
-	add_child(rifle)
+	_add_weapon(height, radius, brass)
+
+
+## The kit that tells unit types apart from above: a weapon, plus a shield,
+## satchel or medic's cross.
+func _add_weapon(height: float, radius: float, brass: StandardMaterial3D) -> void:
+	var gunmetal := _plain(Color(0.2, 0.2, 0.22))
+	match unit_type if not is_hero else "hero":
+		"shieldbearer":
+			# A tall riveted tower shield in front, and a short baton.
+			_box(Vector3(radius * 2.4, height * 0.85, 0.12), Vector3(0, height * 0.5, radius + 0.25), _plain(Color(0.5, 0.52, 0.56)))
+			_box(Vector3(radius * 1.6, 0.1, 0.14), Vector3(0, height * 0.75, radius + 0.33), brass)
+			_box(Vector3(0.1, 0.1, radius * 1.2), Vector3(radius * 0.9, height * 0.5, radius * 0.4), gunmetal)
+		"rifleman":
+			# A long bolt gun with a brass scope.
+			_box(Vector3(0.09, 0.09, radius * 3.6), Vector3(radius * 0.8, height * 0.6, radius * 1.1), gunmetal)
+			_box(Vector3(0.12, 0.12, radius * 0.9), Vector3(radius * 0.8, height * 0.6 + 0.12, radius * 0.7), brass)
+		"sapper":
+			# A big wrench and a satchel of charges on the hip.
+			_box(Vector3(0.12, 0.12, radius * 1.8), Vector3(radius * 0.85, height * 0.5, radius * 0.6), brass)
+			_box(Vector3(0.3, 0.1, 0.12), Vector3(radius * 0.85, height * 0.5, radius * 1.5), brass)
+			_box(Vector3(radius * 0.7, radius * 0.6, radius * 0.5), Vector3(-radius * 0.95, height * 0.35, 0), _plain(Color(0.6, 0.2, 0.15)))
+		"lancer":
+			# A heavy arc lance with a glowing tip.
+			_box(Vector3(0.16, 0.16, radius * 4.0), Vector3(radius * 0.8, height * 0.6, radius * 1.2), gunmetal)
+			var tip := _plain(Color(0.5, 0.8, 1.0))
+			tip.emission_enabled = true
+			tip.emission = Color(0.5, 0.8, 1.0)
+			_box(Vector3(0.24, 0.24, 0.24), Vector3(radius * 0.8, height * 0.6, radius * 3.2), tip)
+		"medic":
+			# A white satchel with a red cross on the back, and a tonic sprayer.
+			_box(Vector3(radius * 0.9, 0.08, radius * 0.25), Vector3(0, height * 0.6 + 0.05, -radius * 1.25), _plain(Color(0.85, 0.15, 0.15)))
+			_box(Vector3(radius * 0.25, 0.08, radius * 0.9), Vector3(0, height * 0.6 + 0.05, -radius * 1.25), _plain(Color(0.85, 0.15, 0.15)))
+			_box(Vector3(0.08, 0.08, radius * 1.0), Vector3(radius * 0.8, height * 0.55, radius * 0.5), brass)
+		_:
+			_box(Vector3(0.1, 0.1, radius * 2.4), Vector3(radius * 0.8, height * 0.55, radius * 0.7), gunmetal)
+
+
+func _box(size: Vector3, at: Vector3, mat: StandardMaterial3D) -> MeshInstance3D:
+	var part := MeshInstance3D.new()
+	var mesh := BoxMesh.new()
+	mesh.size = size
+	part.mesh = mesh
+	part.position = at
+	part.material_override = mat
+	add_child(part)
+	return part
 
 
 ## Ironbell walker: a boxy riveted body on two stubby legs with a smokestack.

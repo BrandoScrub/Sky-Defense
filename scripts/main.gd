@@ -173,7 +173,7 @@ func _ready() -> void:
 	recruiter.units_root = get_node("Units")
 	add_child(recruiter)
 	recruiter.notice.connect(show_notice)
-	recruiter.recruited.connect(func(_u): show_notice("A Riveteer is ready on the Hub"))
+	recruiter.recruited.connect(func(u: Unit): show_notice("A %s is ready on the Hub" % u.display_name))
 
 	fog = FogSystem.new()
 	fog.name = "FogSystem"
@@ -306,7 +306,7 @@ func _spawn_starting_units() -> void:
 
 	var spots: Array[Vector2i] = [Vector2i(-1, 2), Vector2i(0, 2), Vector2i(1, 1), Vector2i(-1, 1)]
 	for i in SQUAD_SIZE:
-		var r := Unit.new()
+		var r := UnitCatalog.make("riveteer")
 		r.name = "Riveteer%d" % (i + 1)
 		r.position = region.hex_center(hub_hex + spots[i % spots.size()])
 		units.add_child(r)
