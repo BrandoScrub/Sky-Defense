@@ -134,7 +134,7 @@ func _update_ghost(force := false) -> void:
 
 
 func _unit_on(hex: Vector2i) -> bool:
-	for node in get_tree().get_nodes_in_group(Unit.GROUP):
+	for node in get_tree().get_nodes_in_group(Unit.GROUP) + get_tree().get_nodes_in_group(Unit.ENEMY_GROUP):
 		if region.hex_at((node as Node3D).global_position) == hex:
 			return true
 	return false

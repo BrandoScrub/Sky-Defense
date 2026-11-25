@@ -45,6 +45,29 @@ func _initialize() -> void:
 	main.building.start_placing("rivet_turret")
 	await _settle()
 	_save(out_dir + "/hub.png")
+	main.building.cancel_placing()
+
+	# Sky network: a claimed Foundry, a new walkway, and a raid on Midway.
+	region.set_platform_owner("Foundry", "player")
+	var foundry: Dictionary = region.platforms["Foundry"]
+	var crystal: Dictionary = region.platforms["Crystal Spire"]
+	main.walkways.try_build(region._rim_toward(foundry, crystal.center, true), region._rim_toward(crystal, foundry.center, true))
+	main.capture.set_process(false)
+	main.raids.set_process(false)
+	var party: Array[Unit] = main.raids.send_party(3)
+	for i in 400:
+		main.raids._process(0.05)
+		for u in party:
+			u._process(0.05)
+		main.capture.step(0.05)
+		if main.capture.claims.get("Midway", {}).get("progress", 0.0) > 0.6:
+			break
+	cam.position = (region.get_platform_position("Hub") + region.get_platform_position("Midway")) / 2.0 + Vector3(-8, 0, 4)
+	cam.zoom = 0.6
+	cam._target_zoom = 0.6
+	cam._apply_zoom()
+	await _settle()
+	_save(out_dir + "/network.png")
 	quit(0)
 
 

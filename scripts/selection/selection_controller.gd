@@ -125,6 +125,10 @@ func order_move(point: Vector3, attack_move := false) -> bool:
 
 ## Grid offsets around the click point, centre first.
 func formation_offsets(count: int) -> Array[Vector3]:
+	return formation_offsets_for(count, formation_spacing)
+
+
+static func formation_offsets_for(count: int, formation_spacing: float) -> Array[Vector3]:
 	var out: Array[Vector3] = []
 	var side := int(ceil(sqrt(float(count))))
 	var cells: Array[Vector2] = []

@@ -63,6 +63,14 @@ var tiles_in_clouds := {}
 
 ## Emitted when a building is placed or removed.
 signal buildings_changed
+## Emitted when a platform changes hands.
+signal owner_changed(platform_name: String, new_owner: String)
+## Emitted when a walkway is added at runtime.
+signal walkways_changed
+
+## Walkway cost per tile and the longest walkway the player can build.
+const WALKWAY_COST_PER_TILE := 15
+const WALKWAY_MAX_TILES := 8
 
 ## Who owns each platform: "player", "rival" or "" for neutral.
 var owners := {}
@@ -70,6 +78,9 @@ var owners := {}
 var buildings := {}
 
 var _labels := {}
+## platform name -> extra status line for its label (claim progress etc.)
+var _label_status := {}
+var _tile_nodes := {}
 var _astar := AStar3D.new()
 var _astar_ids := {}
 var _hex_mesh_cache := {}
@@ -289,7 +300,99 @@ func _refresh_label(platform_name: String) -> void:
 	var used := platform_load(platform_name)
 	var cap := platform_capacity(platform_name)
 	label.text = "%s\nLoad %d / %d" % [platform_name, used, cap]
+	var status: String = _label_status.get(platform_name, "")
+	if status != "":
+		label.text += "\n" + status
 	label.modulate = Color(1.0, 0.45, 0.4) if used > cap else Color.WHITE
+
+
+# --- Ownership --------------------------------------------------------------
+
+func platform_owner(platform_name: String) -> String:
+	return owners.get(platform_name, "")
+
+
+## Hands a platform to "player", "rival" or "" and recolours its deck.
+func set_platform_owner(platform_name: String, new_owner: String) -> void:
+	if owners.get(platform_name) == new_owner:
+		return
+	owners[platform_name] = new_owner
+	var color: Color = COLORS[{"player": "hub", "rival": "rival"}.get(new_owner, "neutral")]
+	for hex in tiles_of_platform(platform_name):
+		var node: MeshInstance3D = _tile_nodes.get(hex)
+		if node:
+			node.material_override = _material(color)
+	owner_changed.emit(platform_name, new_owner)
+
+
+## Sets the extra line under a platform's name and load, e.g. "Claiming 40%".
+func set_platform_status(platform_name: String, status: String) -> void:
+	if _label_status.get(platform_name, "") == status:
+		return
+	_label_status[platform_name] = status
+	_refresh_label(platform_name)
+
+
+## Every unit of a faction standing on a platform's tiles.
+func units_on_platform(platform_name: String, group: String) -> Array[Node3D]:
+	var out: Array[Node3D] = []
+	for node in get_tree().get_nodes_in_group(group):
+		if platform_at((node as Node3D).global_position) == platform_name:
+			out.append(node)
+	return out
+
+
+# --- Building walkways ------------------------------------------------------
+
+## Plans a walkway from a tile on one platform to a tile on another.
+## Returns {"tiles": [...new sky hexes...], "cost": int, "problem": String}.
+func plan_walkway(from_hex: Vector2i, to_hex: Vector2i) -> Dictionary:
+	var plan := {"tiles": [], "cost": 0, "problem": ""}
+	var a := get_tile(from_hex)
+	var b := get_tile(to_hex)
+	if a.is_empty() or a.platform == "":
+		plan.problem = "Start the walkway on a platform"
+	elif platform_owner(a.platform) != "player":
+		plan.problem = "Start the walkway on a platform you own"
+	elif b.is_empty() or b.platform == "":
+		plan.problem = "End the walkway on another platform"
+	elif b.platform == a.platform:
+		plan.problem = "End the walkway on a different platform"
+	if plan.problem != "":
+		return plan
+	var line := HexGrid.line(from_hex, to_hex)
+	var new_tiles: Array[Vector2i] = []
+	var left_start := false
+	for i in range(1, line.size() - 1):
+		var hex: Vector2i = line[i]
+		var t := get_tile(hex)
+		if t.is_empty():
+			left_start = true
+			new_tiles.append(hex)
+		elif left_start and t.platform != b.platform:
+			plan.problem = "The walkway would run into something"
+			return plan
+		elif left_start and t.platform == b.platform:
+			break
+	if new_tiles.is_empty():
+		plan.problem = "Those platforms are already touching"
+	elif new_tiles.size() > WALKWAY_MAX_TILES:
+		plan.problem = "Too long: walkways reach at most %d tiles" % WALKWAY_MAX_TILES
+	plan.tiles = new_tiles
+	plan.cost = new_tiles.size() * WALKWAY_COST_PER_TILE
+	return plan
+
+
+## Adds walkway tiles in the sky and links them into the walking graph.
+func add_walkway(new_tiles: Array) -> void:
+	for hex in new_tiles:
+		tiles[hex] = {"type": "walkway", "platform": ""}
+		_make_tile(hex)
+		_add_walk_point(hex)
+	for hex in new_tiles:
+		_connect_walk_point(hex)
+	walkway_count += 1
+	walkways_changed.emit()
 
 
 # --- Layout -----------------------------------------------------------------
@@ -348,16 +451,23 @@ func _center_of(thing: String) -> Vector2i:
 # --- Walking ----------------------------------------------------------------
 
 func _build_walk_graph() -> void:
-	var next_id := 0
 	for hex in tiles:
 		if WALKABLE.has(tiles[hex].type):
-			_astar.add_point(next_id, hex_center(hex))
-			_astar_ids[hex] = next_id
-			next_id += 1
+			_add_walk_point(hex)
 	for hex in _astar_ids:
-		for n in HexGrid.neighbors(hex):
-			if _astar_ids.has(n) and not _astar.are_points_connected(_astar_ids[hex], _astar_ids[n]):
-				_astar.connect_points(_astar_ids[hex], _astar_ids[n])
+		_connect_walk_point(hex)
+
+
+func _add_walk_point(hex: Vector2i) -> void:
+	var id := _astar.get_available_point_id()
+	_astar.add_point(id, hex_center(hex))
+	_astar_ids[hex] = id
+
+
+func _connect_walk_point(hex: Vector2i) -> void:
+	for n in HexGrid.neighbors(hex):
+		if _astar_ids.has(n) and not _astar.are_points_connected(_astar_ids[hex], _astar_ids[n]):
+			_astar.connect_points(_astar_ids[hex], _astar_ids[n])
 
 
 ## Drops waypoints that can be skipped by walking straight over walkable tiles.
@@ -393,22 +503,27 @@ func _build_tiles() -> void:
 	deck_root.name = "Tiles"
 	add_child(deck_root)
 	for hex in tiles:
-		var t: Dictionary = tiles[hex]
-		var kind: String = platforms[t.platform].kind if t.platform != "" else "walkway"
-		var is_walkway: bool = t.type == "walkway"
-		var height := WALKWAY_HEIGHT if is_walkway else DECK_HEIGHT
-		var tile := MeshInstance3D.new()
-		tile.name = "Tile_%d_%d" % [hex.x, hex.y]
-		tile.mesh = _hex_mesh(height, tile_size * TILE_GAP)
-		tile.material_override = _material(COLORS[kind])
-		tile.position = hex_center(hex) + Vector3.DOWN * height / 2.0
-		deck_root.add_child(tile)
-		if t.type != "deck" and not is_walkway:
-			_add_prop(tile, t.type, height)
+		_make_tile(hex)
 
 	for p in Layout.PLATFORMS:
 		_add_underside(p)
 		_add_label(p)
+
+
+func _make_tile(hex: Vector2i) -> void:
+	var t: Dictionary = tiles[hex]
+	var kind: String = platforms[t.platform].kind if t.platform != "" else "walkway"
+	var is_walkway: bool = t.type == "walkway"
+	var height := WALKWAY_HEIGHT if is_walkway else DECK_HEIGHT
+	var tile := MeshInstance3D.new()
+	tile.name = "Tile_%d_%d" % [hex.x, hex.y]
+	tile.mesh = _hex_mesh(height, tile_size * TILE_GAP)
+	tile.material_override = _material(COLORS[kind])
+	tile.position = hex_center(hex) + Vector3.DOWN * height / 2.0
+	get_node("Tiles").add_child(tile)
+	_tile_nodes[hex] = tile
+	if t.type != "deck" and not is_walkway:
+		_add_prop(tile, t.type, height)
 
 
 func _add_prop(tile: Node3D, type: String, tile_height: float) -> void:

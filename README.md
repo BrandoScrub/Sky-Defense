@@ -12,6 +12,8 @@ Built with [Godot 4.3](https://godotengine.org/download/archive/4.3-stable/) (st
 
 The current build is a placeholder sky region on hexagonal tiles: your Hub, five neutral platforms, the rival Ironbell HQ, walkways, a ferry route, two storm clouds and a rival air lane. A legend in the top right explains the tile colours. Your Commander (gold) and a squad of four Riveteers start on the Hub and can be selected and sent across walkways. You start with 200 scrap and can build on the Hub; the top bar shows scrap and the power grid, and each platform's label shows its load.
 
+Park units on a neutral platform to claim it (it's contested while both sides have units there), then build on it. Ironbell raiding parties march along walkways, claim platforms on the way, and gather at your Hub; there's no combat yet.
+
 To change the map, edit `scripts/world/level_layout.gd`: platforms, features, walkways, ferry routes, clouds and air lanes are all plain tables there.
 
 ## Controls
@@ -31,6 +33,8 @@ To change the map, edit `scripts/world/level_layout.gd`: platforms, features, wa
 | Build | Z Dynamo Generator, X Cloud Harvester, C Rivet Turret, V Flak Battery, B Arc Coil |
 | While placing | Left click places, Shift keeps placing, R rotates, Esc or right click cancels |
 | Demolish | Delete over a building (refunds 75%) |
+| Build a walkway | T, click a tile on your platform, then a tile on another platform (15 scrap per tile) |
+| Send an Ironbell raid | G (for testing until timed waves arrive) |
 
 The full default key map (selection, control groups, build shortcuts, game speed) is defined in `tools/input_bindings.gd` and already written into `project.godot`. Those actions will be hooked up as each system is built.
 
@@ -45,6 +49,7 @@ The full default key map (selection, control groups, build shortcuts, game speed
 | `scripts/selection/` | Selection, orders and control groups |
 | `scripts/buildings/` | Building catalog (costs, power, weight), placed buildings and build mode |
 | `scripts/economy/` | The player's scrap and crystals |
+| `scripts/rivals/` | Ironbell raiding parties |
 | `tools/` | Developer scripts: input map generator and the smoke test |
 
 ## Developer tools

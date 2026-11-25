@@ -6,9 +6,12 @@ extends Node3D
 signal arrived
 
 const GROUP := "player_units"
+const ENEMY_GROUP := "enemy_units"
 
 @export var display_name := "Riveteer"
 @export var is_hero := false
+## "player" or "rival". Rival units aren't selectable.
+@export var faction := "player"
 @export var move_speed := 6.0
 @export var body_color := Color(0.42, 0.5, 0.6)
 ## Radius used for click picking and formation spacing.
@@ -27,7 +30,7 @@ var _ring: MeshInstance3D
 
 
 func _ready() -> void:
-	add_to_group(GROUP)
+	add_to_group(GROUP if faction == "player" else ENEMY_GROUP)
 	_build_visuals()
 
 
