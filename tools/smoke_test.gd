@@ -36,6 +36,7 @@ func _initialize() -> void:
 	_check_building(main)
 	_check_build_menu(main)
 	_check_info_panel(main)
+	_check_top_bar(main)
 	_check_ferry(main)
 	await _check_claiming_walkways_and_raids(main)
 	_check_weight_power_income(main)
@@ -503,6 +504,32 @@ func _check_info_panel(main: Node) -> void:
 	main.building.demolish(deck)
 	# Put scrap back where it was for the checks that follow.
 	main.resources.scrap -= BuildingCatalog.refund_for("dynamo")
+
+
+func _check_top_bar(main: Node) -> void:
+	var bar: TopBar = main.top_bar
+	var waves: WaveManager = main.waves
+	_expect(bar != null, "the HUD should have a top bar")
+	if bar == null:
+		return
+	bar.refresh()
+	_expect(bar._scrap.text == "Scrap %d" % main.resources.scrap, "the top bar should show scrap")
+	var plan := waves.wave_plan()
+	_expect(plan.size() >= 2, "the wave plan should list every rival")
+	for entry in plan:
+		_expect(bar._cards.has(entry.corp), "the top bar should have a card for %s" % entry.corp)
+	# Wave 1: Ironbell sends walkers, Vesper sits it out until wave 2.
+	var ironbell: Dictionary = plan[0]
+	var total := 0
+	for u in ironbell.units:
+		total += u[1]
+	_expect(total == waves.party_size_for(waves.wave), "Ironbell's plan should match its party size")
+	_expect(bar.wave_tooltip(ironbell).contains("Ironbell Walker"), "hovering Ironbell should list its walkers")
+	if waves.phase == WaveManager.BUILD:
+		_expect(bar.status_text(ironbell).begins_with("Wave %d in" % waves.wave), "Ironbell's card should count down: " + bar.status_text(ironbell))
+	var vesper: Array = waves.wave_plan(3).filter(func(e): return e.corp == "Vesper")
+	_expect(not vesper.is_empty() and vesper[0].units[0][0] == "Vesper Bomber", "Vesper's wave 3 should send bombers")
+	_expect(TopBar.clock(83.2) == "1:24", "clock should format as m:ss")
 
 
 func _key(keycode: Key, shift := false) -> InputEventKey:
