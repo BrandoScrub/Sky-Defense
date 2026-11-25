@@ -9,6 +9,10 @@ var _failures := 0
 
 
 func _initialize() -> void:
+	# Fail instead of hanging if a script error stops the test part-way.
+	create_timer(120.0).timeout.connect(func():
+		printerr("Smoke test timed out (likely a script error above)")
+		quit(1))
 	_check_input_map()
 	_check_hex_math()
 	var main: Node = load("res://scenes/main.tscn").instantiate()
@@ -20,6 +24,7 @@ func _initialize() -> void:
 	_check_routing(main.get_node("Region"))
 	await _check_selection_and_orders(main)
 	_check_building(main)
+	_check_claiming_walkways_and_raids(main)
 	if _failures == 0:
 		print("Smoke test passed")
 	else:
@@ -214,3 +219,76 @@ func _check_building(main: Node) -> void:
 	_expect(build.placing == "flak_battery" and build._ghost != null, "start_placing should show a ghost")
 	build.cancel_placing()
 	_expect(build.placing == "" and build._ghost == null, "cancel_placing should clear the ghost")
+
+
+func _check_claiming_walkways_and_raids(main: Node) -> void:
+	var region: SkyRegion = main.get_node("Region")
+	var capture: CaptureSystem = main.capture
+	var raids: RivalRaids = main.raids
+	var res: PlayerResources = main.resources
+	var units: Array[Unit] = main.selection.all_units()
+	capture.set_process(false)
+	raids.set_process(false)
+
+	_expect(not capture.is_claimable("Hub") and not capture.is_claimable("Ironbell HQ"), "HQs can't be claimed")
+	_expect(capture.is_claimable("Foundry"), "neutral platforms can be claimed")
+
+	# Two units on the Foundry claim it.
+	var foundry := region.get_platform_position("Foundry")
+	units[1].position = foundry + Vector3(1, 0, 0)
+	units[2].position = foundry + Vector3(-1, 0, 0)
+	for u in units.slice(3):
+		u.position = region.hex_center(region.platforms["Hub"].center + Vector2i(1, 1))
+	units[0].position = region.hex_center(region.platforms["Hub"].center + Vector2i(-1, 1))
+	capture.step(1.0)
+	_expect(capture.claims["Foundry"].side == "player" and capture.claims["Foundry"].progress > 0.0, "claiming should start")
+	for i in 10:
+		capture.step(1.0)
+	_expect(region.platform_owner("Foundry") == "player", "two units should claim the Foundry within 11 s")
+
+	# Building a walkway from the Foundry to the ferry-only Crystal Spire.
+	var crystal: Dictionary = region.platforms["Crystal Spire"]
+	var foundry_data: Dictionary = region.platforms["Foundry"]
+	var from_hex: Vector2i = region._rim_toward(foundry_data, crystal.center, true)
+	var to_hex: Vector2i = region._rim_toward(crystal, foundry_data.center, true)
+	var plan := region.plan_walkway(from_hex, to_hex)
+	_expect(plan.problem == "" and plan.tiles.size() > 0, "Foundry to Crystal Spire walkway should plan: %s" % plan.problem)
+	_expect(region.plan_walkway(to_hex, from_hex).problem != "", "can't start a walkway on a platform you don't own")
+	_expect(region.plan_walkway(from_hex, region.platforms["Foundry"].center).problem != "", "walkway must end on another platform")
+	var walkways_before := region.walkway_count
+	var scrap_before := res.scrap
+	res.add_scrap(100)
+	_expect(main.walkways.try_build(from_hex, to_hex) == "", "walkway build should succeed")
+	_expect(res.scrap == scrap_before + 100 - plan.cost, "walkway should cost %d" % plan.cost)
+	_expect(region.walkway_count == walkways_before + 1, "walkway count should go up")
+	var spire := region.get_platform_position("Crystal Spire") + Vector3(1, 0, 0)
+	_expect(not region.find_route(region.get_platform_position("Hub") + Vector3(0, 0, 3), spire).is_empty(),
+		"Crystal Spire should be walkable after the new walkway")
+
+	# Contested: a rival on the Foundry stops progress.
+	var rival := raids.send_party(1)[0]
+	rival.position = foundry
+	region.set_platform_owner("Foundry", "")
+	capture.claims.erase("Foundry")
+	capture.step(1.0)
+	_expect(capture.claims["Foundry"].progress == 0.0, "contested platforms don't progress")
+	rival.queue_free()
+	await process_frame
+	region.set_platform_owner("Foundry", "player")
+	units[1].position = region.hex_center(region.platforms["Hub"].center + Vector2i(2, 1))
+	units[2].position = region.hex_center(region.platforms["Hub"].center + Vector2i(-2, 2))
+
+	# A raiding party claims Midway on its way, then gathers at the Hub.
+	var party := raids.send_party(3)
+	_expect(party.size() == 3 and get_root().get_tree().get_nodes_in_group(Unit.ENEMY_GROUP).size() == 3, "raid should spawn 3 walkers")
+	_expect(raids.next_objective(party[0].position) == "Midway", "raiders should go for Midway first")
+	for i in 1600:
+		raids._process(0.05)
+		for u in party:
+			u._process(0.05)
+		capture.step(0.05)
+	_expect(region.platform_owner("Midway") == "rival", "raiders should claim Midway")
+	for u in party:
+		_expect(region.platform_at(u.position) == "Hub", "%s should end on the Hub, is at %s" % [u.name, u.position])
+	capture.set_process(true)
+	raids.set_process(true)

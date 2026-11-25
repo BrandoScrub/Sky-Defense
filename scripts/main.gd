@@ -9,6 +9,9 @@ const SQUAD_SIZE := 4
 
 var selection: SelectionController
 var building: BuildController
+var walkways: WalkwayBuilder
+var capture: CaptureSystem
+var raids: RivalRaids
 var resources: PlayerResources
 var _status: Label
 var _resource_bar: Label
@@ -40,6 +43,24 @@ func _ready() -> void:
 	building.resources = resources
 	add_child(building)
 
+	walkways = WalkwayBuilder.new()
+	walkways.name = "WalkwayBuilder"
+	walkways.region = region
+	walkways.camera = camera
+	walkways.resources = resources
+	add_child(walkways)
+
+	capture = CaptureSystem.new()
+	capture.name = "CaptureSystem"
+	capture.region = region
+	add_child(capture)
+
+	raids = RivalRaids.new()
+	raids.name = "RivalRaids"
+	raids.region = region
+	raids.capture = capture
+	add_child(raids)
+
 	_build_hud()
 	selection.selection_changed.connect(_on_selection_changed)
 	_on_selection_changed(selection.selected)
@@ -47,6 +68,10 @@ func _ready() -> void:
 	region.buildings_changed.connect(_refresh_resources)
 	building.notice.connect(show_notice)
 	building.mode_changed.connect(_on_build_mode_changed)
+	walkways.notice.connect(show_notice)
+	walkways.mode_changed.connect(_on_walkway_mode_changed)
+	capture.platform_claimed.connect(_on_platform_claimed)
+	raids.raid_sent.connect(func(n): show_notice("Ironbell sent %d walkers toward your Hub" % n))
 	_refresh_resources()
 	_on_build_mode_changed("")
 
@@ -160,7 +185,21 @@ func _on_build_mode_changed(type_id: String) -> void:
 	for i in BuildingCatalog.HOTKEY_ORDER.size():
 		var data := BuildingCatalog.get_data(BuildingCatalog.HOTKEY_ORDER[i])
 		parts.append("%s %s (%d)" % [BuildingCatalog.HOTKEY_LABELS[i], data.name, data.cost])
-	_build_bar.text = "    ".join(parts) + "    Del: demolish"
+	_build_bar.text = "    ".join(parts) + "    T Walkway    Del: demolish    G: send Ironbell raid"
+
+
+func _on_walkway_mode_changed(active: bool) -> void:
+	if active:
+		_build_bar.text = "Building a walkway (%d scrap per tile): click a tile on your platform, then a tile on another platform    Esc / right click: cancel" % SkyRegion.WALKWAY_COST_PER_TILE
+	else:
+		_on_build_mode_changed("")
+
+
+func _on_platform_claimed(platform_name: String, new_owner: String) -> void:
+	if new_owner == "player":
+		show_notice("You claimed %s" % platform_name)
+	else:
+		show_notice("Ironbell claimed %s" % platform_name)
 
 
 ## Colour key for the placeholder tiles, top right.
