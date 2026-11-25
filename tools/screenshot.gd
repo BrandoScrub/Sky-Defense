@@ -25,6 +25,7 @@ func _initialize() -> void:
 	cam._apply_zoom()
 	await _settle()
 	_save(out_dir + "/overview.png")
+	main._help.visible = false
 
 	# Close view of the Hub with the squad.
 	cam.position = region.get_platform_position("Hub")
