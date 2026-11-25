@@ -13,6 +13,7 @@ func _initialize() -> void:
 	SkyRegion.seed_override = 3
 	# These shots show every system, so lay every planned walkway up front.
 	SkyRegion.prebuilt_walkways = true
+	SkyRegion.instant_walkways = true
 	var main: Node = load("res://scenes/main.tscn").instantiate()
 	root.add_child(main)
 	var cam: RtsCamera = main.get_node("RtsCamera")

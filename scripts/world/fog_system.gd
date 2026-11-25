@@ -78,6 +78,7 @@ func _ready() -> void:
 	_build_beacons()
 	_collect_scenery()
 	region.walkways_changed.connect(_collect_scenery)
+	region.walkway_tile_added.connect(func(hex): _track(region.tile_node(hex)))
 	# Air lanes are redrawn when the wind turns; hide the new markers too.
 	region.air_routes_changed.connect(_collect_scenery)
 	update_visibility()
@@ -184,6 +185,12 @@ func _refresh_nodes() -> void:
 			still_hidden.append(entry)
 	_scenery = still_hidden
 
+	# Harpoon rigs of walkways going up show only over explored sky.
+	if region.crew:
+		for rig in region.crew.get_children():
+			if rig is Node3D:
+				rig.visible = is_explored(rig.global_position)
+
 	# Buildings (they come and go) follow explored sky.
 	var root := region.get_node_or_null("Buildings")
 	if root:
@@ -223,7 +230,7 @@ func _collect_scenery() -> void:
 		for f in ferry.ferries:
 			ships.append(f.ship)
 	for child in region.get_children():
-		if not child is Node3D or child == self or ships.has(child) or child.name == "Buildings":
+		if not child is Node3D or child == self or ships.has(child) or child.name == "Buildings" or child.name == "WalkwayCrew":
 			continue
 		var n := String(child.name)
 		var is_group := n == "Tiles" or n.begins_with("Cloud_") or n.begins_with("AirLane_") or n.begins_with("Ferry_")

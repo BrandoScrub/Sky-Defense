@@ -1,5 +1,6 @@
 ## Building new walkways. Pick Walkway in the build menu, click a tile on a platform you own, then
-## click a tile on another platform. A preview shows the planned tiles in green
+## click a tile on another platform. Harpoons fire across and the walkway is
+## laid one tile at a time (WalkwayCrew). A preview shows the planned tiles in green
 ## (or red if it can't be built) with the scrap cost. Esc or right click cancels.
 class_name WalkwayBuilder
 extends Node
@@ -74,8 +75,8 @@ func try_build(from_hex: Vector2i, to_hex) -> String:
 		return plan.problem
 	if not resources.spend_scrap(plan.cost):
 		return "Not enough scrap (%d needed)" % plan.cost
-	region.add_walkway(plan.tiles)
-	notice.emit("Built a %d-tile walkway (-%d scrap)" % [plan.tiles.size(), plan.cost])
+	region.build_walkway(plan.tiles, "player", region.hex_center(from_hex), region.hex_center(to_hex))
+	notice.emit("Harpoons away! Building a %d-tile walkway (-%d scrap)" % [plan.tiles.size(), plan.cost])
 	return ""
 
 
