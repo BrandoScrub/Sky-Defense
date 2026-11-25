@@ -44,7 +44,7 @@ var _banner: Label
 var resources: PlayerResources
 var _status: Label
 var _resource_bar: Label
-var _build_bar: Label
+var build_menu: BuildMenu
 var _notice: Label
 var _notice_tween: Tween
 var _help: PanelContainer
@@ -316,14 +316,12 @@ func _build_hud() -> void:
 	_resource_bar.position.y = 16
 	layer.add_child(_resource_bar)
 
-	_build_bar = _hud_label("BuildBar", 16)
-	_build_bar.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	_build_bar.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_build_bar.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	_build_bar.offset_top = -40
-	_build_bar.offset_bottom = -12
-	_build_bar.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	layer.add_child(_build_bar)
+	build_menu = BuildMenu.new()
+	build_menu.building = building
+	build_menu.walkways = walkways
+	build_menu.recruiter = recruiter
+	build_menu.resources = resources
+	layer.add_child(build_menu)
 
 	_notice = _hud_label("Notice", 18)
 	_notice.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
@@ -344,8 +342,8 @@ func _build_hud() -> void:
 
 	_help = PanelContainer.new()
 	_help.name = "HowToPlay"
-	_help.set_anchors_preset(Control.PRESET_CENTER_LEFT)
-	_help.position = Vector2(16, -170)
+	# Top left, under the selection text, so it stays clear of the build menu.
+	_help.position = Vector2(16, 96)
 	var help_box := VBoxContainer.new()
 	_help.add_child(help_box)
 	var help_text := Label.new()
@@ -377,7 +375,7 @@ func _hud_label(node_name: String, font_size: int) -> Label:
 	return label
 
 
-## Shows a short message above the build bar that fades out.
+## Shows a short message near the bottom of the screen that fades out.
 func show_notice(text: String) -> void:
 	_notice.text = text
 	_notice.modulate.a = 1.0
@@ -397,23 +395,20 @@ func _refresh_resources() -> void:
 	_resource_bar.text = "Scrap %d      %s      Crystals %d" % [resources.scrap, power, resources.crystals]
 
 
+## The build menu's hint line shows how to place while a build mode is on.
 func _on_build_mode_changed(type_id: String) -> void:
 	if type_id != "":
 		var data := BuildingCatalog.get_data(type_id)
-		_build_bar.text = "Placing %s (%d scrap, weight %d)    Left click: place    Shift: keep placing    R: rotate    Esc / right click: cancel" % [data.name, data.cost, data.weight]
-		return
-	var parts := PackedStringArray()
-	for i in BuildingCatalog.HOTKEY_ORDER.size():
-		var data := BuildingCatalog.get_data(BuildingCatalog.HOTKEY_ORDER[i])
-		parts.append("%s %s (%d)" % [BuildingCatalog.HOTKEY_LABELS[i], data.name, data.cost])
-	_build_bar.text = "    ".join(parts) + "    T Walkway    Y Recruit Riveteer (%d)    Del: demolish    P pause, F1-F3 speed" % recruiter.cost
+		build_menu.set_hint("Placing %s (weight %d). Left click: place. Shift: keep placing. R: rotate. Esc or right click: cancel." % [data.name, data.weight])
+	else:
+		build_menu.set_hint("")
 
 
 func _on_walkway_mode_changed(active: bool) -> void:
 	if active:
-		_build_bar.text = "Building a walkway (%d scrap per tile): click a tile on your platform, then a tile on another platform    Esc / right click: cancel" % SkyRegion.WALKWAY_COST_PER_TILE
+		build_menu.set_hint("Walkway: click a tile on your platform, then a tile on another platform. Esc or right click: cancel.")
 	else:
-		_on_build_mode_changed("")
+		build_menu.set_hint("")
 
 
 func _on_platform_claimed(platform_name: String, new_owner: String) -> void:

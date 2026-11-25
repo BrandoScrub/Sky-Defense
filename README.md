@@ -40,6 +40,7 @@ To change the map, edit `scripts/world/level_layout.gd`: platforms, features, wa
 | Select all units on screen | Q |
 | Select hero | H (double-tap to move the camera to them) |
 | Control groups | Ctrl + 1 to 5 saves, 1 to 5 selects, double-tap to move the camera |
+| Build menu | Bottom left: click a tab (Army, Defense, Economy, Storm), then a building. Tab cycles the tabs. Hover a button for its stats |
 | Build | Z Dynamo Generator, X Cloud Harvester, C Rivet Turret, V Flak Battery, B Arc Coil |
 | While placing | Left click places, Shift keeps placing, R rotates, Esc or right click cancels |
 | Demolish | Delete over a building (refunds 75%) |
@@ -57,6 +58,7 @@ The full default key map (selection, control groups, build shortcuts, game speed
 | --- | --- |
 | `scenes/` | Godot scenes; `main.tscn` is the entry point |
 | `scripts/camera/` | The RTS camera |
+| `scripts/ui/` | HUD pieces: the bottom-left build menu |
 | `scripts/world/` | Hex grid math, level layout data, the sky region builder with routing, claiming, platform load, the airship ferry and storm control |
 | `scripts/units/` | Player units, the hero and recruiting |
 | `scripts/selection/` | Selection, orders and control groups |

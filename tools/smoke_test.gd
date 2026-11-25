@@ -24,6 +24,7 @@ func _initialize() -> void:
 	_check_routing(main.get_node("Region"))
 	await _check_selection_and_orders(main)
 	_check_building(main)
+	_check_build_menu(main)
 	_check_ferry(main)
 	await _check_claiming_walkways_and_raids(main)
 	_check_weight_power_income(main)
@@ -224,6 +225,33 @@ func _check_building(main: Node) -> void:
 	_expect(build.placing == "flak_battery" and build._ghost != null, "start_placing should show a ghost")
 	build.cancel_placing()
 	_expect(build.placing == "" and build._ghost == null, "cancel_placing should clear the ghost")
+
+
+func _check_build_menu(main: Node) -> void:
+	var menu: BuildMenu = main.build_menu
+	_expect(menu != null, "the HUD should have a build menu")
+	if menu == null:
+		return
+	_expect(menu.get_node("Box/Tabs").get_child_count() == 4, "the build menu should have 4 tabs")
+	for tab_name in BuildMenu.TABS:
+		menu.show_tab(tab_name)
+		_expect(menu._entry_buttons.size() == BuildMenu.TABS[tab_name].size(), "%s tab should show its buttons" % tab_name)
+	# Every building in the catalog is somewhere in the menu.
+	for type_id in BuildingCatalog.BUILDINGS:
+		_expect(BuildMenu.tab_of(type_id) != "", "%s is missing from the build menu" % type_id)
+	# Clicking a button starts placing, and a hotkey jumps to the right tab.
+	menu.show_tab("Defense")
+	menu._entry_buttons["flak_battery"].emit_signal("pressed")
+	_expect(main.building.placing == "flak_battery", "the Flak Battery button should start placing")
+	_expect(menu._entry_buttons["flak_battery"].button_pressed, "the active building's button should be lit")
+	main.building.start_placing("dynamo")
+	_expect(menu.current_tab == "Economy", "placing a Dynamo should switch to the Economy tab")
+	main.building.cancel_placing()
+	menu.activate("walkway")
+	_expect(main.walkways.active, "the Walkway button should start a walkway")
+	menu.activate("walkway")
+	_expect(not main.walkways.active, "pressing Walkway again should cancel it")
+	menu.show_tab("Army")
 
 
 func _check_claiming_walkways_and_raids(main: Node) -> void:
