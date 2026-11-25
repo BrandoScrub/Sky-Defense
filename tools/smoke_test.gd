@@ -56,7 +56,7 @@ func _check_scene(main: Node) -> void:
 		_expect(region.platforms.has(p), "layout is missing platform %s" % p)
 	_expect(region.tiles_of_platform("Hub").size() == 37, "Hub (radius 3) should have 37 tiles")
 	_expect(region.tiles_of_platform("Generator Rig").size() == 7, "Generator Rig (radius 1) should have 7 tiles")
-	_expect(region.walkway_count == 5, "expected 5 walkways")
+	_expect(region.walkway_count == 6, "expected 6 walkways")
 	_expect(region.tiles_in_clouds.size() == 2, "expected 2 storm clouds")
 	var types := {}
 	for hex in region.tiles:
@@ -523,7 +523,7 @@ func _check_combat_and_waves(main: Node) -> void:
 	await process_frame
 
 	var hqs := get_root().get_tree().get_nodes_in_group(Headquarters.GROUP)
-	_expect(hqs.size() == 2, "expected 2 headquarters, got %d" % hqs.size())
+	_expect(hqs.size() == 3, "expected 3 headquarters (Hub, Ironbell, Vesper), got %d" % hqs.size())
 
 	# A Rivet Turret kills a walker and pays its bounty.
 	var hub: Vector2i = region.platforms["Hub"].center
@@ -613,6 +613,45 @@ func _check_combat_and_waves(main: Node) -> void:
 		_expect(not region.is_hex_walkable(hex), "wall tile %s should stay blocked" % [hex])
 		build.demolish(hex)
 
+	# Vesper bombers: only anti-air can hit them, and they bomb buildings.
+	var fleet: VesperFleet = main.fleet
+	fleet.set_process(false)
+	var bomber: Unit = fleet.send_flight(1)[0]
+	_expect(bomber.flying and bomber.position.y > 5.0, "bombers fly high")
+	_expect(bomber.is_moving(), "a new bomber flies its air lane")
+	var dynamo_hex := hub + Vector2i(-2, 1)
+	_expect(build.try_place("dynamo", dynamo_hex) == "", "place a dynamo for the bomber")
+	var dynamo: Building = region.buildings[dynamo_hex]
+	bomber.position = dynamo.global_position + Vector3.UP * VesperFleet.ALTITUDE
+	bomber.stop()
+	_expect(combat.nearest_enemy(bomber.global_position, "player", 20.0, false) != bomber, "ground-only weapons can't target aircraft")
+	_expect(combat.nearest_enemy(bomber.global_position, "player", 20.0, true) == bomber, "anti-air weapons can")
+	_expect(not region.units_on_platform("Hub", Unit.ENEMY_GROUP).has(bomber), "aircraft don't stand on platforms")
+	var riveteer_far: Unit = units[2]
+	riveteer_far.position = region.get_platform_position("Outpost")
+	bomber.cooldown_left = 0.0
+	var dynamo_hp := dynamo.hp
+	combat.step(0.05)
+	_expect(dynamo.hp < dynamo_hp, "the bomber should bomb the dynamo below it")
+	# A Flak Battery brings it down quickly.
+	_expect(build.try_place("flak_battery", hub + Vector2i(-1, 2)) == "", "place a Flak Battery")
+	for i in 200:
+		combat.step(0.05)
+		if not is_instance_valid(bomber) or bomber.hp <= 0.0:
+			break
+	_expect(not is_instance_valid(bomber) or bomber.hp <= 0.0, "flak should shoot the bomber down")
+	await process_frame
+	# An idle bomber picks the nearest player building.
+	var lost: Unit = fleet.send_flight(1)[0]
+	lost.stop()
+	lost.position = region.get_platform_position("Outpost") + Vector3.UP * VesperFleet.ALTITUDE
+	fleet.step()
+	_expect(lost.is_moving(), "an idle bomber should head for a target")
+	lost.free()
+	for hex in [dynamo_hex, hub + Vector2i(-1, 2)]:
+		if region.buildings.has(hex):
+			build.demolish(hex)
+
 	# Waves: the build timer starts wave 1 with 3 walkers; clearing it starts the next build phase.
 	_expect(waves.phase == WaveManager.BUILD and waves.wave == 1, "game starts in the build phase")
 	waves.step(waves.time_left + 0.1)
@@ -623,16 +662,30 @@ func _check_combat_and_waves(main: Node) -> void:
 	waves.step(0.1)
 	_expect(waves.phase == WaveManager.BUILD and waves.wave == 2, "clearing wave 1 should start the build phase for wave 2")
 	_expect(waves.party_size_for(2) == 4 and waves.party_size_for(50) == waves.max_party, "waves grow up to a cap")
+	_expect(waves.flight_size_for(1) == 0 and waves.flight_size_for(2) == 1 and waves.flight_size_for(50) == waves.max_flight, "Vesper flights start in wave 2 and grow")
 	waves.start_wave()
-	_expect(waves.remaining() == 4, "starting early sends wave 2 now")
+	_expect(waves.remaining() == 5, "starting early sends wave 2 now: 4 walkers and 1 bomber, got %d" % waves.remaining())
 	for e in get_root().get_tree().get_nodes_in_group(Unit.ENEMY_GROUP):
 		e.take_damage(10000.0)
 	await process_frame
 
-	# Victory when Ironbell HQ falls.
+	# One rival down isn't a win, and that rival stops attacking.
 	var won := [false]
 	waves.game_over.connect(func(w): won[0] = w)
-	for hq in hqs:
-		if hq.faction == "rival":
-			hq.take_damage(100000.0)
-	_expect(waves.phase == WaveManager.OVER and won[0], "destroying Ironbell HQ should win")
+	combat.headquarters_on("Ironbell HQ").take_damage(100000.0)
+	_expect(waves.phase != WaveManager.OVER, "the game goes on while Vesper stands")
+	waves.step(0.1)
+	_expect(waves.phase == WaveManager.BUILD, "clearing wave 2 starts the next build phase")
+	waves.start_wave()
+	var walkers := 0
+	for e in get_root().get_tree().get_nodes_in_group(Unit.ENEMY_GROUP):
+		if not e.flying:
+			walkers += 1
+	_expect(walkers == 0 and waves.remaining() > 0, "with Ironbell HQ gone, only Vesper attacks")
+	for e in get_root().get_tree().get_nodes_in_group(Unit.ENEMY_GROUP):
+		e.take_damage(10000.0)
+	await process_frame
+	waves.step(0.1)
+	# Victory when both rival headquarters have fallen.
+	combat.headquarters_on("Vesper Aerodrome").take_damage(100000.0)
+	_expect(waves.phase == WaveManager.OVER and won[0], "destroying both rival headquarters should win")
