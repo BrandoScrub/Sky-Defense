@@ -31,6 +31,7 @@ const BUILDING_INFO := {
 	"mending_post": "A steam-powered field workshop. Barely fights, but patches up your units nearby and gives them a little armor. Can't hit aircraft.",
 	"flak_battery": "Rapid anti-air guns. Shreds bombers and other aircraft, but ignores everything on the ground.",
 	"skyhook_cannon": "A long-range harpoon gun for big airships. Slow, but each hit tears a hole in the envelope. Ignores everything on the ground.",
+	"turbine_engine": "A big brass propeller bolted to a turbine island. Build 4 on one island and you can steer it with Steer Island (Ships tab): it moves up to 4 hexes, breaking off its walkways after a warning, and draws 30 power while under way.",
 	"drone_hangar": "Launches defensive drones that chase off anything coming near, air or ground, then return. Rebuilds lost drones over time.",
 }
 

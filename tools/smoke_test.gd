@@ -49,6 +49,7 @@ func _initialize() -> void:
 	_check_air_routes(main)
 	await _check_rival_airships(main)
 	await _check_combat_and_waves(main)
+	await _check_island_steering(main)
 	if _failures == 0:
 		print("Smoke test passed")
 	else:
@@ -1437,6 +1438,78 @@ func _check_rival_airships(main: Node) -> void:
 	gun.free()
 	fleet.set_process(true)
 	await process_frame
+
+
+## Turbine Engines go only on turbine islands; with 4 the island can be
+## steered, breaking its walkways after a warning and carrying its buildings.
+func _check_island_steering(main: Node) -> void:
+	var region: SkyRegion = main.region
+	var steer: IslandSteering = main.steering
+	var build: BuildController = main.building
+	var turbine := ""
+	for p in region.platforms:
+		if region.platforms[p].get("style", "") == "turbine" and not region.platforms[p].get("balloon", false):
+			turbine = p
+			break
+	_expect(turbine != "", "seed 3 has a turbine island")
+	if turbine == "":
+		return
+	main.resources.add_scrap(2000)
+	region.set_platform_owner("Hub", "player")
+	_expect(build.try_place(IslandSteering.ENGINE, region.platforms["Hub"].center + Vector2i(1, 1)).contains("turbine"), "engines only fit on turbine islands")
+	region.set_platform_owner(turbine, "player")
+	var spots: Array[Vector2i] = []
+	for hex in region.tiles_of_platform(turbine):
+		if region.build_problem(IslandSteering.ENGINE, hex) == "":
+			spots.append(hex)
+	_expect(spots.size() >= 4, "room for 4 engines on %s" % turbine)
+	if spots.size() < 4:
+		return
+	for i in 3:
+		_expect(build.try_place(IslandSteering.ENGINE, spots[i]) == "", "build an engine on %s" % turbine)
+	_expect(steer.steer_problem(turbine).contains("needs 4"), "3 engines aren't enough: %s" % steer.steer_problem(turbine))
+	_expect(build.try_place(IslandSteering.ENGINE, spots[3]) == "", "build a 4th engine")
+	region.storm_bonus += 200
+	_expect(steer.steer_problem(turbine) == "", "4 engines and spare power let you steer: %s" % steer.steer_problem(turbine))
+	var old_center: Vector2i = region.platforms[turbine].center
+	var engine_hex := spots[0]
+	var engine: Building = region.buildings[engine_hex]
+	var dir := -1
+	for d in 6:
+		if steer._clear_at(turbine, HexGrid.DIRECTIONS[d]):
+			dir = d
+			break
+	_expect(dir >= 0, "%s has open sky on some side" % turbine)
+	if dir < 0:
+		return
+	var tile_count := region.tiles_of_platform(turbine).size()
+	# A stub of walkway on the far side, which will break off.
+	var stub = null
+	for hex in region.tiles_of_platform(turbine):
+		var out: Vector2i = hex - HexGrid.DIRECTIONS[dir]
+		if not region.tiles.has(out):
+			stub = out
+			break
+	if stub != null:
+		region.add_tiles({stub: {"type": "walkway", "platform": ""}})
+	_expect(steer.steer(turbine, dir, 2) == "", "order the island to move")
+	_expect(region.power_demand() >= IslandSteering.STEER_POWER, "moving engines draw power")
+	_expect(steer.moving[turbine].state == IslandSteering.WARNING, "it warns before moving")
+	steer.step(steer.warning_seconds + 0.1)
+	_expect(steer.moving.has(turbine) and steer.moving[turbine].state == IslandSteering.MOVING, "after the warning it moves")
+	_expect(stub == null or not region.tiles.has(stub), "its walkways break off")
+	for i in 400:
+		if not steer.moving.has(turbine):
+			break
+		steer.step(0.1)
+	var new_center: Vector2i = region.platforms[turbine].center
+	_expect(not steer.moving.has(turbine), "the island stops")
+	_expect(HexGrid.distance(new_center, old_center) >= 1, "the island moved (from %s to %s)" % [old_center, new_center])
+	_expect(region.tiles_of_platform(turbine).size() == tile_count, "the island keeps its shape")
+	_expect(is_instance_valid(engine) and region.buildings.get(engine.hex) == engine and engine.hex == engine_hex + new_center - old_center, "its buildings ride along")
+	_expect(region.engine_draw == 0, "engines stop drawing power once it stops")
+	_expect(steer.engines_on(turbine) == 4, "still 4 engines aboard")
+	region.storm_bonus -= 200
 
 
 ## First platform (other than `allowed`) that a flight along `route` from

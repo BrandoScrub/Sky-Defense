@@ -290,6 +290,9 @@ func build_problem(type_id: String, hex: Vector2i) -> String:
 		return "You don't own %s yet" % tile.platform
 	if buildings.has(hex):
 		return "Something is already built there"
+	var style: String = BuildingCatalog.get_data(type_id).get("island_style", "")
+	if style != "" and platforms.get(tile.platform, {}).get("style", "") != style:
+		return "%ss only fit on %s islands" % [BuildingCatalog.get_data(type_id).name, style]
 	var allowed: Array = BuildingCatalog.get_data(type_id).tiles
 	if not allowed.has(tile.type):
 		if type_id == "harvester":
@@ -381,8 +384,12 @@ func grid_efficiency() -> float:
 
 
 ## Electricity drawn by the player's buildings.
+## Extra power drawn by turbine islands under way (IslandSteering).
+var engine_draw := 0
+
+
 func power_demand() -> int:
-	var total := 0
+	var total := engine_draw
 	for b in buildings.values():
 		if b.power < 0 and owners.get(b.platform) == "player":
 			total -= b.power

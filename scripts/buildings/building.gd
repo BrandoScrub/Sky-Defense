@@ -139,6 +139,16 @@ func _build_shape() -> void:
 			var door := BoxMesh.new()
 			door.size = Vector3(1.0, 0.7, 0.05)
 			_add(door, Vector3(0, 0.4, 0.82), Color(0.15, 0.14, 0.13))
+		"engine":
+			# A brass turbine on a stand, propeller facing out.
+			_add(_cylinder(0.55, 0.75, 0.5, 8), Vector3(0, 0.25, 0), Color(0.3, 0.28, 0.26))
+			var housing := _add(_cylinder(0.55, 0.7, 1.5, 12), Vector3(0, 1.1, 0), color)
+			housing.rotation.x = PI / 2.0
+			for k in 3:
+				var blade := BoxMesh.new()
+				blade.size = Vector3(0.18, 1.6, 0.06)
+				var part := _add(blade, Vector3(0, 1.1, 0.85), Color(0.2, 0.19, 0.18))
+				part.rotation.z = k * TAU / 3.0
 		"coil":
 			_add(_cylinder(0.35, 0.6, 2.4, 8), Vector3(0, 1.2, 0), Color(0.55, 0.4, 0.25))
 			var top := TorusMesh.new()
