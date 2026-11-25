@@ -15,7 +15,7 @@ func _initialize() -> void:
 		quit(1))
 	_check_input_map()
 	_check_hex_math()
-	# A fixed map so results repeat (seed 3: Ironbell southeast, Vesper northeast).
+	# A fixed map so results repeat (seed 3: Ironbell northwest, Vesper east).
 	SkyRegion.seed_override = 3
 	_check_layout_rules()
 	await _check_open_map()
@@ -44,6 +44,7 @@ func _initialize() -> void:
 	await _check_hero_respawn(main)
 	await _check_unit_roster(main)
 	await _check_defense_roles(main)
+	_check_air_routes(main)
 	await _check_combat_and_waves(main)
 	if _failures == 0:
 		print("Smoke test passed")
@@ -261,7 +262,12 @@ func _check_drifting_islands(main: Node) -> void:
 	var warned := []
 	drift.warning_started.connect(func(_n, _p, _s, count): warned.append(count), CONNECT_ONE_SHOT)
 
+	# Balloons ignore the old timer: they only cast off when the wind turns.
+	_expect(drift.wind == main.wind, "balloons follow the wind")
 	b.timer = 0.01
+	drift.step(0.05)
+	_expect(b.state == DriftSystem.MOORED and warned.is_empty(), "a balloon stays moored until the wind turns")
+	main.wind.wind_changed.emit(main.wind.from_index, false)
 	drift.step(0.05)
 	_expect(b.state == DriftSystem.WARNING, "a balloon should warn before casting off")
 	_expect(warned == [1], "the warning should count 1 of your units on the walkway, got %s" % [warned])
@@ -487,7 +493,7 @@ func _check_info_panel(main: Node) -> void:
 		if region.get_tile(hex).type != "deck" or region.buildings.has(hex):
 			continue
 		var clear := true
-		for u in main.selection.all_units():
+		for u in main.get_tree().get_nodes_in_group(Unit.GROUP):
 			if u.global_position.distance_to(region.hex_center(hex)) < 4.0:
 				clear = false
 		if clear:
@@ -495,7 +501,14 @@ func _check_info_panel(main: Node) -> void:
 			break
 	main.resources.add_scrap(40)
 	_expect(main.building.try_place("dynamo", deck) == "", "info card test needs a Dynamo on the Hub")
+	# The headless window is tiny, so far-off units can still be within the
+	# click radius on screen: hide them for this click.
+	var squad: Array = main.get_tree().get_nodes_in_group(Unit.GROUP)
+	for u in squad:
+		u.visible = false
 	picked = info.pick(cam.unproject_position(region.hex_center(deck)))
+	for u in squad:
+		u.visible = true
 	_expect(picked is Building and picked.type_id == "dynamo", "clicking a Dynamo should describe it, got %s" % str(picked))
 	info.show_thing(picked)
 	_expect(info.visible and info._title.text == "Dynamo Generator", "the info card should show the Dynamo")
@@ -1278,6 +1291,78 @@ func _check_combat_and_waves(main: Node) -> void:
 ## The map rules hold for many seeds: rival headquarters in two different
 ## compass directions at least 90 degrees apart, 4 to 9 platforms between
 ## the Hub and each, and every platform reachable on foot or by ferry.
+## Airships steer around islands, and the wind turns their attack routes.
+func _check_air_routes(main: Node) -> void:
+	var region: SkyRegion = main.region
+	var fleet: VesperFleet = main.fleet
+	var wind: WindSystem = main.wind
+	var nav := fleet.nav
+	_expect(nav != null and wind != null and fleet.wind == wind, "the fleet plans with the wind")
+	var from := region.get_platform_position(fleet.home)
+	var hub := region.get_platform_position("Hub")
+	# Does the straight line from the Aerodrome to the Hub cross an island?
+	var straight_blocked := false
+	for i in 200:
+		var p := region.platform_at(from.lerp(hub, i / 200.0))
+		if p != "" and p != fleet.home and p != "Hub":
+			straight_blocked = true
+	var route := nav.plan(from, hub)
+	_expect(not route.is_empty() and route[route.size() - 1].distance_to(Vector3(hub.x, 0, hub.z)) < 0.01, "an airship route ends at its target")
+	_expect(_route_over_islands(region, from, route, [fleet.home, "Hub"]) == "", "airship route crosses %s" % _route_over_islands(region, from, route, [fleet.home, "Hub"]))
+	if straight_blocked:
+		_expect(route.size() > 1, "with islands in the way, the airship should bend around them")
+	# Lanes are drawn along planned routes, and avoid islands too.
+	var drawn := region.air_lane_routes()
+	_expect(drawn.size() == fleet.lanes().size() and drawn.size() > 0, "every Vesper lane is drawn")
+	for lane in drawn:
+		var pts: PackedVector3Array = lane[2]
+		_expect(_route_over_islands(region, pts[0], pts.slice(1), [lane[0], lane[1]]) == "", "drawn lane %s to %s avoids islands" % [lane[0], lane[1]])
+		var node := region.get_node_or_null(("AirLane_%s_%s" % [lane[0], lane[1]]).replace(" ", ""))
+		_expect(node != null and node.get_child_count() > 0, "lane %s to %s has markers" % [lane[0], lane[1]])
+	# Attacks come in from upwind: the last leg runs with the wind.
+	var old_wind := wind.from_index
+	var old_routes := {}
+	for lane in fleet.lanes():
+		old_routes[lane[1]] = fleet.route_for(lane)
+	var stage = nav.staging_point(from, hub)
+	_expect(stage != null, "with wind, the flight gathers upwind of its target")
+	if stage != null:
+		var run: Vector3 = (Vector3(hub.x, 0, hub.z) - stage).normalized()
+		_expect(run.dot(wind.blowing()) > 0.6, "the bombing run goes downwind")
+	# Every 3 waves the wind turns at least 90 degrees and the lanes move.
+	_expect(wind.waves_until_shift(1) == 3 and wind.waves_until_shift(3) == 1, "wind turns every 3 waves")
+	wind._on_phase_changed(WaveManager.BUILD, 3)
+	_expect(wind.from_index == old_wind, "wind holds before wave 4")
+	wind._on_phase_changed(WaveManager.BUILD, 4)
+	_expect(LevelLayout.compass_gap(wind.from_index, old_wind) >= 2, "wind turns at least 90 degrees before wave 4")
+	_expect(wind.since_wave == 4 and wind.waves_until_shift(4) == 3, "next turn is 3 waves later")
+	var nb := wind.blowing()
+	_expect(nav.wind.distance_to(Vector2(nb.x, nb.z)) < 0.01, "the fleet hears the new wind")
+	var moved := 0
+	for lane in fleet.lanes():
+		if fleet.route_for(lane) != old_routes[lane[1]]:
+			moved += 1
+	_expect(moved > 0, "turning the wind changes the attack routes")
+	# Put things back for the wave tests.
+	wind.since_wave = 1
+	wind.from_index = old_wind
+	wind.wind_changed.emit(old_wind, true)
+
+
+## First platform (other than `allowed`) that a flight along `route` from
+## `from` passes over, or "".
+func _route_over_islands(region: SkyRegion, from: Vector3, route: PackedVector3Array, allowed: Array) -> String:
+	var prev := from
+	for point in route:
+		var steps := int(ceil(prev.distance_to(point) / 0.4))
+		for s in range(steps + 1):
+			var p := region.platform_at(prev.lerp(point, float(s) / maxi(steps, 1)))
+			if p != "" and not allowed.has(p):
+				return p
+		prev = point
+	return ""
+
+
 func _check_layout_rules() -> void:
 	for map_seed in 40:
 		var l := LevelLayout.generate(map_seed)
@@ -1304,6 +1389,18 @@ func _check_layout_rules() -> void:
 					linked[w[1]] = true
 					grew = true
 		_expect(linked.size() == l.platforms.size(), "seed %d: every platform should be reachable" % map_seed)
+		# Island outlines: inside their radius, holding their fixed features,
+		# and an island type for each.
+		for p in l.platforms:
+			_expect(p.style in ["city", "turbine", "crystal", "rock"], "seed %d: %s has no island type" % [map_seed, p.name])
+			_expect(p.shape.has(Vector2i.ZERO), "seed %d: %s's outline should include its centre" % [map_seed, p.name])
+			for off in p.shape:
+				_expect(HexGrid.distance(Vector2i.ZERO, off) <= p.radius, "seed %d: %s's outline leaves its radius" % [map_seed, p.name])
+			for f in p.features:
+				if f[1] is Vector2i:
+					_expect(p.shape.has(f[1]), "seed %d: %s's %s is off the island" % [map_seed, p.name, f[0]])
+			if p.style == "crystal":
+				_expect(p.get("variant", "") in ["grassy", "overcharged"], "seed %d: crystal island %s needs a variant" % [map_seed, p.name])
 		# HQ really is in its compass direction.
 		for p in l.platforms:
 			if p.has("corp"):
