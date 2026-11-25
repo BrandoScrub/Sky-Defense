@@ -275,10 +275,13 @@ func _walkway_hexes(b: Dictionary) -> Array[Vector2i]:
 
 func _corridor(center: Vector2i, platform: Dictionary) -> Array[Vector2i]:
 	var from := _rim(center, RADIUS, platform.center)
-	var to := _rim(platform.center, platform.radius, center)
+	var to := region._rim_toward(platform, center, true)
+	var own := {}
+	for hex in region.shape_of(platform):
+		own[hex] = true
 	var out: Array[Vector2i] = []
 	for hex in HexGrid.line(from, to):
-		if HexGrid.distance(hex, center) > RADIUS and HexGrid.distance(hex, platform.center) > platform.radius:
+		if HexGrid.distance(hex, center) > RADIUS and not own.has(hex):
 			out.append(hex)
 	return out
 

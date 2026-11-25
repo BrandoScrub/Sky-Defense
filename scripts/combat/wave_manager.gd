@@ -41,13 +41,15 @@ var wave := 1
 var time_left := 0.0
 var won := false
 var _wave_units: Array[Unit] = []
+## corp -> the units it sent in the current wave.
+var _wave_units_by_corp := {}
 
 
 func _ready() -> void:
 	time_left = first_build_seconds
 	combat.headquarters_destroyed.connect(_on_headquarters_destroyed)
 	if fleet:
-		fleet.troops_dropped.connect(func(_c, _p, units): add_wave_units(units))
+		fleet.troops_dropped.connect(func(c, _p, units): add_wave_units(units, c))
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -144,26 +146,36 @@ func start_wave() -> void:
 		return
 	phase = WAVE
 	_wave_units = []
+	_wave_units_by_corp = {}
 	var ground := 0
 	for entry in composition_for(wave):
+		var sent: Array[Unit] = []
 		if not entry.air:
 			ground += entry.count
 		elif entry.unit == "bomber":
-			_wave_units.append_array(fleet.send_flight(entry.count))
+			sent = fleet.send_flight(entry.count)
 		else:
-			_wave_units.append_array(fleet.launch(entry.unit, entry.count))
+			sent = fleet.launch(entry.unit, entry.count)
+		_track(entry.corp, sent)
 	if ground > 0:
-		_wave_units.append_array(raids.send_party(ground))
+		_track(raids.corp, raids.send_party(ground))
 	for u in _wave_units:
 		_toughen(u)
 	phase_changed.emit(phase, wave)
 
 
 ## Troops dropped by a carrier join the wave (and must be beaten to end it).
-func add_wave_units(units: Array) -> void:
+func add_wave_units(units: Array, corp := "Ironbell") -> void:
 	for u in units:
 		_toughen(u)
-		_wave_units.append(u)
+	_track(corp, units)
+
+
+func _track(corp: String, units: Array) -> void:
+	_wave_units.append_array(units)
+	if not _wave_units_by_corp.has(corp):
+		_wave_units_by_corp[corp] = []
+	_wave_units_by_corp[corp].append_array(units)
 
 
 func _toughen(u: Unit) -> void:
@@ -173,11 +185,56 @@ func _toughen(u: Unit) -> void:
 
 ## Walkers from the current wave still alive.
 func remaining() -> int:
+	return _alive(_wave_units)
+
+
+## Attackers a rival sent in the current wave that are still alive.
+func remaining_for(corp: String) -> int:
+	return _alive(_wave_units_by_corp.get(corp, []))
+
+
+func _alive(units: Array) -> int:
 	var n := 0
-	for u in _wave_units:
+	for u in units:
 		if is_instance_valid(u) and u.hp > 0.0:
 			n += 1
 	return n
+
+
+## What each rival sends in wave `n` (default: the next or current wave).
+## The HUD reads this, so keep it in step with start_wave(). One entry per
+## rival: {corp, hq, defeated, units: [[unit name, count], ...]}.
+func wave_plan(n := -1) -> Array:
+	if n < 0:
+		n = wave
+	var counts := {raids.corp: {}}
+	var hqs := {raids.corp: raids.rival_platform}
+	if fleet:
+		counts["Vesper"] = {}
+		hqs["Vesper"] = fleet.home
+	for entry in composition_for(n):
+		var unit_name: String = entry.name
+		if entry.has("carries"):
+			unit_name += " (drops %d troops each)" % entry.carries.size()
+		counts[entry.corp][unit_name] = counts[entry.corp].get(unit_name, 0) + entry.count
+	var plan := []
+	for corp in counts:
+		plan.append(_plan_entry(corp, hqs[corp], counts[corp]))
+	return plan
+
+
+func _plan_entry(corp: String, hq: String, counts: Dictionary) -> Dictionary:
+	var units := []
+	for unit_name in counts:
+		units.append([unit_name, counts[unit_name]])
+	return {"corp": corp, "hq": hq, "defeated": combat.headquarters_on(hq) == null, "units": units}
+
+
+## How much tougher than normal this wave's attackers are, e.g. 0.16 = +16%.
+func health_bonus(n := -1) -> float:
+	if n < 0:
+		n = wave
+	return (1.0 + hp_growth_per_wave * (n - 1)) * (1.0 + hp_bonus) - 1.0
 
 
 func _on_headquarters_destroyed(faction: String, platform: String) -> void:

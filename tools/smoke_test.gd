@@ -15,7 +15,7 @@ func _initialize() -> void:
 		quit(1))
 	_check_input_map()
 	_check_hex_math()
-	# A fixed map so results repeat (seed 3: Ironbell southeast, Vesper northeast).
+	# A fixed map so results repeat (seed 3: Ironbell northwest, Vesper east).
 	SkyRegion.seed_override = 3
 	_check_layout_rules()
 	await _check_open_map()
@@ -36,6 +36,7 @@ func _initialize() -> void:
 	_check_building(main)
 	_check_build_menu(main)
 	_check_info_panel(main)
+	_check_top_bar(main)
 	_check_ferry(main)
 	await _check_claiming_walkways_and_raids(main)
 	_check_weight_power_income(main)
@@ -44,6 +45,7 @@ func _initialize() -> void:
 	await _check_unit_roster(main)
 	await _check_defense_roles(main)
 	_check_air_routes(main)
+	await _check_rival_airships(main)
 	await _check_combat_and_waves(main)
 	if _failures == 0:
 		print("Smoke test passed")
@@ -492,7 +494,7 @@ func _check_info_panel(main: Node) -> void:
 		if region.get_tile(hex).type != "deck" or region.buildings.has(hex):
 			continue
 		var clear := true
-		for u in main.selection.all_units():
+		for u in main.get_tree().get_nodes_in_group(Unit.GROUP):
 			if u.global_position.distance_to(region.hex_center(hex)) < 4.0:
 				clear = false
 		if clear:
@@ -500,7 +502,14 @@ func _check_info_panel(main: Node) -> void:
 			break
 	main.resources.add_scrap(40)
 	_expect(main.building.try_place("dynamo", deck) == "", "info card test needs a Dynamo on the Hub")
+	# The headless window is tiny, so far-off units can still be within the
+	# click radius on screen: hide them for this click.
+	var squad: Array = main.get_tree().get_nodes_in_group(Unit.GROUP)
+	for u in squad:
+		u.visible = false
 	picked = info.pick(cam.unproject_position(region.hex_center(deck)))
+	for u in squad:
+		u.visible = true
 	_expect(picked is Building and picked.type_id == "dynamo", "clicking a Dynamo should describe it, got %s" % str(picked))
 	info.show_thing(picked)
 	_expect(info.visible and info._title.text == "Dynamo Generator", "the info card should show the Dynamo")
@@ -509,6 +518,32 @@ func _check_info_panel(main: Node) -> void:
 	main.building.demolish(deck)
 	# Put scrap back where it was for the checks that follow.
 	main.resources.scrap -= BuildingCatalog.refund_for("dynamo")
+
+
+func _check_top_bar(main: Node) -> void:
+	var bar: TopBar = main.top_bar
+	var waves: WaveManager = main.waves
+	_expect(bar != null, "the HUD should have a top bar")
+	if bar == null:
+		return
+	bar.refresh()
+	_expect(bar._scrap.text == "Scrap %d" % main.resources.scrap, "the top bar should show scrap")
+	var plan := waves.wave_plan()
+	_expect(plan.size() >= 2, "the wave plan should list every rival")
+	for entry in plan:
+		_expect(bar._cards.has(entry.corp), "the top bar should have a card for %s" % entry.corp)
+	# Wave 1: Ironbell sends walkers, Vesper sits it out until wave 2.
+	var ironbell: Dictionary = plan[0]
+	var total := 0
+	for u in ironbell.units:
+		total += u[1]
+	_expect(total == waves.party_size_for(waves.wave), "Ironbell's plan should match its party size")
+	_expect(bar.wave_tooltip(ironbell).contains("Ironbell Walker"), "hovering Ironbell should list its walkers")
+	if waves.phase == WaveManager.BUILD:
+		_expect(bar.status_text(ironbell).begins_with("Wave %d in" % waves.wave), "Ironbell's card should count down: " + bar.status_text(ironbell))
+	var vesper: Array = waves.wave_plan(3).filter(func(e): return e.corp == "Vesper")
+	_expect(not vesper.is_empty() and vesper[0].units[0][0] == "Vesper Bomber", "Vesper's wave 3 should send bombers")
+	_expect(TopBar.clock(83.2) == "1:24", "clock should format as m:ss")
 
 
 func _key(keycode: Key, shift := false) -> InputEventKey:
@@ -1315,6 +1350,59 @@ func _check_air_routes(main: Node) -> void:
 	wind.wind_changed.emit(old_wind, true)
 
 
+## Rivals launch airships in waves: Ironbell carriers drop troops on your
+## platforms, Vesper gunships hunt your units, and the wind sets their speed.
+func _check_rival_airships(main: Node) -> void:
+	var region: SkyRegion = main.region
+	var fleet: VesperFleet = main.fleet
+	var waves: WaveManager = main.waves
+	var combat: CombatSystem = main.combat
+	fleet.set_process(false)
+	# Wave data the top bar reads.
+	_expect(waves.carriers_for(2) == 0 and waves.carriers_for(3) == 1 and waves.carriers_for(99) == waves.max_carriers, "carriers start in wave 3 and grow")
+	_expect(waves.gunships_for(3) == 0 and waves.gunships_for(4) == 1, "gunships start in wave 4")
+	var kinds := waves.composition_for(4).map(func(e): return e.unit)
+	_expect(kinds.has("carrier") and kinds.has("gunship") and kinds.has("bomber") and kinds.has("walker"), "wave 4 sends walkers, carriers, bombers and gunships: %s" % [kinds])
+	var plan_text := str(waves.wave_plan(4))
+	_expect(plan_text.contains("Troop Carrier") and plan_text.contains("Gunship"), "the wave preview lists the airships")
+	# A carrier flies around islands to your platform and drops its squad.
+	var carrier: Unit = fleet.launch("carrier", 1)[0]
+	var target: String = carrier.get_meta("carrier_target")
+	_expect(region.platform_owner(target) == "player", "carriers aim for one of your platforms")
+	_expect(carrier.flying and carrier.is_moving() and not carrier.attack_move, "a carrier flies without stopping to fight")
+	var dropped := []
+	fleet.troops_dropped.connect(func(_c, p, units): dropped.append([p, units]), CONNECT_ONE_SHOT)
+	carrier.stop()
+	carrier.position = region.get_platform_position(target) + Vector3.UP * VesperFleet.ALTITUDE
+	fleet.step(0.1)
+	_expect(carrier.get_meta("carrier_state") == "unloading", "over its target, the carrier hovers to unload")
+	fleet.step(VesperFleet.UNLOAD_SECONDS)
+	_expect(dropped.size() == 1 and dropped[0][1].size() == VesperFleet.AIRSHIPS.carrier.troops.size(), "the carrier drops its squad")
+	if dropped.size() == 1:
+		for u in dropped[0][1]:
+			_expect(region.platform_at(u.position) == target and not u.flying, "dropped troops land on %s" % target)
+			u.free()
+	_expect(carrier.get_meta("carrier_state") == "outbound" and carrier.is_moving(), "an empty carrier flies home")
+	carrier.free()
+	# A gunship hunts a unit of yours and can hit aircraft.
+	var gun: Unit = fleet.launch("gunship", 1)[0]
+	_expect(gun.targets_units and gun.hits_air, "gunships fight units and aircraft")
+	var prey: Unit = main.selection.all_units()[0]
+	gun.stop()
+	gun.position = prey.global_position + Vector3(12, VesperFleet.ALTITUDE, 0)
+	fleet.step(0.1)
+	_expect(gun.is_moving() and gun.next_waypoint().distance_to(Vector3(prey.global_position.x, 0, prey.global_position.z)) < 1.0, "an idle gunship goes after your nearest unit")
+	# Airships ride the wind.
+	var blow: Vector3 = main.wind.blowing()
+	gun.set_route(PackedVector3Array([gun.position + blow * 10.0]))
+	_expect(fleet.wind_speed_for(gun) > 1.2, "a tailwind speeds an airship up")
+	gun.set_route(PackedVector3Array([gun.position - blow * 10.0]))
+	_expect(fleet.wind_speed_for(gun) < 0.8, "a headwind slows it down")
+	gun.free()
+	fleet.set_process(true)
+	await process_frame
+
+
 ## First platform (other than `allowed`) that a flight along `route` from
 ## `from` passes over, or "".
 func _route_over_islands(region: SkyRegion, from: Vector3, route: PackedVector3Array, allowed: Array) -> String:
@@ -1355,6 +1443,18 @@ func _check_layout_rules() -> void:
 					linked[w[1]] = true
 					grew = true
 		_expect(linked.size() == l.platforms.size(), "seed %d: every platform should be reachable" % map_seed)
+		# Island outlines: inside their radius, holding their fixed features,
+		# and an island type for each.
+		for p in l.platforms:
+			_expect(p.style in ["city", "turbine", "crystal", "rock"], "seed %d: %s has no island type" % [map_seed, p.name])
+			_expect(p.shape.has(Vector2i.ZERO), "seed %d: %s's outline should include its centre" % [map_seed, p.name])
+			for off in p.shape:
+				_expect(HexGrid.distance(Vector2i.ZERO, off) <= p.radius, "seed %d: %s's outline leaves its radius" % [map_seed, p.name])
+			for f in p.features:
+				if f[1] is Vector2i:
+					_expect(p.shape.has(f[1]), "seed %d: %s's %s is off the island" % [map_seed, p.name, f[0]])
+			if p.style == "crystal":
+				_expect(p.get("variant", "") in ["grassy", "overcharged"], "seed %d: crystal island %s needs a variant" % [map_seed, p.name])
 		# HQ really is in its compass direction.
 		for p in l.platforms:
 			if p.has("corp"):

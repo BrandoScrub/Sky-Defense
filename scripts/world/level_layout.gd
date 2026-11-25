@@ -13,7 +13,14 @@
 ##   harvester anchors on the platforms around it.
 ##
 ## The result is a Dictionary with these keys, which SkyRegion reads:
-##   platforms: [{name, kind, corp?, center, radius, capacity, features}]
+##   platforms: [{name, kind, corp?, center, radius, capacity, features,
+##     style, shape}]
+##     `style` is the island type, which sets its outline: "city" (the Hub and
+##     rival HQs: full hexagons), "turbine" (a hub with pinwheel blades),
+##     "crystal" (a long jagged shard) or "rock" (a lumpy natural blob).
+##     Crystal islands also have a `variant`: "grassy" or "overcharged".
+##     `shape` is the island's hexes as offsets from `center`, all within
+##     `radius` steps, so `radius` is still the island's outer bound.
 ##     `kind` is "hub", "neutral" or "rival". Features are [type, where]:
 ##     `where` is an offset from the centre (Vector2i), or the name of a
 ##     platform or cloud to put it on the rim facing that thing.
@@ -34,6 +41,8 @@ const MIN_BETWEEN := 4
 const MAX_BETWEEN := 9
 ## Empty sky tiles kept between neighbouring platforms (at least).
 const MIN_GAP := 2
+## Longest planned walkway, in tiles (what the player can build in one go).
+const MAX_SPAN := 8
 
 ## The rivals in the current prototype. Each: corp, HQ name and the name of
 ## the first platform out from the Hub on its chain. Later factions add
@@ -150,6 +159,9 @@ static func _attempt(rng: RandomNumberGenerator, rivals: Array) -> Dictionary:
 		first = false
 	if not b.walkways_clear():
 		return {}
+	b.give_shapes()
+	if not b.spans_short():
+		return {}
 
 	for rival in rivals:
 		if rival.corp == "Vesper":
@@ -227,9 +239,10 @@ class _Builder:
 		var path := ["Hub"]
 		for i in between + 1:
 			var is_hq := i == between
-			var radius := 3 if is_hq else rng.randi_range(1, 2)
-			along += spacing(prev.radius, radius, rng.randi_range(LevelLayout.MIN_GAP + 1, LevelLayout.MIN_GAP + 3))
-			var lateral := 0.0 if is_hq else rng.randf_range(-0.3, 0.3) * along / (i + 1)
+			var radius := 3 if is_hq else (3 if rng.randf() < 0.1 else rng.randi_range(1, 2))
+			# Uneven gaps and a wandering line, so islands don't sit in a row.
+			along += spacing(prev.radius, radius, rng.randi_range(LevelLayout.MIN_GAP, LevelLayout.MIN_GAP + 4))
+			var lateral := 0.0 if is_hq else rng.randf_range(-0.45, 0.45) * along / (i + 1)
 			var pos := dir * along + perp * lateral
 			var platform_name: String = hq.name if is_hq else (first_name if i == 0 else next_name())
 			var features: Array = []
@@ -242,6 +255,8 @@ class _Builder:
 					features.append(["scrap_heap", Vector2i(0, 0)])
 				elif roll < 0.55:
 					features.append(["generator_socket", Vector2i(0, 0)])
+				elif roll < 0.67:
+					features.append(["crystal_seam", Vector2i(0, 0)])
 			if not add(platform_name, "rival" if is_hq else "neutral", pos, radius, features, hq.corp if is_hq else ""):
 				return false
 			walkways.append([prev.name, platform_name])
@@ -252,7 +267,7 @@ class _Builder:
 
 	## A platform hanging off another one, joined by a walkway.
 	func spur(platform_name: String, stem: String, dir: Vector3, radius: int, features: Array) -> bool:
-		if not place_near(platform_name, stem, dir, radius, rng.randi_range(LevelLayout.MIN_GAP + 1, LevelLayout.MIN_GAP + 3), features):
+		if not place_near(platform_name, stem, dir, radius, rng.randi_range(LevelLayout.MIN_GAP, LevelLayout.MIN_GAP + 4), features):
 			return false
 		walkways.append([stem, platform_name])
 		return true
@@ -289,6 +304,136 @@ class _Builder:
 	func _compass_index(world: Vector3) -> int:
 		var angle := atan2(-world.z, world.x)
 		return posmod(roundi(angle / (PI / 4.0)), 8)
+
+	## Gives every platform its island type and outline.
+	func give_shapes() -> void:
+		for p in platforms:
+			p.style = style_for(p)
+			if p.style == "crystal":
+				# Grassy: ground the crystals lifted into the sky. Overcharged:
+				# crackling with stored storm power.
+				p.variant = "grassy" if rng.randf() < 0.5 else "overcharged"
+			var shape: Dictionary = {}
+			match p.style:
+				"turbine":
+					shape = turbine_shape(p.radius)
+				"crystal":
+					shape = crystal_shape(p.radius)
+				"rock":
+					shape = rock_shape(p.radius)
+				_:
+					for h in HexGrid.disk(Vector2i.ZERO, p.radius):
+						shape[h] = true
+			# Fixed features always sit on the island, joined to its middle.
+			for f in p.features:
+				if f[1] is Vector2i:
+					for h in HexGrid.line(Vector2i.ZERO, f[1]):
+						shape[h] = true
+			var offsets: Array[Vector2i] = []
+			offsets.assign(shape.keys())
+			p.shape = offsets
+			if p.style != "city":
+				# Weight capacity follows the island's real size.
+				p.capacity = maxi(5, roundi(offsets.size() * 1.4 / 5.0) * 5)
+
+	func style_for(p: Dictionary) -> String:
+		if p.kind != "neutral":
+			return "city"
+		for f in p.features:
+			if f[0] == "crystal_seam":
+				return "crystal"
+		for f in p.features:
+			if f[0] == "generator_socket":
+				return "turbine"
+		return "rock"
+
+	## A round hub with three blades bent the same way, like a turbine.
+	func turbine_shape(radius: int) -> Dictionary:
+		var shape := {}
+		for h in HexGrid.disk(Vector2i.ZERO, maxi(radius - 1, 1) if radius > 1 else radius):
+			shape[h] = true
+		if radius < 2:
+			return shape
+		var first := rng.randi_range(0, 1)
+		for k in 3:
+			var d: int = first + k * 2
+			var tip: Vector2i = HexGrid.DIRECTIONS[d] * radius
+			shape[tip] = true
+			# Bend each blade toward the next direction round.
+			shape[tip + HexGrid.DIRECTIONS[(d + 2) % 6]] = true
+		return shape
+
+	## A long jagged shard along one axis, with spikes off its sides.
+	func crystal_shape(radius: int) -> Dictionary:
+		var shape := {Vector2i.ZERO: true}
+		var axis: Vector2i = HexGrid.DIRECTIONS[rng.randi_range(0, 2)]
+		for i in range(-radius, radius + 1):
+			var h: Vector2i = axis * i
+			shape[h] = true
+			if absi(i) < radius and rng.randf() < 0.55:
+				var side: Vector2i = HexGrid.DIRECTIONS[rng.randi_range(0, 5)]
+				if HexGrid.distance(Vector2i.ZERO, h + side) <= radius:
+					shape[h + side] = true
+		return shape
+
+	## A lumpy natural rock: grows outward from the middle at random until it
+	## covers most of its bounds.
+	func rock_shape(radius: int) -> Dictionary:
+		var shape := {Vector2i.ZERO: true}
+		var target := roundi(HexGrid.disk(Vector2i.ZERO, radius).size() * rng.randf_range(0.55, 0.8))
+		var guard := 0
+		while shape.size() < target and guard < 500:
+			guard += 1
+			var keys := shape.keys()
+			var from: Vector2i = keys[rng.randi_range(0, keys.size() - 1)]
+			var h: Vector2i = from + HexGrid.DIRECTIONS[rng.randi_range(0, 5)]
+			if HexGrid.distance(Vector2i.ZERO, h) <= radius:
+				shape[h] = true
+		return shape
+
+	## The island hex of `p` nearest a target hex.
+	func nearest_tile(p: Dictionary, target: Vector2i) -> Vector2i:
+		var best: Vector2i = p.center
+		var best_d := INF
+		var tw := world_of(target)
+		for off in p.shape:
+			var d := world_of(p.center + off).distance_to(tw)
+			if d < best_d:
+				best_d = d
+				best = p.center + off
+		return best
+
+	## True if every planned walkway is short enough to build. Where an
+	## outline leaves too wide a gap, both islands grow a spit of land toward
+	## each other first.
+	func spans_short() -> bool:
+		for w in walkways:
+			var a: Dictionary = _by_name[w[0]]
+			var b: Dictionary = _by_name[w[1]]
+			if span_gap(a, b) > LevelLayout.MAX_SPAN:
+				grow_toward(a, b)
+				grow_toward(b, a)
+			if span_gap(a, b) > LevelLayout.MAX_SPAN:
+				return false
+		return true
+
+	func span_gap(a: Dictionary, b: Dictionary) -> int:
+		return HexGrid.distance(nearest_tile(a, b.center), nearest_tile(b, a.center)) - 1
+
+	func grow_toward(p: Dictionary, other: Dictionary) -> void:
+		if p.style == "city":
+			return
+		var tip := Vector2i.ZERO
+		var best := INF
+		var tw := world_of(other.center)
+		for h in HexGrid.ring(Vector2i.ZERO, p.radius):
+			var d := world_of(p.center + h).distance_to(tw)
+			if d < best:
+				best = d
+				tip = h
+		for h in HexGrid.line(Vector2i.ZERO, tip):
+			if not p.shape.has(h):
+				p.shape.append(h)
 
 	## True if no walkway passes over a platform other than its two ends.
 	func walkways_clear() -> bool:

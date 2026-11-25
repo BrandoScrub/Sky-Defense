@@ -34,7 +34,7 @@ Some maps have one or two balloon platforms (the Zephyr Barge and the Gasbag Wha
 
 All art is placeholder geometry built in code: brass-trimmed decks with lamp posts, lift engines under each platform, a clock-tower headquarters, helmeted Riveteers, a top-hatted Commander, boxy Ironbell walkers and Vesper blimps. Below the city a stormy sea of cloud drifts past, with lightning flickering through it (`scripts/world/sky_backdrop.gd` and `shaders/cloud_sea.gdshader`).
 
-The map is generated each game from a seed (`scripts/world/level_layout.gd`). Your Hub is in the middle. Each rival headquarters sits in its own compass direction (one of the 8, at least 90 degrees apart), with a chain of 4 to 9 platforms between it and the Hub, plus a few side platforms. The Foundry, Generator Rig and ferry-only Crystal Spire sit near the Hub, and a storm cloud hangs beside the middle of each rival's chain. The generator already handles up to 4 rivals for future factions. Islands start unconnected: the walkways in the layout are only planned routes. You expand by building walkways (Economy tab) from platforms you own, so where you go first is your call. Ironbell's bridge crews build its planned chain one span at a time from its HQ toward your Hub (a span every 10 seconds, three times as fast while a wave is out, `scripts/rivals/rival_bridges.gd`), and its walkers wait at the end of the bridge until it reaches you. Ironbell's spans are tinted red-brown. Vesper doesn't bridge; its bombers fly. To replay one map, set `map_seed` on the Region node in `scenes/main.tscn`. To compare maps, run `tools/map_preview.gd` (instructions at the top of the file).
+The map is generated each game from a seed (`scripts/world/level_layout.gd`). Your Hub is in the middle. Each rival headquarters sits in its own compass direction (one of the 8, at least 90 degrees apart), with a chain of 4 to 9 platforms between it and the Hub, plus a few side platforms. The Foundry, Generator Rig and ferry-only Crystal Spire sit near the Hub, and a storm cloud hangs beside the middle of each rival's chain. The generator already handles up to 4 rivals for future factions. Islands have their own outlines by type, so no two look alike and they don't sit in neat rows: turbine islands (with generator sockets) are a round hub with three bent blades and lift engines underneath, crystal islands are long jagged shards, and everything else is a lumpy natural rock. Crystal islands come in two kinds: grassy green ones (ground the crystals lifted into the sky, trailing roots) and overcharged violet ones bristling with glowing shards (storm effects to come). The Hub and rival HQs stay full hexagons. An island's weight capacity follows its real size. Islands start unconnected: the walkways in the layout are only planned routes. You expand by building walkways (Economy tab) from platforms you own, so where you go first is your call. Ironbell's bridge crews build its planned chain one span at a time from its HQ toward your Hub (a span every 10 seconds, three times as fast while a wave is out, `scripts/rivals/rival_bridges.gd`), and its walkers wait at the end of the bridge until it reaches you. Ironbell's spans are tinted red-brown. Vesper doesn't bridge; its bombers fly. To replay one map, set `map_seed` on the Region node in `scenes/main.tscn`. To compare maps, run `tools/map_preview.gd` (instructions at the top of the file).
 
 ## Ground units
 
@@ -72,6 +72,7 @@ Melee hits, Arc Coil lightning and bombs from the air go around shields. Units c
 | Build a walkway | Economy tab, W, then click a tile on your platform, then a tile on another platform (15 scrap per tile) |
 | Train units | Army tab: Q Riveteer, W Shieldbearer, E Rifleman, R Sapper, A Lancer, S Medic |
 | Start the next wave early | Space |
+| Next waves | The top bar shows your resources and a card per rival with a countdown to its next wave; hover a card to see which units and how many it will send |
 | What is this? | Left click anything (unit, building, platform, tile, storm cloud, ferry route, air lane) for a card in the bottom right that says what it is and does |
 | Show or hide the legend | L, or click its title |
 | Pause | P |
@@ -87,7 +88,7 @@ Dark storm clouds hide every part of the sky you haven't scouted (`scripts/world
 | --- | --- |
 | `scenes/` | Godot scenes; `main.tscn` is the entry point |
 | `scripts/camera/` | The RTS camera |
-| `scripts/ui/` | HUD pieces: the bottom-left build menu and the bottom-right info card |
+| `scripts/ui/` | HUD pieces: the top bar, the bottom-left build menu and the bottom-right info card |
 | `scripts/world/` | Hex grid math, level layout data, the sky region builder with routing, claiming, platform load, the airship ferry, storm control and the fog of war |
 | `scripts/units/` | Player units, the hero and recruiting |
 | `scripts/selection/` | Selection, orders and control groups |
