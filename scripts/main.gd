@@ -16,6 +16,8 @@ before they destroy your Hub. Ironbell walks; Vesper flies bombers.
 2. Each wave of Ironbell walkers comes down the walkway. Kills pay scrap.
    From wave 2 Vesper bombers fly in along the red air lanes and bomb your
    buildings: Flak Batteries (Defense, W) shred them, Rivet Turrets only scratch them.
+   Airships steer around islands and attack from upwind. The wind (top of
+   the screen) turns every 3 waves, and the air lanes move with it.
 3. Send units to a neutral platform to claim it (the Foundry gives scrap).
 4. Put Cloud Harvesters (Storm, Q) on storm anchors. Hold more harvesters on a storm
    than Ironbell to get its power; if Ironbell holds it, lightning strikes.
@@ -46,6 +48,7 @@ var recruiter: Recruiter
 var fleet: VesperFleet
 var drift: DriftSystem
 var fog: FogSystem
+var wind: WindSystem
 var _phase_label: Label
 var _banner: Label
 var resources: PlayerResources
@@ -151,6 +154,15 @@ func _ready() -> void:
 	waves.combat = combat
 	add_child(waves)
 
+	# The wind bends Vesper's air routes and turns every few waves.
+	wind = WindSystem.new()
+	wind.name = "WindSystem"
+	wind.waves = waves
+	add_child(wind)
+	fleet.wind = wind
+	# Balloon islands cast off only when the wind turns.
+	drift.wind = wind
+
 	ferry = FerrySystem.new()
 	ferry.name = "FerrySystem"
 	ferry.region = region
@@ -199,6 +211,9 @@ func _ready() -> void:
 	ferry.departed.connect(_on_ferry_departed)
 	loads.building_lost.connect(func(b, p): show_notice("%s is overloaded: a %s broke off and fell!" % [p, b]))
 	economy.grid_changed.connect(func(_e): _refresh_resources())
+	wind.wind_changed.connect(func(_i, first):
+		if not first:
+			show_notice("The wind turned: it now blows from the %s. Vesper's air lanes have moved" % wind.from_name()))
 	drift.warning_started.connect(_on_drift_warning)
 	drift.cast_off.connect(_on_drift_cast_off)
 	_refresh_resources()
@@ -384,7 +399,17 @@ func _build_hud() -> void:
 	info_panel.loads = loads
 	info_panel.defenses = defenses
 	info_panel.fog = fog
+	info_panel.wind = wind
 	layer.add_child(info_panel)
+
+	var vane := WindVane.new()
+	vane.wind = wind
+	vane.waves = waves
+	vane.camera = camera
+	vane.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	vane.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	vane.position.y = 78
+	layer.add_child(vane)
 
 	_notice = _hud_label("Notice", 18)
 	_notice.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
