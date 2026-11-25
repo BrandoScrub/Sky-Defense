@@ -23,6 +23,7 @@ func _initialize() -> void:
 	await process_frame
 	await process_frame
 	_check_scene(main)
+	_check_fog(main)
 	_check_camera(main.get_node("RtsCamera"))
 	_check_routing(main.get_node("Region"))
 	await _check_selection_and_orders(main)
@@ -35,6 +36,7 @@ func _initialize() -> void:
 	_check_storms(main)
 	await _check_hero_respawn(main)
 	await _check_unit_roster(main)
+	await _check_defense_roles(main)
 	await _check_combat_and_waves(main)
 	if _failures == 0:
 		print("Smoke test passed")
@@ -71,6 +73,47 @@ func _check_scene(main: Node) -> void:
 		_expect(types.has(t), "no %s tile in the layout" % t)
 	_expect(region.has_node("Tiles") and region.get_node("Tiles").get_child_count() == region.tiles.size(),
 		"every tile should have a placeholder mesh")
+
+
+func _check_fog(main: Node) -> void:
+	var region: SkyRegion = main.get_node("Region")
+	var fog: FogSystem = main.fog
+	_expect(fog != null, "the main scene should have a FogSystem")
+	if fog == null:
+		return
+	fog.update_visibility()
+	_expect(fog.is_platform_revealed("Hub"), "the Hub should start out of the fog")
+	for hq in ["Ironbell HQ", "Vesper Aerodrome"]:
+		_expect(not fog.is_platform_revealed(hq), "%s should start hidden in the fog" % hq)
+		_expect(fog.beacons.has(hq), "%s should glow through the fog" % hq)
+	_expect(fog.beacons.has("Crystal Spire"), "the Crystal Spire should glow through the fog")
+	var hq_tile: Node3D = region._tile_nodes[region.platforms["Ironbell HQ"].center]
+	_expect(not hq_tile.visible, "Ironbell HQ's deck should be hidden by the fog")
+	_expect(not region.get_node("HQ_IronbellHQ").visible, "Ironbell's HQ building should be hidden by the fog")
+
+	var scout: Unit = main.get_node("Units").get_child(0)
+	var home := scout.position
+	var enemy := Unit.new()
+	enemy.faction = "rival"
+	main.get_node("Units").add_child(enemy)
+	enemy.position = region.get_platform_position("Vesper Aerodrome")
+	fog.update_visibility()
+	_expect(not enemy.visible, "a rival unit out of sight should be hidden")
+
+	scout.position = region.get_platform_position("Ironbell HQ")
+	enemy.position = scout.position + Vector3(3, 0, 0)
+	fog.update_visibility()
+	_expect(fog.is_platform_revealed("Ironbell HQ"), "a unit next to Ironbell HQ should reveal it")
+	_expect(not fog.beacons.has("Ironbell HQ"), "a revealed island stops glowing through the fog")
+	_expect(hq_tile.visible, "Ironbell HQ's deck should show once scouted")
+	_expect(enemy.visible, "a rival unit next to your unit should be visible")
+
+	scout.position = home
+	fog.update_visibility()
+	_expect(hq_tile.visible, "scouted sky should stay clear")
+	_expect(not enemy.visible, "a rival unit should vanish once you lose sight of it")
+	main.get_node("Units").remove_child(enemy)
+	enemy.free()
 
 
 func _check_hex_math() -> void:
@@ -241,7 +284,8 @@ func _check_build_menu(main: Node) -> void:
 	_expect(menu.get_node("Box/Tabs").get_child_count() == 5, "the build menu should have 5 tabs")
 	for tab_name in BuildMenu.TABS:
 		menu.show_tab(tab_name)
-		_expect(menu._entry_buttons.size() == BuildMenu.TABS[tab_name].size(), "%s tab should show its buttons" % tab_name)
+		var filled: int = BuildMenu.TABS[tab_name].filter(func(e): return e != "").size()
+		_expect(menu._entry_buttons.size() == filled, "%s tab should show its buttons" % tab_name)
 	# Every building in the catalog is somewhere in the menu.
 	for type_id in BuildingCatalog.BUILDINGS:
 		_expect(BuildMenu.tab_of(type_id) != "", "%s is missing from the build menu" % type_id)
@@ -262,8 +306,14 @@ func _check_build_menu(main: Node) -> void:
 	# The command grid: keys follow the slots, and their meaning follows the tab.
 	_expect(menu._grid.get_child_count() == 16, "the command grid should have 16 slots")
 	menu.show_tab("Defense")
-	menu._unhandled_input(_key(KEY_W))
-	_expect(main.building.placing == "flak_battery", "W on the Defense tab should pick the Flak Battery")
+	menu._unhandled_input(_key(KEY_A))
+	_expect(main.building.placing == "flak_battery", "A on the Defense tab should pick the Flak Battery")
+	main.building.cancel_placing()
+	menu._unhandled_input(_key(KEY_Z))
+	_expect(main.building.placing == "drone_hangar", "Z on the Defense tab should pick the Drone Hangar")
+	main.building.cancel_placing()
+	menu._unhandled_input(_key(KEY_S))
+	_expect(main.building.placing == "skyhook_cannon", "S on the Defense tab should pick the Skyhook Gun")
 	main.building.cancel_placing()
 	menu.show_tab("Economy")
 	menu._unhandled_input(_key(KEY_Q))
@@ -756,6 +806,112 @@ func _check_unit_roster(main: Node) -> void:
 	combat.set_process(true)
 	main.raids.set_process(true)
 	await process_frame
+
+
+## Flak only shoots aircraft, ground defenses only shoot the ground and buff
+## nearby allies, and hangars launch drones that fight and get rebuilt.
+func _check_defense_roles(main: Node) -> void:
+	var region: SkyRegion = main.get_node("Region")
+	var combat: CombatSystem = main.combat
+	var defenses: DefenseSystem = main.defenses
+	var build: BuildController = main.building
+	var res: PlayerResources = main.resources
+	_expect(defenses != null, "main should have a DefenseSystem")
+	if defenses == null:
+		return
+	for n in [combat, defenses, main.waves, main.raids, main.fleet, main.loads, main.economy, main.capture]:
+		n.set_process(false)
+	for e in get_root().get_tree().get_nodes_in_group(Unit.ENEMY_GROUP):
+		e.free()
+	for b in region.buildings.values().duplicate():
+		build.demolish(b.hex)
+	var units: Array[Unit] = main.selection.all_units()
+	for u in units:
+		u.position = region.get_platform_position("Outpost")
+		u.stop()
+	await process_frame
+	for type_id in BuildingCatalog.BUILDINGS:
+		var data: Dictionary = BuildingCatalog.BUILDINGS[type_id]
+		if data.has("attack") or data.has("hangar"):
+			_expect(BuildingCatalog.ROLES.has(BuildingCatalog.role_of(type_id)), "%s needs a defense role" % type_id)
+		if BuildingCatalog.role_of(type_id) == "flak":
+			_expect(data.attack.get("air_only", false), "%s is flak, so it should be air-only" % type_id)
+		if BuildingCatalog.role_of(type_id) == "ground":
+			_expect(not data.get("attack", {}).has("air"), "%s is a ground defense, so it can't hit aircraft" % type_id)
+
+	var hub: Vector2i = region.platforms["Hub"].center
+	var scrap_start := res.scrap
+	res.add_scrap(1000)
+	# Flak ignores a walker right in front of it.
+	_expect(build.try_place("flak_battery", hub + Vector2i(2, -2)) == "", "place a Flak Battery")
+	var walker: Unit = main.raids.send_party(1)[0]
+	walker.position = region.hex_center(hub + Vector2i(3, -3))
+	walker.stop()
+	walker.damage = 0.0
+	for i in 40:
+		combat.step(0.05)
+	_expect(walker.hp == walker.max_hp, "flak shouldn't shoot walkers")
+	build.demolish(hub + Vector2i(2, -2))
+	walker.free()
+
+	# Ground support: a Rally Horn and a Mending Post buff a Riveteer.
+	var riveteer: Unit = units[1]
+	riveteer.position = region.hex_center(hub + Vector2i(0, 2))
+	_expect(build.try_place("rally_horn", hub + Vector2i(-1, 2)) == "", "place a Rally Horn")
+	_expect(build.try_place("mending_post", hub + Vector2i(1, 1)) == "", "place a Mending Post")
+	riveteer.hp = riveteer.max_hp * 0.5
+	defenses.step(1.0)
+	_expect(riveteer.damage_mult > 1.0 and riveteer.cooldown_mult < 1.0, "a Rally Horn should boost nearby units")
+	_expect(riveteer.armor > 0.0, "a Mending Post should give nearby units armor")
+	_expect(riveteer.hp > riveteer.max_hp * 0.5, "a Mending Post should heal nearby units")
+	var far: Unit = units[2]
+	_expect(far.damage_mult == 1.0 and far.armor == 0.0, "units far away get no bonus")
+	var before := riveteer.hp
+	riveteer.take_damage(10.0)
+	_expect(before - riveteer.hp < 10.0, "armor should block part of the damage")
+	riveteer.hp = riveteer.max_hp
+	build.demolish(hub + Vector2i(-1, 2))
+	build.demolish(hub + Vector2i(1, 1))
+	defenses.step(0.1)
+	_expect(riveteer.damage_mult == 1.0 and riveteer.armor == 0.0, "bonuses end when the building is gone")
+	riveteer.position = region.get_platform_position("Outpost")
+
+	# Hangar: launches drones, they shoot down a bomber, and die with the hangar.
+	var hangar_hex := hub + Vector2i(2, -2)
+	var hangar_err := build.try_place("drone_hangar", hangar_hex)
+	_expect(hangar_err == "", "place a Drone Hangar: " + hangar_err)
+	var hangar: Building = region.buildings[hangar_hex]
+	defenses.step(0.1)
+	_expect(defenses.drones_of(hangar).size() == 1, "a new hangar launches a drone right away")
+	for i in 400:
+		defenses.step(0.05)
+	var drones: Array = defenses.drones_of(hangar)
+	_expect(drones.size() == 3, "the hangar should fill up to 3 drones, got %d" % drones.size())
+	_expect(not main.selection.all_units().has(drones[0]), "drones aren't selectable squad units")
+	_expect(not drones[0].is_in_group(Unit.GROUP), "drones don't count as squad units (capture, load, army size)")
+	_expect(main.info_panel.describe(drones[0]).body != "", "the info card describes drones")
+	_expect(main.info_panel.describe(hangar).stats.contains("Drones up: 3 / 3"), "the hangar's card shows its drones")
+	var bomber: Unit = main.fleet.send_flight(1)[0]
+	bomber.stop()
+	bomber.position = hangar.global_position + Vector3(6, VesperFleet.ALTITUDE, 0)
+	bomber.damage = 0.0
+	for i in 600:
+		defenses.step(0.05)
+		combat.step(0.05)
+		for d in defenses.drones_of(hangar):
+			d._process(0.05)
+		if not is_instance_valid(bomber) or bomber.hp <= 0.0:
+			break
+	_expect(not is_instance_valid(bomber) or bomber.hp <= 0.0, "drones should shoot down a bomber near their hangar")
+	await process_frame
+	drones = defenses.drones_of(hangar)
+	build.demolish(hangar_hex)
+	defenses.step(0.05)
+	await process_frame
+	var alive := drones.filter(func(d): return is_instance_valid(d))
+	_expect(alive.is_empty(), "drones go down with their hangar")
+	_expect(get_root().get_tree().get_nodes_in_group(Unit.DRONE_GROUP).is_empty(), "no drones left over")
+	res.scrap = scrap_start
 
 
 func _check_combat_and_waves(main: Node) -> void:

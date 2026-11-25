@@ -29,6 +29,9 @@ const BUFF_STATS := {
 	"healing": "healing and repair done",
 	"regen": "hit points regained per second",
 }
+## Defensive drones from hangars (either faction). They fight like units but
+## can't be selected, claim platforms or weigh anything down.
+const DRONE_GROUP := "drones"
 
 @export var display_name := "Riveteer"
 ## UnitCatalog id: riveteer, shieldbearer, rifleman, sapper, lancer, medic, walker.
@@ -73,6 +76,17 @@ var speed_multiplier := 1.0
 @export var heal_power := 0.0
 ## Hit points per second repaired on one damaged friendly building (sappers).
 @export var repair_power := 0.0
+## Launched from a Drone Hangar; DefenseSystem flies it.
+@export var is_drone := false
+
+## Bonuses from nearby support buildings (see DefenseSystem). They work on
+## any unit type, so new units get them for free. Reset every frame.
+## Multiplies damage dealt.
+var damage_mult := 1.0
+## Multiplies time between shots (below 1 = faster).
+var cooldown_mult := 1.0
+## Fraction of incoming damage blocked, 0..0.9.
+var armor := 0.0
 
 var hp := 60.0
 var cooldown_left := 0.0
@@ -96,7 +110,10 @@ var _buffs := {}
 
 
 func _ready() -> void:
-	add_to_group(GROUP if faction == "player" else ENEMY_GROUP)
+	if is_drone:
+		add_to_group(DRONE_GROUP)
+	else:
+		add_to_group(GROUP if faction == "player" else ENEMY_GROUP)
 	hp = max_hp
 	_build_visuals()
 	_health_bar = HealthBar.new()
@@ -111,7 +128,7 @@ func is_alive() -> bool:
 func take_damage(amount: float) -> void:
 	if hp <= 0.0:
 		return
-	hp -= amount * buff_multiplier("armor")
+	hp -= amount * (1.0 - clampf(armor, 0.0, 0.9)) * buff_multiplier("armor")
 	_health_bar.set_ratio(hp / max_hp, faction != "player")
 	if hp <= 0.0:
 		hp = 0.0
@@ -135,9 +152,9 @@ func is_ranged() -> bool:
 	return attack_range > MELEE_RANGE
 
 
-## Damage per hit after buffs.
+## Damage per hit after buffs and support bonuses.
 func get_damage() -> float:
-	return damage * buff_multiplier("damage")
+	return damage * damage_mult * buff_multiplier("damage")
 
 
 ## Attack range after buffs.
@@ -145,9 +162,9 @@ func get_attack_range() -> float:
 	return attack_range * buff_multiplier("range")
 
 
-## Seconds between attacks after buffs.
+## Seconds between attacks after buffs and support bonuses.
 func get_attack_cooldown() -> float:
-	return attack_cooldown / maxf(buff_multiplier("attack_speed"), 0.05)
+	return attack_cooldown * cooldown_mult / maxf(buff_multiplier("attack_speed"), 0.05)
 
 
 # --- Buffs -------------------------------------------------------------------
@@ -214,6 +231,13 @@ static func buff_allies_near(tree_node: Node, center: Vector3, radius: float, fa
 			u.add_buff(id, mods, seconds)
 			count += 1
 	return count
+
+
+## Clears support bonuses back to normal.
+func reset_support() -> void:
+	damage_mult = 1.0
+	cooldown_mult = 1.0
+	armor = 0.0
 
 
 func is_moving() -> bool:

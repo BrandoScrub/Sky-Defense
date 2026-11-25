@@ -111,6 +111,34 @@ func _build_shape() -> void:
 				gun.size = Vector3(0.2, 1.2, 0.2)
 				var part := _add(gun, Vector3(x, 1.0, 0.1), color.darkened(0.3))
 				part.rotation.x = -0.5
+		"horn":
+			_add(_cylinder(0.5, 0.7, 0.5, 8), Vector3(0, 0.25, 0), Color(0.4, 0.32, 0.25))
+			_add(_cylinder(0.12, 0.12, 2.0, 6), Vector3(0, 1.4, 0), Color(0.35, 0.3, 0.28))
+			var bell := _add(_cylinder(0.6, 0.12, 1.0, 10), Vector3(0, 2.4, 0.35), color)
+			bell.rotation.x = PI / 2.0
+		"mender":
+			_add(_cylinder(0.75, 0.85, 0.9, 8), Vector3(0, 0.45, 0), Color(0.85, 0.85, 0.8))
+			for size in [Vector3(1.1, 0.3, 0.35), Vector3(0.35, 0.3, 1.1)]:
+				var cross := BoxMesh.new()
+				cross.size = size
+				_add(cross, Vector3(0, 1.05, 0), color)
+			_add(_cylinder(0.15, 0.15, 0.8, 6), Vector3(0.45, 1.3, -0.3), Color(0.5, 0.5, 0.5))
+		"skyhook":
+			_add(_cylinder(0.7, 0.85, 0.6, 8), Vector3(0, 0.3, 0), color)
+			var cannon := BoxMesh.new()
+			cannon.size = Vector3(0.35, 0.35, 2.2)
+			var gun := _add(cannon, Vector3(0, 1.3, 0.3), color.darkened(0.35))
+			gun.rotation.x = -0.9
+			_add(_cylinder(0.22, 0.22, 0.25, 8), Vector3(0, 2.05, 0.95), Color(0.75, 0.7, 0.6))
+		"hangar":
+			var shed := BoxMesh.new()
+			shed.size = Vector3(1.8, 1.0, 1.6)
+			_add(shed, Vector3(0, 0.5, 0), color)
+			var roof := _add(_cylinder(0.8, 0.8, 1.6, 12), Vector3(0, 1.0, 0), color.darkened(0.25))
+			roof.rotation.x = PI / 2.0
+			var door := BoxMesh.new()
+			door.size = Vector3(1.0, 0.7, 0.05)
+			_add(door, Vector3(0, 0.4, 0.82), Color(0.15, 0.14, 0.13))
 		"coil":
 			_add(_cylinder(0.35, 0.6, 2.4, 8), Vector3(0, 1.2, 0), Color(0.55, 0.4, 0.25))
 			var top := TorusMesh.new()

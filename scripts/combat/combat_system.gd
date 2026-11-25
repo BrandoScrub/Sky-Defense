@@ -4,7 +4,8 @@
 ## - Units shoot the nearest enemy in range. Idle or attack-moving units also
 ##   walk toward enemies within their aggro range. A plain move order ignores
 ##   enemies until the unit arrives (like the reference game's RTS controls).
-## - Towers shoot the nearest enemy in range. Their fire rate scales with grid
+## - Towers shoot the nearest enemy in range. Flak (air_only) sees only
+##   aircraft; ground defenses can't see aircraft at all. Their fire rate scales with grid
 ##   efficiency, and they miss more on an overloaded platform.
 ## - Headquarters have a light gun of their own.
 ## - Shots from range (units with a long reach, towers, headquarters guns) are
@@ -130,19 +131,22 @@ func step(delta: float) -> void:
 
 ## The closest living enemy of `faction` within `max_range`: a unit, a
 ## building or a headquarters. Null if none. Aircraft only count when
-## `hits_air`; bombers pass `hits_units` false to ignore units entirely.
-func nearest_enemy(from: Vector3, faction: String, max_range: float, hits_air := false, hits_units := true):
+## `hits_air`; bombers pass `hits_units` false to ignore units entirely, and
+## flak passes `air_only` to see nothing but aircraft.
+func nearest_enemy(from: Vector3, faction: String, max_range: float, hits_air := false, hits_units := true, air_only := false):
 	var best = null
 	var best_d := max_range
 	var other := "rival" if faction == "player" else "player"
 	for unit in _units(other):
-		if not hits_units or (unit.flying and not hits_air):
+		if not hits_units or (unit.flying and not hits_air) or (air_only and not unit.flying):
 			continue
 		if unit.is_alive() and not unit.riding:
 			var d := _flat_distance(from, unit.global_position)
 			if d <= best_d:
 				best_d = d
 				best = unit
+	if air_only:
+		return best
 	for b in region.buildings.values():
 		if b.faction == other and b.is_alive():
 			var d := _flat_distance(from, b.global_position)
@@ -306,10 +310,14 @@ func _chain(first: Node3D, faction: String, amount: float, jumps: int) -> void:
 		from = next
 
 
+## Every unit of a faction, including its hangar drones.
 func _units(faction: String) -> Array[Unit]:
 	var out: Array[Unit] = []
 	for node in get_tree().get_nodes_in_group(Unit.GROUP if faction == "player" else Unit.ENEMY_GROUP):
 		out.append(node as Unit)
+	for node in get_tree().get_nodes_in_group(Unit.DRONE_GROUP):
+		if node.faction == faction:
+			out.append(node as Unit)
 	return out
 
 
