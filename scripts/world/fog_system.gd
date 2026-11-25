@@ -63,6 +63,9 @@ var _timer := 0.0
 var _flash_timer := 2.0
 var _flash: OmniLight3D
 var _rng := RandomNumberGenerator.new()
+## False while the fog is switched off (Debug panel). Exploring still goes on
+## underneath, so switching it back on shows what you've scouted so far.
+var enabled := true
 
 
 func _ready() -> void:
@@ -94,11 +97,21 @@ func _process(delta: float) -> void:
 # --- Queries ----------------------------------------------------------------
 
 func is_explored(point: Vector3) -> bool:
-	return explored.has(_cell_of(point))
+	return not enabled or explored.has(_cell_of(point))
 
 
 func is_visible_now(point: Vector3) -> bool:
-	return visible_cells.has(_cell_of(point))
+	return not enabled or visible_cells.has(_cell_of(point))
+
+
+## Switches the fog on or off. With it off the whole map, every rival unit
+## and every building shows, and the fog clouds and glows are hidden.
+func set_enabled(on: bool) -> void:
+	enabled = on
+	for child in get_children():
+		if child is Node3D:
+			child.visible = on
+	_refresh_nodes()
 
 
 func is_platform_revealed(platform_name: String) -> bool:
@@ -167,6 +180,7 @@ func _refresh_nodes() -> void:
 		if explored.has(entry[1]):
 			node.visible = true
 		else:
+			node.visible = not enabled
 			still_hidden.append(entry)
 	_scenery = still_hidden
 

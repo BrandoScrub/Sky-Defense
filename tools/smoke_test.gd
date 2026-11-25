@@ -37,6 +37,7 @@ func _initialize() -> void:
 	_check_build_menu(main)
 	_check_info_panel(main)
 	_check_top_bar(main)
+	_check_debug_panel(main)
 	_check_ferry(main)
 	await _check_claiming_walkways_and_raids(main)
 	_check_weight_power_income(main)
@@ -543,6 +544,24 @@ func _check_top_bar(main: Node) -> void:
 	var vesper: Array = waves.wave_plan(3).filter(func(e): return e.corp == "Vesper")
 	_expect(not vesper.is_empty() and vesper[0].units[0][0] == "Vesper Bomber", "Vesper's wave 3 should send bombers")
 	_expect(TopBar.clock(83.2) == "1:24", "clock should format as m:ss")
+
+
+func _check_debug_panel(main: Node) -> void:
+	var debug: DebugPanel = main.debug_panel
+	_expect(debug != null and not debug.is_open(), "the Debug panel should start folded")
+	if debug == null:
+		return
+	var fog: FogSystem = main.fog
+	var far := Vector3(99999, 0, 99999)
+	debug.set_fog(false)
+	_expect(not fog.enabled and fog.is_explored(far) and fog.is_visible_now(far), "fog off should show everything")
+	_expect(not fog.get_node("FogBank").visible, "fog off should hide the fog clouds")
+	debug.set_fog(true)
+	_expect(fog.enabled and not fog.is_explored(far), "fog on should hide unexplored sky again")
+	_expect(fog.get_node("FogBank").visible, "fog on should show the fog clouds")
+	debug.set_open(true)
+	_expect(debug.is_open(), "the Debug panel should open")
+	debug.set_open(false)
 
 
 func _key(keycode: Key, shift := false) -> InputEventKey:

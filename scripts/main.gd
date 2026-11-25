@@ -65,6 +65,8 @@ var _notice_tween: Tween
 var _help: PanelContainer
 var _legend_entries: VBoxContainer
 var _legend_toggle: Button
+var _right_column: VBoxContainer
+var debug_panel: DebugPanel
 var _hero_respawn_left := 0.0
 var _game_over := false
 
@@ -385,7 +387,22 @@ func _build_hud() -> void:
 	_status.add_theme_constant_override("shadow_offset_x", 1)
 	_status.add_theme_constant_override("shadow_offset_y", 1)
 	layer.add_child(_status)
-	layer.add_child(_build_legend())
+	# Right-hand column: the legend with the Debug panel under it.
+	_right_column = VBoxContainer.new()
+	_right_column.name = "RightColumn"
+	_right_column.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_right_column.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	_right_column.offset_right = -16
+	_right_column.offset_top = TopBar.HEIGHT + 10
+	layer.add_child(_right_column)
+	_right_column.add_child(_build_legend())
+	debug_panel = DebugPanel.new()
+	debug_panel.fog = fog
+	debug_panel.resources = resources
+	debug_panel.waves = waves
+	debug_panel.notice = show_notice
+	debug_panel.resized_by_toggle.connect(_fit_right_column)
+	_right_column.add_child(debug_panel)
 
 	top_bar = TopBar.new()
 	top_bar.region = region
@@ -519,9 +536,6 @@ func _on_platform_claimed(platform_name: String, new_owner: String) -> void:
 func _build_legend() -> Control:
 	var panel := PanelContainer.new()
 	panel.name = "Legend"
-	panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	panel.position = Vector2(-16, TopBar.HEIGHT + 10)
-	panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	var outer := VBoxContainer.new()
 	panel.add_child(outer)
 	var toggle := Button.new()
@@ -557,12 +571,17 @@ func _build_legend() -> Control:
 func set_legend_open(open: bool) -> void:
 	_legend_entries.visible = open
 	_legend_toggle.text = ("v  Legend" if open else ">  Legend")
-	# Shrink the panel back down when it folds.
-	# Zero the size: with the right edge pinned, the panel then grows left and
-	# down to exactly fit what is showing.
-	var panel := _legend_entries.get_parent().get_parent() as Control
-	panel.offset_left = panel.offset_right
-	panel.offset_bottom = panel.offset_top
+	_fit_right_column()
+
+
+## Shrinks the legend and Debug column to fit after either folds or opens.
+func _fit_right_column() -> void:
+	if _right_column == null:
+		return
+	# Zero the size: with the right edge pinned, the column then grows left and
+	# down to exactly fit what is showing. Both panels match the wider one.
+	_right_column.offset_left = _right_column.offset_right
+	_right_column.offset_bottom = _right_column.offset_top
 
 
 func _on_selection_changed(units: Array[Unit]) -> void:

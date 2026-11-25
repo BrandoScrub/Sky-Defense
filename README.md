@@ -74,6 +74,7 @@ Melee hits, Arc Coil lightning and bombs from the air go around shields. Units c
 | Start the next wave early | Space |
 | Next waves | The top bar shows your resources and a card per rival with a countdown to its next wave; hover a card to see which units and how many it will send |
 | What is this? | Left click anything (unit, building, platform, tile, storm cloud, ferry route, air lane) for a card in the bottom right that says what it is and does |
+| Debug tools | Click Debug under the legend: fog of war on/off, +500 scrap, +50 crystals, start the next wave, destroy all attackers. New testing tools go here |
 | Show or hide the legend | L, or click its title |
 | Pause | P |
 | Game speed | F1 normal, F2 double, F3 triple |
@@ -88,7 +89,7 @@ Dark storm clouds hide every part of the sky you haven't scouted (`scripts/world
 | --- | --- |
 | `scenes/` | Godot scenes; `main.tscn` is the entry point |
 | `scripts/camera/` | The RTS camera |
-| `scripts/ui/` | HUD pieces: the top bar, the bottom-left build menu and the bottom-right info card |
+| `scripts/ui/` | HUD pieces: the top bar, the Debug panel, the bottom-left build menu and the bottom-right info card |
 | `scripts/world/` | Hex grid math, level layout data, the sky region builder with routing, claiming, platform load, the airship ferry, storm control and the fog of war |
 | `scripts/units/` | Player units, the hero and recruiting |
 | `scripts/selection/` | Selection, orders and control groups |
