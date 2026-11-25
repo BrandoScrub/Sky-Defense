@@ -57,7 +57,7 @@ var _phase_label: Label
 var _banner: Label
 var resources: PlayerResources
 var _status: Label
-var _resource_bar: Label
+var top_bar: TopBar
 var build_menu: BuildMenu
 var info_panel: InfoPanel
 var _notice: Label
@@ -380,18 +380,18 @@ func _build_hud() -> void:
 	add_child(layer)
 	_status = Label.new()
 	_status.name = "Status"
-	_status.position = Vector2(16, 16)
+	_status.position = Vector2(16, TopBar.HEIGHT + 10)
 	_status.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
 	_status.add_theme_constant_override("shadow_offset_x", 1)
 	_status.add_theme_constant_override("shadow_offset_y", 1)
 	layer.add_child(_status)
 	layer.add_child(_build_legend())
 
-	_resource_bar = _hud_label("Resources", 20)
-	_resource_bar.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	_resource_bar.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_resource_bar.position.y = 16
-	layer.add_child(_resource_bar)
+	top_bar = TopBar.new()
+	top_bar.region = region
+	top_bar.resources = resources
+	top_bar.waves = waves
+	layer.add_child(top_bar)
 
 	build_menu = BuildMenu.new()
 	build_menu.building = building
@@ -436,14 +436,14 @@ func _build_hud() -> void:
 	_phase_label = _hud_label("Phase", 18)
 	_phase_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	_phase_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_phase_label.position.y = 48
+	_phase_label.position.y = TopBar.HEIGHT + 8
 	_phase_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	layer.add_child(_phase_label)
 
 	_help = PanelContainer.new()
 	_help.name = "HowToPlay"
 	# Top left, under the selection text, so it stays clear of the build menu.
-	_help.position = Vector2(16, 96)
+	_help.position = Vector2(16, TopBar.HEIGHT + 90)
 	var help_box := VBoxContainer.new()
 	_help.add_child(help_box)
 	var help_text := Label.new()
@@ -487,12 +487,8 @@ func show_notice(text: String) -> void:
 
 
 func _refresh_resources() -> void:
-	var supply := region.power_supply()
-	var demand := region.power_demand()
-	var power := "Power %d / %d" % [demand, supply]
-	if demand > supply:
-		power += " (brownout: towers at %d%%)" % int(region.grid_efficiency() * 100)
-	_resource_bar.text = "Scrap %d      %s      Crystals %d" % [resources.scrap, power, resources.crystals]
+	if top_bar:
+		top_bar.refresh()
 
 
 ## The build menu's hint line shows how to place while a build mode is on.
@@ -524,7 +520,7 @@ func _build_legend() -> Control:
 	var panel := PanelContainer.new()
 	panel.name = "Legend"
 	panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	panel.position = Vector2(-16, 16)
+	panel.position = Vector2(-16, TopBar.HEIGHT + 10)
 	panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	var outer := VBoxContainer.new()
 	panel.add_child(outer)
