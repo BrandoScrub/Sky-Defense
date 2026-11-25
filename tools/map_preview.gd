@@ -30,6 +30,7 @@ func _initialize() -> void:
 			if child is CanvasLayer:
 				child.visible = false
 		var region: SkyRegion = main.get_node("Region")
+		main.fog.reveal_all()
 		var cam: RtsCamera = main.get_node("RtsCamera")
 		var bounds := region.get_bounds()
 		cam.bounds = bounds.grow(200.0)
