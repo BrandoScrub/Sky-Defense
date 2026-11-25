@@ -16,7 +16,7 @@ signal selection_changed(units: Array[Unit])
 @export var formation_spacing := 1.8
 
 @export var camera: RtsCamera
-@export var region: Node3D
+@export var region: SkyRegion
 
 var selected: Array[Unit] = []
 var control_groups := {}
@@ -103,8 +103,7 @@ func order_move(point: Vector3, attack_move := false) -> bool:
 	_prune()
 	if selected.is_empty():
 		return false
-	var goal_platform: String = region.platform_at(point)
-	if goal_platform == "":
+	if not region.is_walkable(point):
 		return false
 	var offsets := formation_offsets(selected.size())
 	var ordered := false
@@ -113,7 +112,7 @@ func order_move(point: Vector3, attack_move := false) -> bool:
 	units.sort_custom(func(a: Unit, b: Unit): return a.is_hero and not b.is_hero)
 	for i in units.size():
 		var unit: Unit = units[i]
-		var target: Vector3 = region.clamp_to_platform(goal_platform, point + offsets[i])
+		var target: Vector3 = region.snap_to_walkable(point + offsets[i])
 		var route: PackedVector3Array = region.find_route(unit.position, target)
 		if route.is_empty():
 			continue

@@ -5,13 +5,15 @@ extends Node3D
 const SQUAD_SIZE := 4
 
 @onready var camera: RtsCamera = $RtsCamera
-@onready var region: Node3D = $Region
+@onready var region: SkyRegion = $Region
 
 var selection: SelectionController
 var _status: Label
 
 
 func _ready() -> void:
+	camera.bounds = region.get_bounds()
+	camera.position = region.get_platform_position("Hub")
 	_spawn_starting_units()
 
 	selection = SelectionController.new()
@@ -43,13 +45,16 @@ func _spawn_starting_units() -> void:
 	hero.is_hero = true
 	hero.move_speed = 7.0
 	hero.body_color = Color(0.85, 0.65, 0.3)
-	hero.position = hub + Vector3(0, 0, 3)
+	# Start just south of the Hub's core, on open deck tiles.
+	var hub_hex := region.hex_at(hub)
+	hero.position = region.hex_center(hub_hex + Vector2i(0, 1))
 	units.add_child(hero)
 
+	var spots: Array[Vector2i] = [Vector2i(-1, 2), Vector2i(0, 2), Vector2i(1, 1), Vector2i(-1, 1)]
 	for i in SQUAD_SIZE:
 		var r := Unit.new()
 		r.name = "Riveteer%d" % (i + 1)
-		r.position = hub + Vector3(-3.0 + 2.0 * i, 0, 6)
+		r.position = region.hex_center(hub_hex + spots[i % spots.size()])
 		units.add_child(r)
 
 
@@ -64,6 +69,31 @@ func _build_hud() -> void:
 	_status.add_theme_constant_override("shadow_offset_x", 1)
 	_status.add_theme_constant_override("shadow_offset_y", 1)
 	layer.add_child(_status)
+	layer.add_child(_build_legend())
+
+
+## Colour key for the placeholder tiles, top right.
+func _build_legend() -> Control:
+	var panel := PanelContainer.new()
+	panel.name = "Legend"
+	panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	panel.position = Vector2(-16, 16)
+	panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	var box := VBoxContainer.new()
+	panel.add_child(box)
+	for entry in SkyRegion.LEGEND:
+		var row := HBoxContainer.new()
+		var swatch := ColorRect.new()
+		var c: Color = SkyRegion.COLORS[entry[0]]
+		swatch.color = Color(c.r, c.g, c.b)
+		swatch.custom_minimum_size = Vector2(14, 14)
+		swatch.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(swatch)
+		var label := Label.new()
+		label.text = entry[1]
+		row.add_child(label)
+		box.add_child(row)
+	return panel
 
 
 func _on_selection_changed(units: Array[Unit]) -> void:

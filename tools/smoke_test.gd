@@ -10,6 +10,7 @@ var _failures := 0
 
 func _initialize() -> void:
 	_check_input_map()
+	_check_hex_math()
 	var main: Node = load("res://scenes/main.tscn").instantiate()
 	root.add_child(main)
 	await process_frame
@@ -39,11 +40,32 @@ func _check_input_map() -> void:
 
 
 func _check_scene(main: Node) -> void:
-	var region: Node = main.get_node("Region")
-	for name in ["Hub", "NeutralA", "NeutralB", "NeutralC", "NeutralD", "RivalHQ", "StormCloud"]:
-		_expect(region.has_node(name), "region is missing %s" % name)
-	_expect(region.get_children().filter(func(n): return n.name.begins_with("Walkway_")).size() == 5,
-		"expected 5 walkways")
+	var region: SkyRegion = main.get_node("Region")
+	for p in ["Hub", "Foundry", "Generator Rig", "Midway", "Outpost", "Crystal Spire", "Ironbell HQ"]:
+		_expect(region.platforms.has(p), "layout is missing platform %s" % p)
+	_expect(region.tiles_of_platform("Hub").size() == 37, "Hub (radius 3) should have 37 tiles")
+	_expect(region.tiles_of_platform("Generator Rig").size() == 7, "Generator Rig (radius 1) should have 7 tiles")
+	_expect(region.walkway_count == 5, "expected 5 walkways")
+	_expect(region.tiles_in_clouds.size() == 2, "expected 2 storm clouds")
+	var types := {}
+	for hex in region.tiles:
+		types[region.tiles[hex].type] = true
+	for t in ["core", "rival_core", "generator_socket", "harvester_anchor", "scrap_heap", "crystal_seam", "dock", "spawn", "walkway"]:
+		_expect(types.has(t), "no %s tile in the layout" % t)
+	_expect(region.has_node("Tiles") and region.get_node("Tiles").get_child_count() == region.tiles.size(),
+		"every tile should have a placeholder mesh")
+
+
+func _check_hex_math() -> void:
+	for hex in [Vector2i(0, 0), Vector2i(3, -2), Vector2i(-7, 5), Vector2i(10, -17)]:
+		_expect(HexGrid.from_world(HexGrid.to_world(hex, 2.0), 2.0) == hex, "hex round trip failed for %s" % hex)
+	_expect(HexGrid.disk(Vector2i.ZERO, 2).size() == 19, "disk of radius 2 should have 19 hexes")
+	_expect(HexGrid.ring(Vector2i.ZERO, 3).size() == 18, "ring of radius 3 should have 18 hexes")
+	_expect(HexGrid.distance(Vector2i(0, 0), Vector2i(6, -9)) == 9, "hex distance is wrong")
+	var line := HexGrid.line(Vector2i(0, 0), Vector2i(4, -2))
+	_expect(line.size() == 5 and line[0] == Vector2i(0, 0) and line[4] == Vector2i(4, -2), "hex line is wrong")
+	for i in line.size() - 1:
+		_expect(HexGrid.distance(line[i], line[i + 1]) == 1, "hex line has a gap")
 
 
 func _check_camera(cam: RtsCamera) -> void:
@@ -66,18 +88,27 @@ func _check_camera(cam: RtsCamera) -> void:
 	cam._apply_zoom()
 
 
-func _check_routing(region: Node) -> void:
-	_expect(region.platform_path("Hub", "RivalHQ") == PackedStringArray(["Hub", "NeutralB", "NeutralD", "RivalHQ"]),
-		"Hub to RivalHQ should go via NeutralB and NeutralD, got %s" % [region.platform_path("Hub", "RivalHQ")])
-	var hub: Vector3 = region.get_platform_position("Hub")
-	var d: Vector3 = region.get_platform_position("NeutralD")
-	var route: PackedVector3Array = region.find_route(hub, d)
-	_expect(route.size() == 5, "Hub to NeutralD should be 2 walkways (4 rim points) + goal, got %d points" % route.size())
-	_expect(route.size() > 0 and route[route.size() - 1].is_equal_approx(d), "route should end at the target")
-	_expect(region.find_route(hub, Vector3(500, 0, 500)).is_empty(), "a point in open sky should be unreachable")
-	_expect(region.find_route(hub, hub + Vector3(2, 0, 0)).size() == 1, "same-platform move should be direct")
-	var clamped: Vector3 = region.clamp_to_platform("Hub", hub + Vector3(50, 0, 0))
-	_expect(region.platform_at(clamped) == "Hub", "clamped point should stay on the Hub")
+func _check_routing(region: SkyRegion) -> void:
+	var hub := region.get_platform_position("Hub")
+	var foundry := region.get_platform_position("Foundry") + Vector3(1, 0, 0)
+	var ironbell := region.hex_center(region.platforms["Ironbell HQ"].center + Vector2i(0, 2))
+	var route := region.find_route(hub + Vector3(0, 0, 3), ironbell)
+	_expect(not route.is_empty(), "Hub to Ironbell HQ should be walkable")
+	_expect(region.platforms_along(hub + Vector3(0, 0, 3), route) == PackedStringArray(["Hub", "Midway", "Ironbell HQ"]),
+		"Hub to Ironbell HQ should go via Midway, got %s" % [region.platforms_along(hub + Vector3(0, 0, 3), route)])
+	_expect(route[route.size() - 1].is_equal_approx(ironbell), "route should end at the target")
+	_expect(not region.find_route(hub, foundry).is_empty(), "Hub to Foundry should be walkable")
+	_expect(region.find_route(hub, region.get_platform_position("Crystal Spire") + Vector3(1, 0, 0)).is_empty(),
+		"Crystal Spire is ferry-only and shouldn't be walkable from the Hub")
+	_expect(region.find_route(hub, Vector3(500, 0, 500)).is_empty(), "open sky should be unreachable")
+	_expect(not region.is_walkable(hub), "the Hub core blocks walking")
+	var near := hub + Vector3(3, 0, 0)
+	_expect(region.find_route(near, hub + Vector3(-3, 0, 2)).size() <= 2, "a short move on one deck should be nearly direct")
+	# Every leg of a route stays on walkable tiles.
+	var prev := hub + Vector3(0, 0, 3)
+	for point in route:
+		_expect(region._clear_line(prev, point), "route leg %s -> %s crosses open sky" % [prev, point])
+		prev = point
 
 
 func _check_selection_and_orders(main: Node) -> void:
@@ -110,15 +141,15 @@ func _check_selection_and_orders(main: Node) -> void:
 	_expect(offsets[0] == Vector3.ZERO, "first formation slot is the centre")
 
 	# Order everyone to NeutralD and simulate until they arrive.
-	var region: Node = main.get_node("Region")
-	var target: Vector3 = region.get_platform_position("NeutralD")
-	_expect(sel.order_move(target), "ordering a move to NeutralD should succeed")
+	var region: SkyRegion = main.get_node("Region")
+	var target: Vector3 = region.hex_center(region.platforms["Midway"].center)
+	_expect(sel.order_move(target), "ordering a move to Midway should succeed")
 	_expect(not sel.order_move(Vector3(500, 0, 500)), "ordering a move into open sky should fail")
 	for i in 600:
 		for u in units:
 			u._process(0.05)
 	for u in units:
 		_expect(not u.is_moving(), "%s should have arrived" % u.name)
-		_expect(region.platform_at(u.position) == "NeutralD", "%s should be on NeutralD, is at %s" % [u.name, u.position])
+		_expect(region.platform_at(u.position) == "Midway", "%s should be on Midway, is at %s" % [u.name, u.position])
 	_expect(hero.position.distance_to(target) < 0.01, "hero should take the centre spot")
 	await process_frame
