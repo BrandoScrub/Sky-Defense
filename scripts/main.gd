@@ -38,6 +38,7 @@ var raids: RivalRaids
 var loads: LoadSystem
 var economy: EconomySystem
 var combat: CombatSystem
+var defenses: DefenseSystem
 var waves: WaveManager
 var ferry: FerrySystem
 var storms: StormSystem
@@ -124,6 +125,12 @@ func _ready() -> void:
 	add_child(combat)
 	combat.spawn_headquarters()
 	raids.combat = combat
+
+	defenses = DefenseSystem.new()
+	defenses.name = "DefenseSystem"
+	defenses.region = region
+	defenses.combat = combat
+	add_child(defenses)
 
 	fleet = VesperFleet.new()
 	fleet.name = "VesperFleet"
@@ -353,6 +360,7 @@ func _build_hud() -> void:
 	info_panel.combat = combat
 	info_panel.storms = storms
 	info_panel.loads = loads
+	info_panel.defenses = defenses
 	info_panel.fog = fog
 	layer.add_child(info_panel)
 
