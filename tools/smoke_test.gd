@@ -15,7 +15,7 @@ func _initialize() -> void:
 		quit(1))
 	_check_input_map()
 	_check_hex_math()
-	# A fixed map so results repeat (seed 3: Ironbell southeast, Vesper northeast).
+	# A fixed map so results repeat (seed 3: Ironbell northwest, Vesper east).
 	SkyRegion.seed_override = 3
 	_check_layout_rules()
 	await _check_open_map()
@@ -492,7 +492,7 @@ func _check_info_panel(main: Node) -> void:
 		if region.get_tile(hex).type != "deck" or region.buildings.has(hex):
 			continue
 		var clear := true
-		for u in main.selection.all_units():
+		for u in main.get_tree().get_nodes_in_group(Unit.GROUP):
 			if u.global_position.distance_to(region.hex_center(hex)) < 4.0:
 				clear = false
 		if clear:
@@ -500,7 +500,14 @@ func _check_info_panel(main: Node) -> void:
 			break
 	main.resources.add_scrap(40)
 	_expect(main.building.try_place("dynamo", deck) == "", "info card test needs a Dynamo on the Hub")
+	# The headless window is tiny, so far-off units can still be within the
+	# click radius on screen: hide them for this click.
+	var squad: Array = main.get_tree().get_nodes_in_group(Unit.GROUP)
+	for u in squad:
+		u.visible = false
 	picked = info.pick(cam.unproject_position(region.hex_center(deck)))
+	for u in squad:
+		u.visible = true
 	_expect(picked is Building and picked.type_id == "dynamo", "clicking a Dynamo should describe it, got %s" % str(picked))
 	info.show_thing(picked)
 	_expect(info.visible and info._title.text == "Dynamo Generator", "the info card should show the Dynamo")
@@ -1355,6 +1362,18 @@ func _check_layout_rules() -> void:
 					linked[w[1]] = true
 					grew = true
 		_expect(linked.size() == l.platforms.size(), "seed %d: every platform should be reachable" % map_seed)
+		# Island outlines: inside their radius, holding their fixed features,
+		# and an island type for each.
+		for p in l.platforms:
+			_expect(p.style in ["city", "turbine", "crystal", "rock"], "seed %d: %s has no island type" % [map_seed, p.name])
+			_expect(p.shape.has(Vector2i.ZERO), "seed %d: %s's outline should include its centre" % [map_seed, p.name])
+			for off in p.shape:
+				_expect(HexGrid.distance(Vector2i.ZERO, off) <= p.radius, "seed %d: %s's outline leaves its radius" % [map_seed, p.name])
+			for f in p.features:
+				if f[1] is Vector2i:
+					_expect(p.shape.has(f[1]), "seed %d: %s's %s is off the island" % [map_seed, p.name, f[0]])
+			if p.style == "crystal":
+				_expect(p.get("variant", "") in ["grassy", "overcharged"], "seed %d: crystal island %s needs a variant" % [map_seed, p.name])
 		# HQ really is in its compass direction.
 		for p in l.platforms:
 			if p.has("corp"):

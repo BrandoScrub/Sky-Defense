@@ -115,6 +115,9 @@ func order_move(point: Vector3, attack_move := false) -> bool:
 	for i in units.size():
 		var unit: Unit = units[i]
 		var target: Vector3 = region.snap_to_walkable(point + offsets[i])
+		var clicked := region.platform_at(point)
+		if clicked != "":
+			target = region.snap_to_platform(point + offsets[i], clicked)
 		if ferry:
 			ferry.cancel(unit)
 			if ferry.is_riding(unit):
