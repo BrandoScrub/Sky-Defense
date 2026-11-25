@@ -6,7 +6,8 @@
 ##   Z X C V
 ##   T G B N
 ## What a slot does depends on the tab, so Q is a Rivet Turret on the Defense
-## tab and a Dynamo on the Economy tab. Tab cycles the tabs. Keys pressed with
+## tab and a Dynamo on the Economy tab. On the Defense tab each row is one
+## role: ground defenses on Q W E R, flak on A S D F, hangars on Z X C V. Tab cycles the tabs. Keys pressed with
 ## Shift, Ctrl or Alt are left alone (Shift + W A S D pans the camera).
 class_name BuildMenu
 extends PanelContainer
@@ -23,7 +24,11 @@ const SLOT_KEYS := ["Q", "W", "E", "R", "A", "S", "D", "F", "Z", "X", "C", "V", 
 ## actions "walkway" and "recruit".
 const TABS := {
 	"Army": ["recruit"],
-	"Defense": ["rivet_turret", "flak_battery", "arc_coil"],
+	"Defense": [
+		"rivet_turret", "arc_coil", "rally_horn", "mending_post",
+		"flak_battery", "skyhook_cannon", "", "",
+		"drone_hangar",
+	],
 	"Economy": ["dynamo", "walkway"],
 	"Storm": ["harvester"],
 	# Airships go here once the player can build them.
@@ -151,7 +156,7 @@ func set_hint(text: String) -> void:
 ## The tab that holds an entry, or "" if none does.
 static func tab_of(entry: String) -> String:
 	for tab_name in TABS:
-		if entry in TABS[tab_name]:
+		if entry != "" and entry in TABS[tab_name]:
 			return tab_name
 	return ""
 
@@ -280,14 +285,42 @@ func _building_details(data: Dictionary) -> String:
 	elif data.power < 0:
 		lines.append("Uses %d power" % -data.power)
 	lines.append("Weight %d" % data.weight)
-	if data.has("attack"):
-		var attack: Dictionary = data.attack
-		lines.append("Damage %d, range %d" % [int(attack.damage), int(attack.range)])
+	if data.has("role"):
+		lines.append(BuildingCatalog.ROLES[data.role])
+	lines.append_array(BuildMenu.defense_lines(data))
 	var tiles := PackedStringArray()
 	for t in data.tiles:
 		tiles.append(String(t).replace("_", " "))
 	lines.append("Goes on: " + ", ".join(tiles))
 	return "\n".join(lines)
+
+
+## Short stat lines for a defense's attack, aura and drones. Shared with
+## the info card.
+static func defense_lines(data: Dictionary) -> PackedStringArray:
+	var lines := PackedStringArray()
+	if data.has("attack"):
+		var attack: Dictionary = data.attack
+		if attack.get("air_only", false):
+			lines.append("Anti-air damage %d, range %d" % [int(attack.air), int(attack.range)])
+		else:
+			lines.append("Damage %d, range %d" % [int(attack.damage), int(attack.range)])
+	if data.has("aura"):
+		var aura: Dictionary = data.aura
+		var parts := PackedStringArray()
+		if aura.has("damage_mult"):
+			parts.append("+%d%% damage" % roundi((aura.damage_mult - 1.0) * 100))
+		if aura.has("cooldown_mult"):
+			parts.append("+%d%% fire rate" % roundi((1.0 / aura.cooldown_mult - 1.0) * 100))
+		if aura.has("armor"):
+			parts.append("%d%% armor" % roundi(aura.armor * 100))
+		if aura.has("heal"):
+			parts.append("heals %d/s" % int(aura.heal))
+		lines.append("Allies within %d: %s" % [int(aura.radius), ", ".join(parts)])
+	if data.has("hangar"):
+		var h: Dictionary = data.hangar
+		lines.append("%d drones, one rebuilt every %ds, patrol range %d" % [int(h.drones), int(h.rebuild), int(h.leash)])
+	return lines
 
 
 ## The key for an entry on its own tab.

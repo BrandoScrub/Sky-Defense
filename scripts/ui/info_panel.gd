@@ -16,16 +16,21 @@ const UNIT_INFO := {
 	"Commander": "Leads your squad. Tougher and faster than a Riveteer, and can shoot aircraft. Comes back to the Hub 15 seconds after falling.",
 	"Riveteer": "Your basic soldier. Claims neutral platforms by standing on them and fights walkers. Can't hit aircraft. Train more from the Army tab.",
 	"Ironbell Walker": "Ironbell's ground trooper. Marches down walkways toward your Hub, claiming platforms and smashing buildings on the way. Pays scrap when killed.",
-	"Vesper Bomber": "Vesper's bomber airship. Flies the red air lanes and bombs your buildings and Hub. Only anti-air can hit it: Flak Batteries, the Commander and headquarters guns.",
+	"Vesper Bomber": "Vesper's bomber airship. Flies the red air lanes and bombs your buildings and Hub. Only anti-air can hit it: flak towers, drones, the Commander and headquarters guns.",
+	"Defense Drone": "A small clockwork flyer from a Drone Hangar. Chases anything that comes near its hangar, aircraft included, then flies home. Only anti-air can hit it. The hangar builds a new one when it's lost.",
 }
 
 ## What each building is for, by type id.
 const BUILDING_INFO := {
 	"dynamo": "Burns fuel to power your towers. Makes more on a yellow generator socket.",
 	"harvester": "Taps a storm cloud from a blue anchor. Gives lots of power, slowly forms crystals, and counts toward who controls the storm.",
-	"rivet_turret": "All-round gun tower. Good against walkers; only scratches aircraft.",
-	"flak_battery": "Anti-air guns. Shreds Vesper bombers; weak against walkers.",
+	"rivet_turret": "Sturdy gun tower against walkers. Its plating gives cover, so your units fighting beside it take less damage. Can't hit aircraft.",
 	"arc_coil": "Chain lightning that jumps between up to 3 walkers. Power hungry, and can't hit aircraft.",
+	"rally_horn": "A brass horn that blares marching tunes. Its own gun is weak, but your units nearby hit harder and fire faster. Can't hit aircraft.",
+	"mending_post": "A steam-powered field workshop. Barely fights, but patches up your units nearby and gives them a little armor. Can't hit aircraft.",
+	"flak_battery": "Rapid anti-air guns. Shreds bombers and other aircraft, but ignores everything on the ground.",
+	"skyhook_cannon": "A long-range harpoon gun for big airships. Slow, but each hit tears a hole in the envelope. Ignores everything on the ground.",
+	"drone_hangar": "Launches defensive drones that chase off anything coming near, air or ground, then return. Rebuilds lost drones over time.",
 }
 
 ## What each tile feature is for, by tile type.
@@ -47,6 +52,7 @@ var walkways: WalkwayBuilder
 var combat: CombatSystem
 var storms: StormSystem
 var loads: LoadSystem
+var defenses: DefenseSystem
 
 ## The thing being described: a Node3D, or a Dictionary for map features.
 var shown = null
@@ -210,6 +216,8 @@ func describe(thing) -> Dictionary:
 		var stats := ["Health %d / %d" % [ceili(u.hp), int(u.max_hp)], "Damage %d" % int(u.damage), "Range %d" % int(u.attack_range)]
 		if u.flying:
 			stats.append("Flying")
+		if u.damage_mult > 1.0 or u.cooldown_mult < 1.0 or u.armor > 0.0:
+			stats.append("Boosted by nearby defenses")
 		info.stats = "   ".join(stats)
 	elif thing is Building:
 		var b: Building = thing
@@ -217,14 +225,17 @@ func describe(thing) -> Dictionary:
 		info.title = data.name
 		info.subtitle = ("Yours" if b.faction == "player" else "Rival") + " · on " + b.platform
 		info.body = BUILDING_INFO.get(b.type_id, "")
+		if data.has("role"):
+			info.subtitle += " · " + String(data.role).capitalize() + (" defense" if data.role == "ground" else "")
 		var stats := ["Health %d / %d" % [ceili(b.hp), int(b.max_hp)]]
 		if b.power > 0:
 			stats.append("Makes %d power" % b.power)
 		elif b.power < 0:
 			stats.append("Uses %d power" % -b.power)
 		stats.append("Weight %d" % data.weight)
-		if data.has("attack"):
-			stats.append("Damage %d, range %d" % [int(data.attack.damage), int(data.attack.range)])
+		stats.append_array(Array(BuildMenu.defense_lines(data)))
+		if data.has("hangar") and defenses:
+			stats.append("Drones up: %d / %d" % [defenses.drones_of(b).size(), int(data.hangar.drones)])
 		if b.efficiency < 1.0:
 			stats.append("Brownout: %d%% speed" % int(b.efficiency * 100))
 		info.stats = "   ".join(stats)
@@ -265,7 +276,7 @@ func describe(thing) -> Dictionary:
 			"air_lane":
 				info.title = "Rival air lane"
 				info.subtitle = "%s to %s" % [thing.a, thing.b]
-				info.body = "Vesper bombers fly this route toward your buildings. Put Flak Batteries under it."
+				info.body = "Vesper bombers fly this route toward your buildings. Put flak towers or a Drone Hangar under it."
 	return info
 
 
@@ -301,7 +312,7 @@ func _unit_at(screen: Vector2) -> Unit:
 	var cam := camera.camera
 	var best: Unit = null
 	var best_dist := PICK_RADIUS
-	for node in get_tree().get_nodes_in_group(Unit.GROUP) + get_tree().get_nodes_in_group(Unit.ENEMY_GROUP):
+	for node in get_tree().get_nodes_in_group(Unit.GROUP) + get_tree().get_nodes_in_group(Unit.ENEMY_GROUP) + get_tree().get_nodes_in_group(Unit.DRONE_GROUP):
 		var u := node as Unit
 		if u == null or not u.visible:
 			continue

@@ -3,9 +3,8 @@
 ## an air lane (region.layout.air_lanes), then bombs the nearest of your
 ## buildings, or your Hub's headquarters if there are none.
 ##
-## Bombers ignore your units, and only anti-air weapons can hit them: Flak
-## Batteries (strong), Rivet Turrets (weak), headquarters guns and the
-## Commander.
+## Bombers ignore your units, and only anti-air weapons can hit them: flak
+## towers, hangar drones, headquarters guns and the Commander.
 class_name VesperFleet
 extends Node
 
