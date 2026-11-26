@@ -84,7 +84,7 @@ func _ready() -> void:
 	var hub_at := region.get_platform_position("Hub")
 	camera.position = hub_at
 	if region.platforms.has("Foundry"):
-		camera.position = hub_at.lerp(region.get_platform_position("Foundry"), 0.55)
+		camera.position = hub_at.lerp(region.get_platform_position("Foundry"), 0.4)
 	# Balloon platforms join the map before the other systems look at it.
 	drift = DriftSystem.new()
 	drift.name = "DriftSystem"
