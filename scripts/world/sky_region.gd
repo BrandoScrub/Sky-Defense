@@ -1154,9 +1154,17 @@ func _add_label(p: Dictionary) -> void:
 	label.text = "%s\nLoad 0 / %d" % [p.name, p.capacity]
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	label.no_depth_test = true
-	label.font_size = 64
-	label.outline_size = 12
-	label.pixel_size = 0.02
+	# Same small size on screen at any zoom (like the fog hints), so names
+	# never grow over the HUD when you zoom in. The text hangs down from its
+	# anchor; a balloon island's drift sign sits on top of it.
+	label.fixed_size = true
+	label.font_size = 32
+	label.outline_size = 8
+	label.pixel_size = 0.0009
+	label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	# Drawn after the see-through cloud puffs, so clouds never smear the text.
+	label.render_priority = 10
+	label.outline_render_priority = 9
 	label.position = hex_center(p.center) + Vector3.UP * (6.0 + p.radius)
 	add_child(label)
 	_labels[p.name] = label

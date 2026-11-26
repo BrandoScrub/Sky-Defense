@@ -547,11 +547,16 @@ func _spawn(c: Dictionary) -> void:
 	b.sign = Label3D.new()
 	b.sign.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	b.sign.no_depth_test = true
-	b.sign.font_size = 56
-	b.sign.outline_size = 10
-	b.sign.pixel_size = 0.02
-	# Above the platform name and load label.
-	b.sign.position.y = 13.0
+	# Small and the same size at any zoom. It shares the platform label's
+	# anchor and grows upward, so it sits just above the name and load.
+	b.sign.fixed_size = true
+	b.sign.font_size = 26
+	b.sign.outline_size = 8
+	b.sign.pixel_size = 0.0008
+	b.sign.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+	b.sign.render_priority = 10
+	b.sign.outline_render_priority = 9
+	b.sign.position.y = 6.0 + RADIUS
 	b.root.add_child(b.sign)
 	_draw_track(b)
 	balloons.append(b)
