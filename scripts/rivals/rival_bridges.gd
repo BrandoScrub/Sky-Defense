@@ -68,9 +68,15 @@ func step(delta: float) -> void:
 		if is_done(corp) or crew.building or not _hq_alive(crew.path[0]):
 			continue
 		crew.progress += delta * speed
-		if crew.progress >= span_seconds:
+		if crew.progress >= seconds_per_span(corp):
 			crew.progress = 0.0
 			build_next_span(corp)
+
+
+## Seconds between a rival's spans: its own pace from RivalCatalog, or
+## span_seconds.
+func seconds_per_span(corp: String) -> float:
+	return float(RivalCatalog.get_data(corp).get("span_seconds", span_seconds)) * span_seconds / 30.0
 
 
 ## Starts the next span: harpoons fire and the tiles go down one by one

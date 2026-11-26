@@ -409,7 +409,7 @@ func _check_building(main: Node) -> void:
 	var res: PlayerResources = main.resources
 	var hub: Vector2i = region.platforms["Hub"].center
 	var start_scrap := res.scrap
-	_expect(start_scrap == 250, "player should start with 250 scrap")
+	_expect(start_scrap == 300, "player should start with 300 scrap")
 	# The Hub starts with one Dynamo on a generator socket (15 power, 3 weight).
 	var starting := region.buildings_on("Hub").filter(func(b): return b.type_id == "dynamo")
 	_expect(starting.size() == 1 and starting[0].power == 15, "the Hub starts with one socketed Dynamo")

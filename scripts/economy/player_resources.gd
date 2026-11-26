@@ -5,7 +5,7 @@ extends Node
 
 signal changed
 
-@export var scrap := 250
+@export var scrap := 300
 ## Formed by Cloud Harvesters; spent on company powers (CompanyPowers).
 @export var crystals := 0
 

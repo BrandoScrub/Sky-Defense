@@ -18,7 +18,7 @@ const OVER := "over"
 @export var first_build_seconds := 45.0
 @export var build_seconds := 25.0
 ## Walkers in later waves get this much extra health per wave.
-@export var hp_growth_per_wave := 0.08
+@export var hp_growth_per_wave := 0.06
 
 ## The first ground rival's raids (Ironbell). Kept for older callers; every
 ## ground rival's raids are in raids_by_corp.
