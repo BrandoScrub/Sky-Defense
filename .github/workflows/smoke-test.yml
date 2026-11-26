@@ -1,0 +1,34 @@
+# Runs the headless smoke test on every pull request and every push to main.
+# A red X on a pull request means the game broke somewhere: open the
+# "Details" link to see which check failed.
+name: Smoke test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Godot 4.3
+        run: |
+          curl -sSL -o godot.zip https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_linux.x86_64.zip
+          unzip -q godot.zip
+          mv Godot_v4.3-stable_linux.x86_64 godot
+          rm godot.zip
+
+      - name: Import the project
+        # Builds the class cache the scripts need. Godot exits non-zero on a
+        # first import even when it worked, so the result is checked below.
+        run: timeout 300 ./godot --headless --path . --import || true
+
+      - name: Run the smoke test
+        run: |
+          set -o pipefail
+          timeout 600 ./godot --headless --path . --script res://tools/smoke_test.gd 2>&1 \
+            | grep -v -e 'Parameter "m" is null' -e 'mesh_get_surface_count'
