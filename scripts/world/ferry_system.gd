@@ -27,7 +27,7 @@ var _trips := {}
 
 func _ready() -> void:
 	for f in region.layout.ferry_routes:
-		var docks := [region._find_feature(f[0], "dock"), region._find_feature(f[1], "dock")]
+		var docks := [region.find_feature(f[0], "dock"), region.find_feature(f[1], "dock")]
 		var ferry := {
 			"names": [f[0], f[1]], "docks": docks, "at": 0, "flying": false,
 			"timer": dock_seconds, "passengers": [], "ship": _build_ship(),

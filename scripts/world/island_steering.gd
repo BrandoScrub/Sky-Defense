@@ -203,7 +203,7 @@ func _players(units: Array) -> int:
 func _update_warning(s: Dictionary, delta: float) -> void:
 	var endangered := _endangered(s)
 	if drift:
-		drift._set_cautions(s, endangered)
+		drift.set_cautions(s, endangered)
 	var on := fmod(Time.get_ticks_msec() / 1000.0, 0.5) < 0.25
 	for hex in s.walkway:
 		var node := region.tile_node(hex)
@@ -221,9 +221,9 @@ func _update_warning(s: Dictionary, delta: float) -> void:
 func _cast_off(s: Dictionary) -> void:
 	var fallen := _endangered(s)
 	if drift:
-		drift._set_cautions(s, [])
+		drift.set_cautions(s, [])
 		for unit in fallen:
-			drift._fall(unit)
+			drift.fall_unit(unit)
 	for hex in s.walkway:
 		var node := region.tile_node(hex)
 		if node == null:
@@ -324,7 +324,7 @@ func _replan_spans(platform_name: String) -> void:
 	for key in region.planned_spans.keys():
 		var names: PackedStringArray = key.split("|")
 		if names.has(platform_name):
-			region._plan_walkway_span(names[0], names[1])
+			region.plan_walkway_span(names[0], names[1])
 
 
 func _update_power() -> void:

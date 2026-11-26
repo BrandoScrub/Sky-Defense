@@ -89,8 +89,8 @@ func build_next_span(corp: String) -> bool:
 	crew.building = true
 	crew.span = span
 	var done := func(): _span_done(corp, from, to)
-	region.build_walkway(span, "rival", region.hex_center(region._rim_toward(a, b.center, true)),
-		region.hex_center(region._rim_toward(b, a.center, true)), done)
+	region.build_walkway(span, "rival", region.hex_center(region.rim_toward(a, b.center, true)),
+		region.hex_center(region.rim_toward(b, a.center, true)), done)
 	return true
 
 

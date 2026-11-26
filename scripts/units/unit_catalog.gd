@@ -73,7 +73,10 @@ const UNITS := {
 		"cooldown": 1.4,
 		"aggro": 11.0,
 		"color": Color(0.45, 0.42, 0.3),
-		"blurb": "Carries a bolt gun. Outranges walkers and hits hard, but goes down fast. Keep them behind Shieldbearers.",
+		# The only ground troop that can shoot at aircraft, so a wave of
+		# airships can't drag on forever with no flak around.
+		"hits_air": true,
+		"blurb": "Carries a bolt gun. Outranges walkers and hits hard, and can take shots at airships, but goes down fast. Keep them behind Shieldbearers.",
 	},
 	"sapper": {
 		"name": "Sapper",

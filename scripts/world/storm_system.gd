@@ -113,7 +113,7 @@ func strike(cloud: String):
 	if target == null:
 		return null
 	var bolt: Node3D = _labels[cloud]
-	combat._hit(bolt, target, strike_damage, Color(0.75, 0.85, 1.0))
+	combat.deal_hit(bolt, target, strike_damage, Color(0.75, 0.85, 1.0))
 	return target
 
 

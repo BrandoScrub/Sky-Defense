@@ -83,7 +83,7 @@ func _check_open_map() -> void:
 	var foundry: Dictionary = region.platforms["Foundry"]
 	main.resources.add_scrap(200)
 	region.crew.set_process(false)
-	var err: String = main.walkways.try_build(region._rim_toward(hub, foundry.center, true), region._rim_toward(foundry, hub.center, true))
+	var err: String = main.walkways.try_build(region.rim_toward(hub, foundry.center, true), region.rim_toward(foundry, hub.center, true))
 	_expect(err == "", "the player should be able to bridge to the Foundry (%s)" % err)
 	# Harpoons first, then the tiles one at a time.
 	_expect(region.crew.jobs.size() == 1, "building a walkway should start a harpoon crew job")
@@ -93,7 +93,7 @@ func _check_open_map() -> void:
 	if not job.is_empty():
 		region.crew.step(region.crew.harpoon_seconds + region.crew.player_tile_seconds * 0.5)
 		_expect(job.laid == 1, "one tile should be down just after the harpoons land, got %d" % job.laid)
-		_expect(main.walkways.try_build(region._rim_toward(hub, foundry.center, true), region._rim_toward(foundry, hub.center, true)) != "",
+		_expect(main.walkways.try_build(region.rim_toward(hub, foundry.center, true), region.rim_toward(foundry, hub.center, true)) != "",
 			"a second walkway can't go up over one being built")
 		region.crew.step(region.crew.job_seconds(job))
 	_expect(region.crew.jobs.is_empty(), "the walkway should finish")
@@ -690,8 +690,8 @@ func _check_claiming_walkways_and_raids(main: Node) -> void:
 	# Building a walkway from the Foundry to the ferry-only Crystal Spire.
 	var crystal: Dictionary = region.platforms["Crystal Spire"]
 	var foundry_data: Dictionary = region.platforms["Foundry"]
-	var from_hex: Vector2i = region._rim_toward(foundry_data, crystal.center, true)
-	var to_hex: Vector2i = region._rim_toward(crystal, foundry_data.center, true)
+	var from_hex: Vector2i = region.rim_toward(foundry_data, crystal.center, true)
+	var to_hex: Vector2i = region.rim_toward(crystal, foundry_data.center, true)
 	var plan := region.plan_walkway(from_hex, to_hex)
 	_expect(plan.problem == "" and plan.tiles.size() > 0, "Foundry to Crystal Spire walkway should plan: %s" % plan.problem)
 	_expect(region.plan_walkway(to_hex, from_hex).problem != "", "can't start a walkway on a platform you don't own")
@@ -1015,6 +1015,11 @@ func _check_unit_roster(main: Node) -> void:
 	_expect(rifle_stats.range > UnitCatalog.get_data("walker").range, "Riflemen outrange walkers")
 	var rival_rifle := UnitCatalog.make("rifleman", "rival")
 	_expect(rival_rifle.faction == "rival" and rival_rifle.bounty > 0, "rivals can field the same units")
+	var aa_rifle := UnitCatalog.make("rifleman")
+	var aa_rivet := UnitCatalog.make("riveteer")
+	_expect(aa_rifle.hits_air and not aa_rivet.hits_air, "Riflemen can shoot aircraft; Riveteers can't")
+	aa_rifle.free()
+	aa_rivet.free()
 	rival_rifle.free()
 	_expect(main.raids.unit_for_slot(0) == "walker" and main.raids.party_mix.has("shieldbearer"), "Ironbell mixes base troops into bigger parties")
 
@@ -1049,25 +1054,25 @@ func _check_unit_roster(main: Node) -> void:
 
 	# A shield catches a shot flying past it, and stops most of it.
 	_expect(combat.shield_in_path(shooter.global_position, rifle) == shield, "the Shieldbearer stands in the line of fire")
-	combat._hit(shooter, rifle, 20.0, Color.WHITE)
+	combat.deal_hit(shooter, rifle, 20.0, Color.WHITE)
 	_expect(rifle.hp == rifle.max_hp, "the Rifleman behind the shield is untouched")
 	_expect(is_equal_approx(shield.max_hp - shield.hp, 20.0 * (1.0 - shield.shield)), "the shield stops %d%% of a shot" % int(shield.shield * 100))
 	# Off to the side, the shield doesn't help.
 	shield.position.x += 4.0
 	_expect(combat.shield_in_path(shooter.global_position, rifle) == null, "a shield off to the side doesn't block")
-	combat._hit(shooter, rifle, 20.0, Color.WHITE)
+	combat.deal_hit(shooter, rifle, 20.0, Color.WHITE)
 	_expect(is_equal_approx(rifle.max_hp - rifle.hp, 20.0), "an unshielded Rifleman takes the full shot")
 	# Melee isn't a projectile, so a shield doesn't stop it.
 	var brawler: Unit = spawn.call("shieldbearer", "rival", Vector3(4, 0, 2))
 	shield.hp = shield.max_hp
-	combat._hit(brawler, shield, 14.0, Color.WHITE)
+	combat.deal_hit(brawler, shield, 14.0, Color.WHITE)
 	_expect(is_equal_approx(shield.max_hp - shield.hp, 14.0), "melee hits go around shields")
 	brawler.free()
 
 	# Lancers wreck armor.
 	var lancer: Unit = spawn.call("lancer", "player", Vector3(-3, 0, 0))
 	var walker_hp := shooter.hp
-	combat._hit(lancer, shooter, lancer.damage, Color.WHITE)
+	combat.deal_hit(lancer, shooter, lancer.damage, Color.WHITE)
 	_expect(is_equal_approx(walker_hp - shooter.hp, lancer.damage * lancer.vs_armor), "a Lancer does bonus damage to armored walkers")
 
 	# Medics heal the most wounded ally in range.

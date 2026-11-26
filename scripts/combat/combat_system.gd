@@ -88,7 +88,7 @@ func step(delta: float) -> void:
 					unit.stop()
 				if unit.cooldown_left <= 0.0 and not unit.is_moving():
 					unit.cooldown_left = unit.get_attack_cooldown()
-					_hit(unit, target, unit.get_damage(), Color(1.0, 0.85, 0.4))
+					deal_hit(unit, target, unit.get_damage(), Color(1.0, 0.85, 0.4))
 			elif unit.repair_power > 0.0 and not unit.is_moving() and _repair(unit, faction, delta):
 				pass
 			elif chase and not unit.flying and (not unit.is_moving() or unit.attack_move):
@@ -117,7 +117,7 @@ func step(delta: float) -> void:
 		if rng.randf() < miss:
 			_tracer(b.global_position + Vector3.UP * 1.2, target.global_position + Vector3(1.5, 1, 0), Color(0.7, 0.7, 0.7))
 			continue
-		_hit(b, target, amount, Color(0.6, 0.7, 1.0) if attack.has("chain") else Color(1.0, 0.85, 0.4), not attack.has("chain"))
+		deal_hit(b, target, amount, Color(0.6, 0.7, 1.0) if attack.has("chain") else Color(1.0, 0.85, 0.4), not attack.has("chain"))
 		if attack.has("chain"):
 			_chain(target, b.faction, amount * 0.7, int(attack.chain) - 1)
 
@@ -130,7 +130,7 @@ func step(delta: float) -> void:
 		var target = nearest_enemy(hq.global_position, hq.faction, hq.attack.range, true)
 		if target != null:
 			hq.cooldown_left = hq.attack.cooldown
-			_hit(hq, target, hq.attack.damage, Color(1.0, 0.6, 0.3), true)
+			deal_hit(hq, target, hq.attack.damage, Color(1.0, 0.6, 0.3), true)
 
 
 ## The closest living enemy of `faction` within `max_range`: a unit, a
@@ -186,7 +186,7 @@ func _intruder_on_platform(unit: Unit):
 
 ## Deals damage from an attacker to a target. With `projectile` true (the
 ## default for ranged units), a shield in the way catches the shot.
-func _hit(attacker: Node3D, target: Node3D, amount: float, color: Color, projectile = null) -> void:
+func deal_hit(attacker: Node3D, target: Node3D, amount: float, color: Color, projectile = null) -> void:
 	if attacker is Unit:
 		var a := attacker as Unit
 		if projectile == null:
@@ -309,7 +309,7 @@ func _chain(first: Node3D, faction: String, amount: float, jumps: int) -> void:
 					next = unit
 		if next == null:
 			return
-		_hit(from, next, amount, Color(0.6, 0.7, 1.0))
+		deal_hit(from, next, amount, Color(0.6, 0.7, 1.0))
 		hit.append(next)
 		from = next
 

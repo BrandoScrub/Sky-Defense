@@ -138,7 +138,7 @@ func _ready() -> void:
 	for p in layout.platforms:
 		_lay_features(p)
 	for w in layout.walkways:
-		_plan_walkway_span(w[0], w[1])
+		plan_walkway_span(w[0], w[1])
 		if prebuilt_walkways:
 			_lay_walkway(w[0], w[1])
 	for f in layout.ferry_routes:
@@ -599,7 +599,7 @@ func _lay_features(p: Dictionary) -> void:
 		if feature[1] is Vector2i:
 			hex = p.center + feature[1]
 		else:
-			hex = _rim_toward(p, _center_of(feature[1]))
+			hex = rim_toward(p, _center_of(feature[1]))
 		tiles[hex] = {"type": feature[0], "platform": p.name}
 		if feature[1] is String:
 			# What the feature faces, e.g. the storm a harvester anchor taps.
@@ -640,10 +640,10 @@ func _span_key(a_name: String, b_name: String) -> String:
 	return a_name + "|" + b_name if a_name < b_name else b_name + "|" + a_name
 
 
-func _plan_walkway_span(a_name: String, b_name: String) -> void:
+func plan_walkway_span(a_name: String, b_name: String) -> void:
 	var a: Dictionary = platforms[a_name]
 	var b: Dictionary = platforms[b_name]
-	var line := HexGrid.line(_rim_toward(a, b.center, true), _rim_toward(b, a.center, true))
+	var line := HexGrid.line(rim_toward(a, b.center, true), rim_toward(b, a.center, true))
 	var span: Array[Vector2i] = []
 	for hex in line:
 		if not tiles.has(hex):
@@ -655,8 +655,8 @@ func _plan_walkway_span(a_name: String, b_name: String) -> void:
 func _lay_walkway(a_name: String, b_name: String) -> void:
 	var a: Dictionary = platforms[a_name]
 	var b: Dictionary = platforms[b_name]
-	var start := _rim_toward(a, b.center, true)
-	var end := _rim_toward(b, a.center, true)
+	var start := rim_toward(a, b.center, true)
+	var end := rim_toward(b, a.center, true)
 	for hex in HexGrid.line(start, end):
 		if not tiles.has(hex):
 			tiles[hex] = {"type": "walkway", "platform": ""}
@@ -665,7 +665,7 @@ func _lay_walkway(a_name: String, b_name: String) -> void:
 
 ## The free rim tile of a platform closest to a target hex. With `allow_used`
 ## a rim tile that already holds a feature can be returned.
-func _rim_toward(p: Dictionary, target: Vector2i, allow_used := false) -> Vector2i:
+func rim_toward(p: Dictionary, target: Vector2i, allow_used := false) -> Vector2i:
 	var target_world := hex_center(target)
 	var best := p.center as Vector2i
 	var best_d := INF
@@ -1163,8 +1163,8 @@ func _draw_cloud(c: Dictionary) -> void:
 
 
 func _draw_ferry_route(a_name: String, b_name: String) -> void:
-	var a := _find_feature(a_name, "dock")
-	var b := _find_feature(b_name, "dock")
+	var a := find_feature(a_name, "dock")
+	var b := find_feature(b_name, "dock")
 	_draw_markers("Ferry_%s_%s" % [a_name, b_name], a, b, FERRY_HEIGHT, COLORS.ferry, 0.5)
 
 
@@ -1226,7 +1226,7 @@ func _draw_markers(node_name: String, a: Vector2i, b: Vector2i, height: float, c
 		root.add_child(marker)
 
 
-func _find_feature(platform_name: String, type: String) -> Vector2i:
+func find_feature(platform_name: String, type: String) -> Vector2i:
 	for hex in tiles:
 		if tiles[hex].platform == platform_name and tiles[hex].type == type:
 			return hex
