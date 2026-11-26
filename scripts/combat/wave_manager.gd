@@ -1,8 +1,9 @@
 ## Build phase, then wave phase, like the reference game. Each build phase
-## runs on a timer (Space ends it early). Each wave sends a bigger Ironbell party
-## and, from wave 3, a flight of Vesper bombers; once every attacker is
+## runs on a timer (Space ends it early). What each rival sends in each wave
+## comes from RivalCatalog: Ironbell's raiding parties grow every wave,
+## Vesper's bombers join from wave 3, and so on. Once every attacker is
 ## destroyed the next build phase starts. A rival whose headquarters falls
-## stops attacking. Destroying both wins; losing the Hub's headquarters loses.
+## stops attacking. Destroying every rival HQ wins; losing the Hub's loses.
 class_name WaveManager
 extends Node
 
@@ -16,24 +17,31 @@ const OVER := "over"
 
 @export var first_build_seconds := 45.0
 @export var build_seconds := 25.0
-@export var base_party := 2
-@export var max_party := 10
 ## Walkers in later waves get this much extra health per wave.
 @export var hp_growth_per_wave := 0.08
 
-@export var first_air_wave := 3
-@export var max_flight := 4
-## Ironbell troop carriers: from this wave, one more every 3 waves.
-@export var first_carrier_wave := 5
-@export var max_carriers := 3
-## Vesper gunships escort the bombers: from this wave, one more every 3 waves.
-@export var first_gunship_wave := 7
-@export var max_gunships := 3
-
+## The first ground rival's raids (Ironbell). Kept for older callers; every
+## ground rival's raids are in raids_by_corp.
 @export var raids: RivalRaids
-## Optional: Vesper's bombers join waves when set.
+## Optional: rival airships join waves when set.
 @export var fleet: VesperFleet
 @export var combat: CombatSystem
+
+## Rivals on this map, in order (main sets it from the layout). Empty means
+## whatever raids and fleet stand for: Ironbell and Vesper.
+var corps: Array = []
+## corp -> RivalRaids, for every rival that sends ground parties.
+var raids_by_corp := {}
+
+## Caps, from RivalCatalog (for the HUD and tests).
+var max_party: int:
+	get: return RivalCatalog.max_for("Ironbell", "ground")
+var max_flight: int:
+	get: return RivalCatalog.max_for("Vesper", "bomber")
+var max_carriers: int:
+	get: return RivalCatalog.max_for("Ironbell", "carrier")
+var max_gunships: int:
+	get: return RivalCatalog.max_for("Vesper", "gunship")
 
 var phase := BUILD
 ## Number of the next (or current) wave, from 1.
@@ -80,30 +88,42 @@ func step(delta: float) -> void:
 var hp_bonus := 0.0
 
 
+## Rivals taking part, in order.
+func rival_corps() -> Array:
+	if not corps.is_empty():
+		return corps
+	var out := []
+	if raids:
+		out.append(raids.corp)
+	if fleet:
+		out.append("Vesper")
+	return out
+
+
+func _raids_for(corp: String) -> RivalRaids:
+	if raids_by_corp.has(corp):
+		return raids_by_corp[corp]
+	return raids if raids and raids.corp == corp else null
+
+
+## Ironbell's raiding party size in wave `n`.
 func party_size_for(n: int) -> int:
-	return mini(base_party + n, max_party)
+	return RivalCatalog.count_for("Ironbell", "ground", n)
 
 
-## Vesper bombers in wave `n`: none before `first_air_wave`, then one more
-## every two waves.
+## Vesper bombers in wave `n`.
 func flight_size_for(n: int) -> int:
-	if n < first_air_wave:
-		return 0
-	return mini(1 + (n - first_air_wave) / 2, max_flight)
+	return RivalCatalog.count_for("Vesper", "bomber", n)
 
 
 ## Ironbell troop carriers in wave `n`.
 func carriers_for(n: int) -> int:
-	if n < first_carrier_wave:
-		return 0
-	return mini(1 + (n - first_carrier_wave) / 3, max_carriers)
+	return RivalCatalog.count_for("Ironbell", "carrier", n)
 
 
 ## Vesper gunships in wave `n`.
 func gunships_for(n: int) -> int:
-	if n < first_gunship_wave:
-		return 0
-	return mini(1 + (n - first_gunship_wave) / 3, max_gunships)
+	return RivalCatalog.count_for("Vesper", "gunship", n)
 
 
 ## What wave `n` sends, for the wave preview and for start_wave. One entry
@@ -112,28 +132,35 @@ func gunships_for(n: int) -> int:
 ## the squad each one drops. Rivals whose headquarters has fallen send nothing.
 func composition_for(n: int) -> Array:
 	var out := []
-	if raids and _hq_alive(raids.rival_platform):
-		var by_type := {}
-		var order := []
-		for i in party_size_for(n):
-			var t := raids.unit_for_slot(i)
-			if not by_type.has(t):
-				by_type[t] = 0
-				order.append(t)
-			by_type[t] += 1
-		for t in order:
-			out.append({"corp": raids.corp, "hq": raids.rival_platform, "unit": t,
-				"name": UnitCatalog.get_data(t).name, "count": by_type[t], "air": false})
-		if fleet and carriers_for(n) > 0:
-			out.append({"corp": raids.corp, "hq": raids.rival_platform, "unit": "carrier",
-				"name": VesperFleet.name_of("carrier"), "count": carriers_for(n), "air": true,
-				"carries": VesperFleet.AIRSHIPS.carrier.troops.duplicate()})
-	if fleet and _hq_alive(fleet.home):
-		for kind in ["bomber", "gunship"]:
-			var count := flight_size_for(n) if kind == "bomber" else gunships_for(n)
-			if count > 0:
-				out.append({"corp": "Vesper", "hq": fleet.home, "unit": kind,
-					"name": VesperFleet.name_of(kind), "count": count, "air": true})
+	for corp in rival_corps():
+		var hq := RivalCatalog.hq_of(corp)
+		if not _hq_alive(hq):
+			continue
+		for w in RivalCatalog.get_data(corp).get("waves", []):
+			var count := RivalCatalog.count_for(corp, w.unit, n)
+			if count <= 0:
+				continue
+			if w.unit == "ground":
+				var party := _raids_for(corp)
+				if party == null:
+					continue
+				var by_type := {}
+				var order := []
+				for i in count:
+					var t := party.unit_for_slot(i)
+					if not by_type.has(t):
+						by_type[t] = 0
+						order.append(t)
+					by_type[t] += 1
+				for t in order:
+					out.append({"corp": corp, "hq": hq, "unit": t,
+						"name": UnitCatalog.get_data(t).name, "count": by_type[t], "air": false})
+			elif fleet:
+				var entry := {"corp": corp, "hq": hq, "unit": w.unit,
+					"name": VesperFleet.name_of(w.unit), "count": count, "air": true}
+				if w.unit == "carrier":
+					entry.carries = VesperFleet.AIRSHIPS.carrier.troops.duplicate()
+				out.append(entry)
 	return out
 
 
@@ -147,31 +174,35 @@ func start_wave() -> void:
 	phase = WAVE
 	_wave_units = []
 	_wave_units_by_corp = {}
-	# Raiders still camped at the end of Ironbell's bridge from earlier waves
-	# join this one, and Ironbell only tops the camp up to this wave's size
-	# (so a late bridge doesn't bring every wave at once).
-	var leftovers := []
-	if raids:
-		for node in get_tree().get_nodes_in_group(Unit.ENEMY_GROUP):
-			if not node.flying and node.hp > 0.0:
-				leftovers.append(node)
-	var ground := 0
+	# Raiders still camped at the end of a bridge from earlier waves join this
+	# one, and their rival only tops the camp up to this wave's size (so a
+	# late bridge doesn't bring every wave at once).
+	var leftovers := {}
+	for node in get_tree().get_nodes_in_group(Unit.ENEMY_GROUP):
+		if not node.flying and node.hp > 0.0:
+			var corp: String = node.get_meta("corp", raids.corp if raids else "")
+			if not leftovers.has(corp):
+				leftovers[corp] = []
+			leftovers[corp].append(node)
+	var ground := {}
 	for entry in composition_for(wave):
 		var sent: Array[Unit] = []
 		if not entry.air:
-			ground += entry.count
+			ground[entry.corp] = ground.get(entry.corp, 0) + entry.count
 		elif entry.unit == "bomber":
-			sent = fleet.send_flight(entry.count)
+			sent = fleet.send_flight(entry.count, entry.corp)
 		else:
-			sent = fleet.launch(entry.unit, entry.count)
+			sent = fleet.launch(entry.unit, entry.count, entry.corp)
 		_track(entry.corp, sent)
-	ground -= leftovers.size()
-	if ground > 0:
-		_track(raids.corp, raids.send_party(ground))
+	for corp in ground:
+		var size: int = ground[corp] - leftovers.get(corp, []).size()
+		if size > 0:
+			_track(corp, _raids_for(corp).send_party(size))
 	for u in _wave_units:
 		_toughen(u)
 	# Already toughened in the wave they came with.
-	_track(raids.corp if raids else "", leftovers)
+	for corp in leftovers:
+		_track(corp, leftovers[corp])
 	phase_changed.emit(phase, wave)
 
 
@@ -204,26 +235,28 @@ func remaining_for(corp: String) -> int:
 	return _alive(_wave_units_by_corp.get(corp, []))
 
 
-## Raiders waiting at the end of an unfinished Ironbell bridge don't hold
-## the wave open: they camp there and join the next wave.
+## Raiders waiting at the end of an unfinished bridge don't hold the wave
+## open: they camp there and join the next wave.
 func _alive(units: Array) -> int:
 	var n := 0
-	var bridges: RivalBridges = raids.bridges if raids else null
 	for u in units:
-		if is_instance_valid(u) and u.hp > 0.0:
-			if bridges and not u.flying and bridges.is_waiting_at_frontier(raids.corp, u):
-				continue
+		if is_instance_valid(u) and u.hp > 0.0 and not _is_camped(u):
 			n += 1
 	return n
+
+
+func _is_camped(u: Unit) -> bool:
+	var bridges: RivalBridges = raids.bridges if raids else null
+	if bridges == null or u.flying:
+		return false
+	return bridges.is_waiting_at_frontier(u.get_meta("corp", raids.corp), u)
 
 
 ## Raiders camped at the end of an unfinished bridge, waiting for it.
 func camped() -> int:
 	var n := 0
-	if raids == null or raids.bridges == null:
-		return 0
 	for node in get_tree().get_nodes_in_group(Unit.ENEMY_GROUP):
-		if not node.flying and node.hp > 0.0 and raids.bridges.is_waiting_at_frontier(raids.corp, node):
+		if node.hp > 0.0 and _is_camped(node):
 			n += 1
 	return n
 
@@ -234,11 +267,11 @@ func camped() -> int:
 func wave_plan(n := -1) -> Array:
 	if n < 0:
 		n = wave
-	var counts := {raids.corp: {}}
-	var hqs := {raids.corp: raids.rival_platform}
-	if fleet:
-		counts["Vesper"] = {}
-		hqs["Vesper"] = fleet.home
+	var counts := {}
+	var hqs := {}
+	for corp in rival_corps():
+		counts[corp] = {}
+		hqs[corp] = RivalCatalog.hq_of(corp)
 	for entry in composition_for(n):
 		var unit_name: String = entry.name
 		if entry.has("carries"):

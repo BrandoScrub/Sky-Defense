@@ -48,7 +48,10 @@ var selection: SelectionController
 var building: BuildController
 var walkways: WalkwayBuilder
 var capture: CaptureSystem
+## The first walking rival's raids (Ironbell); every one is in all_raids.
 var raids: RivalRaids
+## corp -> RivalRaids, one per rival that sends ground parties.
+var all_raids := {}
 var loads: LoadSystem
 var economy: EconomySystem
 var combat: CombatSystem
@@ -137,11 +140,22 @@ func _ready() -> void:
 	capture.region = region
 	add_child(capture)
 
-	raids = RivalRaids.new()
-	raids.name = "RivalRaids"
-	raids.region = region
-	raids.capture = capture
-	add_child(raids)
+	# One raiding-party driver per rival that walks (RivalCatalog).
+	for corp in region.layout.paths:
+		var data := RivalCatalog.get_data(corp)
+		if data.get("party_mix", []).is_empty():
+			continue
+		var r := RivalRaids.new()
+		r.name = "RivalRaids" if all_raids.is_empty() else "RivalRaids%s" % corp
+		r.region = region
+		r.capture = capture
+		r.corp = corp
+		r.rival_platform = data.hq
+		r.party_mix.assign(data.party_mix)
+		add_child(r)
+		all_raids[corp] = r
+		if raids == null:
+			raids = r
 
 	loads = LoadSystem.new()
 	loads.name = "LoadSystem"
@@ -161,7 +175,8 @@ func _ready() -> void:
 	combat.loads = loads
 	add_child(combat)
 	combat.spawn_headquarters()
-	raids.combat = combat
+	for r in all_raids.values():
+		r.combat = combat
 
 	# Your patrol airships (Ships tab).
 	patrols = AirPatrols.new()
@@ -195,6 +210,8 @@ func _ready() -> void:
 	waves = WaveManager.new()
 	waves.name = "WaveManager"
 	waves.raids = raids
+	waves.raids_by_corp = all_raids
+	waves.corps = region.layout.paths.keys()
 	waves.fleet = fleet
 	waves.combat = combat
 	add_child(waves)
@@ -213,7 +230,8 @@ func _ready() -> void:
 	bridges.region = region
 	bridges.waves = waves
 	add_child(bridges)
-	raids.bridges = bridges
+	for r in all_raids.values():
+		r.bridges = bridges
 	bridges.combat = combat
 	bridges.cutting_started.connect(func(c): show_notice("Your units are cutting %s's bridge: hold them there %d seconds" % [c, int(bridges.cut_seconds)]))
 	bridges.span_cut.connect(func(c, _n): show_notice("You cut %s's bridge! Its crew has to build that span again" % c))
@@ -232,7 +250,7 @@ func _ready() -> void:
 	storms.waves = waves
 	add_child(storms)
 	storms.control_changed.connect(_on_storm_control_changed)
-	storms.rival_harvester_built.connect(func(p): show_notice("Ironbell built a Cloud Harvester on %s" % p))
+	storms.rival_harvester_built.connect(func(p): show_notice("A rival built a Cloud Harvester on %s" % p))
 
 	recruiter = Recruiter.new()
 	recruiter.name = "Recruiter"
@@ -269,8 +287,9 @@ func _ready() -> void:
 	steering.arrived.connect(func(_p): _refresh_resources())
 	walkways.mode_changed.connect(_on_walkway_mode_changed)
 	capture.platform_claimed.connect(_on_platform_claimed)
-	raids.raid_sent.connect(func(n): show_notice("Wave %d: Ironbell sent %d walkers toward your Hub" % [waves.wave, n]))
-	combat.building_destroyed.connect(func(n, f): show_notice(("Your %s was destroyed" if f == "player" else "Destroyed Ironbell's %s") % n))
+	for corp in all_raids:
+		all_raids[corp].raid_sent.connect(func(n): show_notice("Wave %d: %s sent %d raiders toward your Hub" % [waves.wave, corp, n]))
+	combat.building_destroyed.connect(func(n, f): show_notice(("Your %s was destroyed" if f == "player" else "Destroyed a rival %s") % n))
 	waves.game_over.connect(_on_game_over)
 	waves.rival_defeated.connect(func(p): show_notice("%s has fallen! Its attacks stop" % p))
 	fleet.flight_sent.connect(func(n): show_notice("Vesper bombers inbound: %d airship%s on the air lane" % [n, "" if n == 1 else "s"]))
@@ -294,7 +313,7 @@ func _on_storm_control_changed(cloud: String, controller: String) -> void:
 		"player":
 			show_notice("You control the %s: +%d power" % [cloud, storms.power_per_storm])
 		"rival":
-			show_notice("Ironbell controls the %s: expect lightning near it" % cloud)
+			show_notice("A rival controls the %s: expect lightning near it" % cloud)
 		_:
 			show_notice("Nobody controls the %s now" % cloud)
 	_refresh_resources()
@@ -371,7 +390,7 @@ func _process(delta: float) -> void:
 		WaveManager.BUILD:
 			_phase_label.text = "Build phase: wave %d in %ds (Space to start now)" % [waves.wave, ceili(waves.time_left)]
 			if waves.camped() > 0:
-				_phase_label.text += "   %d Ironbell raiders camped at their bridge" % waves.camped()
+				_phase_label.text += "   %d rival raiders camped at their bridge" % waves.camped()
 		WaveManager.WAVE:
 			_phase_label.text = "Wave %d: %d attackers left" % [waves.wave, waves.remaining()]
 		_:
@@ -386,7 +405,7 @@ func _process(delta: float) -> void:
 
 func _on_game_over(won: bool) -> void:
 	_game_over = true
-	_banner.text = ("Victory! Ironbell and Vesper are grounded." if won else "Defeat. Your Hub has fallen.") + "\nPress Enter to play again"
+	_banner.text = ("Victory! Every rival corporation is grounded." if won else "Defeat. Your Hub has fallen.") + "\nPress Enter to play again"
 	_banner.modulate = Color(1.0, 0.85, 0.4) if won else Color(1.0, 0.4, 0.35)
 	_banner.visible = true
 
@@ -610,7 +629,7 @@ func _on_platform_claimed(platform_name: String, new_owner: String) -> void:
 	if new_owner == "player":
 		show_notice("You claimed %s" % platform_name)
 	else:
-		show_notice("Ironbell claimed %s" % platform_name)
+		show_notice("A rival claimed %s" % platform_name)
 
 
 ## Colour key for the placeholder tiles, top right. Click its title (or

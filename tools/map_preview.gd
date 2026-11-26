@@ -1,8 +1,8 @@
 ## Renders a wide view of the generated map for each seed given, to compare
 ## layouts. Needs a display (use xvfb-run on a server):
 ##   godot --path . --rendering-method gl_compatibility --script res://tools/map_preview.gd -- out_dir 3 11 42
-## Add "r4" (or r3) before the seeds to lay out 4 (or 3) rivals with placeholder
-## names for the factions that aren't in the game yet.
+## Add "r4" (or r3) before the seeds to lay out 4 (or 3) rivals (the Nimbus
+## and Aurum stand-ins from RivalCatalog).
 extends SceneTree
 
 
@@ -16,11 +16,7 @@ func _initialize() -> void:
 	if not seeds.is_empty() and str(seeds[0]).begins_with("r"):
 		var count := int(str(seeds.pop_front()).substr(1))
 		tag = "-%drivals" % count
-		var extra := [
-			{"corp": "Weather", "hq": "Storm Faction HQ", "first": "Squall Reach"},
-			{"corp": "Aurum", "hq": "Defense Faction HQ", "first": "Gilt Reach"},
-		]
-		SkyRegion.rivals_override = LevelLayout.DEFAULT_RIVALS + extra.slice(0, count - 2)
+		SkyRegion.rivals_override = RivalCatalog.layout_rivals(count)
 	for s in seeds:
 		SkyRegion.seed_override = int(s)
 		var main: Node = load("res://scenes/main.tscn").instantiate()

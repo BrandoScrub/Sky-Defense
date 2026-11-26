@@ -1,4 +1,5 @@
-## Ironbell raiding parties. Each party spawns on the rival's wave spawn tile,
+## A rival's raiding parties (one RivalRaids per rival that walks; main sets
+## corp, rival_platform and party_mix from RivalCatalog). Each party spawns on the rival's wave spawn tile,
 ## marches along walkways toward the player's Hub, and stops to claim every
 ## platform on the way that isn't already Ironbell's. There's no combat yet:
 ## park your own units on a platform to contest it.
@@ -59,8 +60,9 @@ func send_party(size := party_size) -> Array[Unit]:
 		_count += 1
 		var type_id := unit_for_slot(i)
 		var u := UnitCatalog.make(type_id, "rival")
-		u.name = "IronbellWalker%d" % _count if type_id == "walker" else "Ironbell%s%d" % [type_id.capitalize(), _count]
+		u.name = "%sWalker%d" % [corp, _count] if type_id == "walker" else "%s%s%d" % [corp, type_id.capitalize().replace(" ", ""), _count]
 		u.set_meta("raid_index", _count)
+		u.set_meta("corp", corp)
 		u.position = region.snap_to_walkable(spawn + offsets[i])
 		_units_root().add_child(u)
 		out.append(u)

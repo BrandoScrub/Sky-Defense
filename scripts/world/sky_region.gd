@@ -57,10 +57,13 @@ var tile_size := Layout.TILE_SIZE
 
 ## Seed for the generated map. -1 picks a new random map each game.
 @export var map_seed := -1
+## How many rival corporations the map has, 2 to 4 (RivalCatalog.ORDER:
+## Ironbell, Vesper, then the Nimbus and Aurum stand-ins).
+@export_range(2, 4) var rival_count := 2
 ## When 0 or more, overrides map_seed for every region built afterwards
 ## (tests and screenshots use this for a repeatable map).
 static var seed_override := -1
-## When not empty, the rivals to lay out instead of LevelLayout.DEFAULT_RIVALS.
+## When not empty, the rivals to lay out instead of rival_count's.
 static var rivals_override: Array = []
 ## The map starts with no walkways between islands: you build them to expand,
 ## and Ironbell bridges its way toward you (RivalBridges). Tests set this to
@@ -123,7 +126,7 @@ func _ready() -> void:
 	var chosen := seed_override if seed_override >= 0 else map_seed
 	if chosen < 0:
 		chosen = randi() % 1000000
-	layout = Layout.generate(chosen, rivals_override if not rivals_override.is_empty() else Layout.DEFAULT_RIVALS)
+	layout = Layout.generate(chosen, rivals_override if not rivals_override.is_empty() else RivalCatalog.layout_rivals(rival_count))
 	for p in layout.platforms:
 		platforms[p.name] = p
 		owners[p.name] = {"hub": "player", "rival": "rival"}.get(p.kind, "")
@@ -755,8 +758,10 @@ func _make_tile(hex: Vector2i) -> void:
 		kind = "rival_walkway"
 	if kind == "neutral":
 		kind = _neutral_kind(t.platform)
-	if t.platform != "" and platforms[t.platform].get("corp", "") == "Vesper":
-		kind = "vesper"
+	if t.platform != "" and platforms[t.platform].get("corp", "") != "":
+		var corp_tile: String = RivalCatalog.get_data(platforms[t.platform].corp).get("tile", "rival")
+		if corp_tile != "rival":
+			kind = corp_tile
 	var is_walkway: bool = t.type == "walkway"
 	var height := WALKWAY_HEIGHT if is_walkway else DECK_HEIGHT
 	var tile := MeshInstance3D.new()

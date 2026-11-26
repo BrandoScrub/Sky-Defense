@@ -35,8 +35,8 @@ signal reached_player(corp: String, platform_name: String)
 ## Optional: cutting stops while an enemy is this close to the cutter.
 @export var combat: CombatSystem
 const CUT_ENEMY_RANGE := 6.0
-## Corporations that don't bridge.
-@export var fliers: Array[String] = ["Vesper"]
+## Corporations that don't bridge (besides any RivalCatalog says don't).
+@export var fliers: Array[String] = []
 
 ## corp -> {path: Array (HQ first, Hub last), next: index of the next span,
 ## progress: seconds, building: true while a span is going up}
@@ -47,7 +47,7 @@ var cuts := {}
 
 func _ready() -> void:
 	for corp in region.layout.paths:
-		if fliers.has(corp):
+		if fliers.has(corp) or (RivalCatalog.has(corp) and not RivalCatalog.bridges(corp)):
 			continue
 		var path: Array = region.layout.paths[corp].duplicate()
 		path.reverse()
@@ -87,6 +87,7 @@ func build_next_span(corp: String) -> bool:
 	var a: Dictionary = region.platforms[from]
 	var b: Dictionary = region.platforms[to]
 	crew.building = true
+	crew.span = span
 	var done := func(): _span_done(corp, from, to)
 	region.build_walkway(span, "rival", region.hex_center(region._rim_toward(a, b.center, true)),
 		region.hex_center(region._rim_toward(b, a.center, true)), done)
@@ -96,6 +97,10 @@ func build_next_span(corp: String) -> bool:
 func _span_done(corp: String, from: String, to: String) -> void:
 	var crew: Dictionary = crews[corp]
 	crew.building = false
+	# Remember whose span it is, for cutting.
+	for hex in crew.get("span", []):
+		if region.tiles.has(hex):
+			region.tiles[hex].corp = corp
 	# Work out where the bridge ends from scratch: a span may have been cut
 	# while this one went up.
 	crew.next = 0
@@ -197,9 +202,11 @@ func _is_rival_walkway(hex: Vector2i) -> bool:
 	return t.get("type", "") == "walkway" and t.get("builder", "") == "rival"
 
 
-func _corp_of_span(_hex: Vector2i) -> String:
-	# Only one bridging corporation so far; spans don't record their builder's name.
-	return crews.keys()[0] if not crews.is_empty() else ""
+func _corp_of_span(hex: Vector2i) -> String:
+	var corp: String = region.tiles.get(hex, {}).get("corp", "")
+	if corp == "" and not crews.is_empty():
+		corp = crews.keys()[0]
+	return corp
 
 
 ## True while the bridge hasn't reached `corp`'s target yet and `unit` is

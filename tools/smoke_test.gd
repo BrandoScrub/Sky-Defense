@@ -51,6 +51,10 @@ func _initialize() -> void:
 	await _check_combat_and_waves(main)
 	await _check_island_steering(main)
 	await _check_air_patrols(main)
+	main.queue_free()
+	await process_frame
+	await process_frame
+	await _check_four_rivals()
 	if _failures == 0:
 		print("Smoke test passed")
 	else:
@@ -1718,6 +1722,39 @@ func _check_air_patrols(main: Node) -> void:
 
 ## First platform (other than `allowed`) that a flight along `route` from
 ## `from` passes over, or "".
+## A four-rival map: every rival from RivalCatalog takes part in the waves,
+## each walking rival bridges and sends its own raiders.
+func _check_four_rivals() -> void:
+	SkyRegion.rivals_override = RivalCatalog.layout_rivals(4)
+	SkyRegion.seed_override = 4
+	var main: Node = load("res://scenes/main.tscn").instantiate()
+	root.add_child(main)
+	await process_frame
+	main.drift.set_process(false)
+	main.waves.set_process(false)
+	var waves: WaveManager = main.waves
+	_expect(waves.rival_corps() == ["Ironbell", "Vesper", "Nimbus", "Aurum"], "four rivals take part, got %s" % [waves.rival_corps()])
+	_expect(main.all_raids.has("Nimbus") and main.all_raids.has("Aurum") and not main.all_raids.has("Vesper"), "each walking rival gets raids")
+	_expect(main.bridges.crews.size() == 3, "Ironbell, Nimbus and Aurum bridge, got %d" % main.bridges.crews.size())
+	var corps_sending := {}
+	for entry in waves.composition_for(7):
+		corps_sending[entry.corp] = true
+	_expect(corps_sending.size() == 4, "every rival sends something by wave 7, got %s" % [corps_sending.keys()])
+	_expect(waves.wave_plan(7).size() == 4, "the top bar gets a card per rival")
+	waves.wave = 3
+	waves.start_wave()
+	var by_corp := {}
+	for e in get_root().get_tree().get_nodes_in_group(Unit.ENEMY_GROUP):
+		by_corp[e.get_meta("corp", "")] = by_corp.get(e.get_meta("corp", ""), 0) + 1
+	_expect(by_corp.get("Nimbus", 0) == RivalCatalog.count_for("Nimbus", "ground", 3), "Nimbus sends its wave 3 party, got %s" % [by_corp])
+	_expect(by_corp.get("Aurum", 0) == RivalCatalog.count_for("Aurum", "ground", 3), "Aurum sends its wave 3 party")
+	_expect(waves.remaining_for("Aurum") > 0, "Aurum's raiders count toward the wave")
+	main.queue_free()
+	await process_frame
+	SkyRegion.rivals_override = []
+	SkyRegion.seed_override = 3
+
+
 func _route_over_islands(region: SkyRegion, from: Vector3, route: PackedVector3Array, allowed: Array) -> String:
 	var prev := from
 	for point in route:

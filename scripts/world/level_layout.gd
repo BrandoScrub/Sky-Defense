@@ -44,13 +44,9 @@ const MIN_GAP := 2
 ## Longest planned walkway, in tiles (what the player can build in one go).
 const MAX_SPAN := 8
 
-## The rivals in the current prototype. Each: corp, HQ name and the name of
-## the first platform out from the Hub on its chain. Later factions add
-## entries here (up to 4).
-const DEFAULT_RIVALS := [
-	{"corp": "Ironbell", "hq": "Ironbell HQ", "first": "Midway"},
-	{"corp": "Vesper", "hq": "Vesper Aerodrome", "first": "Outpost"},
-]
+## Rivals come from RivalCatalog.layout_rivals(): each {corp, hq, first},
+## where first is the platform out from the Hub on its chain. A default map
+## has two (SkyRegion.rival_count picks 2 to 4).
 
 const COMPASS := ["East", "Northeast", "North", "Northwest", "West", "Southwest", "South", "Southeast"]
 const CAPACITY := {1: 10, 2: 20, 3: 40}
@@ -79,7 +75,9 @@ static func compass_gap(a: int, b: int) -> int:
 
 ## Generates a layout for 2 to 4 rivals. The same seed and rivals always
 ## give the same map.
-static func generate(map_seed: int, rivals: Array = DEFAULT_RIVALS) -> Dictionary:
+static func generate(map_seed: int, rivals: Array = []) -> Dictionary:
+	if rivals.is_empty():
+		rivals = RivalCatalog.layout_rivals(2)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = map_seed
 	for attempt in 300:
@@ -164,7 +162,7 @@ static func _attempt(rng: RandomNumberGenerator, rivals: Array) -> Dictionary:
 		return {}
 
 	for rival in rivals:
-		if rival.corp == "Vesper":
+		if RivalCatalog.get_data(rival.corp).get("air_lanes", false):
 			b.air_lanes.append([rival.hq, "Hub"])
 			b.air_lanes.append([rival.hq, "Generator Rig"])
 	return {
