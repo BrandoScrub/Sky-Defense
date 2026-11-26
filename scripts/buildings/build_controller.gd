@@ -86,10 +86,7 @@ func placement_problem(type_id: String, hex) -> String:
 		for b in region.buildings_on(platform):
 			if b.type_id == "lift_engine":
 				return "One Lift Engine per island"
-	var cost: int = BuildingCatalog.get_data(type_id).cost
-	if not resources.can_afford(cost):
-		return "Not enough scrap (%d needed)" % cost
-	return ""
+	return resources.shortfall(BuildingCatalog.get_data(type_id).cost, BuildingCatalog.crystals_of(type_id))
 
 
 ## Places a building if allowed. Returns "" on success, or the reason it failed.
@@ -98,9 +95,10 @@ func try_place(type_id: String, hex, rotation_steps := 0) -> String:
 	if problem != "":
 		return problem
 	var data := BuildingCatalog.get_data(type_id)
-	resources.spend_scrap(data.cost)
+	var crystals := BuildingCatalog.crystals_of(type_id)
+	resources.pay(data.cost, crystals)
 	region.place_building(Building.new().setup(type_id), hex, rotation_steps)
-	notice.emit("Built %s (-%d scrap)" % [data.name, data.cost])
+	notice.emit("Built %s (-%d scrap%s)" % [data.name, data.cost, ", -%d crystals" % crystals if crystals > 0 else ""])
 	return ""
 
 
@@ -112,8 +110,11 @@ func demolish(hex: Vector2i) -> int:
 		return 0
 	var building := region.remove_building(hex)
 	var refund := BuildingCatalog.refund_for(building.type_id)
+	var crystal_refund := BuildingCatalog.crystal_refund_for(building.type_id)
 	resources.add_scrap(refund)
-	notice.emit("Demolished %s (+%d scrap)" % [building.get_data().name, refund])
+	if crystal_refund > 0:
+		resources.add_crystals(crystal_refund)
+	notice.emit("Demolished %s (+%d scrap%s)" % [building.get_data().name, refund, ", +%d crystals" % crystal_refund if crystal_refund > 0 else ""])
 	building.queue_free()
 	return refund
 

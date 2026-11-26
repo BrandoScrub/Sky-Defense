@@ -292,6 +292,15 @@ func _make_button(entry: String, key_text: String) -> Button:
 	button.pressed.connect(activate.bind(entry))
 
 	button.add_child(_key_label(key_text))
+	# Top right: the power a building draws (-) or makes (+).
+	var power := Label.new()
+	power.name = "Power"
+	power.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	power.position = Vector2(0, 2)
+	power.size = Vector2(BUTTON_SIZE.x - 6, 16)
+	power.add_theme_font_size_override("font_size", 12)
+	power.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	button.add_child(power)
 	return button
 
 
@@ -310,6 +319,8 @@ func _update_button(entry: String) -> void:
 	var button: Button = _entry_buttons[entry]
 	var title := ""
 	var cost := 0
+	var crystals := 0
+	var power_text := ""
 	var details := ""
 	var active := false
 	if entry.begins_with("power:"):
@@ -318,12 +329,13 @@ func _update_button(entry: String) -> void:
 		var running := powers != null and powers.is_running(id)
 		var wait := powers.cooldown_left(id) if powers else 0.0
 		var label: String = spec.get("short", spec.name)
+		(button.get_node("Power") as Label).text = ""
 		button.text = "\n%s\n%d crystals" % [label, spec.crystals]
 		if running:
 			button.text = "\n%s\nrunning" % label
 		elif wait > 0.0:
 			button.text = "\n%s\nready in %ds" % [label, ceili(wait)]
-		button.tooltip_text = "%s  [%s]\nCompany power: %d crystals, lasts %ds, then %ds to recharge.\n%s\nCloud Harvesters pay crystals at the end of each wave." % [spec.name, _hotkey(entry), spec.crystals, int(spec.seconds), int(spec.cooldown), spec.blurb]
+		button.tooltip_text = "%s  [%s]\nCompany power: %d crystals, lasts %ds, then %ds to recharge.\n%s\nCloud Harvesters and crystal seams pay crystals at the end of each wave." % [spec.name, _hotkey(entry), spec.crystals, int(spec.seconds), int(spec.cooldown), spec.blurb]
 		button.set_pressed_no_signal(running)
 		var can_use: bool = (resources == null or resources.crystals >= spec.crystals) and wait <= 0.0
 		button.modulate = Color(0.6, 0.85, 1.0) if running else (Color.WHITE if can_use else Color(1.0, 0.6, 0.6, 0.8))
@@ -335,6 +347,7 @@ func _update_button(entry: String) -> void:
 		var full_name: String = patrols.ship_name(kind) if patrols else spec.name
 		title = {"interceptor": "Interceptor", "gunboat": "Gunboat"}.get(kind, full_name)
 		cost = spec.cost
+		crystals = spec.get("crystals", 0)
 		details = full_name + ": %s airship, built at an Airship Hangar (%ds). Patrols your Mooring Masts and only hunts within reach of a hangar or mast.\nHealth %d" % [spec.role, int(spec.build_seconds), int(spec.hp)]
 		if kind == "utility":
 			details += "\nJob (V to change): repair mends buildings it flies over, scout sees far through the fog, troops drops Riveteers where enemies land."
@@ -349,6 +362,7 @@ func _update_button(entry: String) -> void:
 			details = "Click an Airship Hangar, then Mooring Masts in order. Right click to finish.\nWithout a route, ships visit every mast, nearest first."
 			active = patrols != null and patrols.editing
 		button.text = "\n%s" % title
+		(button.get_node("Power") as Label).text = ""
 		button.tooltip_text = "%s  [%s]\n%s" % [title, _hotkey(entry), details]
 		button.set_pressed_no_signal(active)
 		button.modulate = Color(1.0, 0.85, 0.4) if active else Color.WHITE
@@ -358,6 +372,7 @@ func _update_button(entry: String) -> void:
 		var unit := UnitCatalog.get_data(type_id)
 		title = unit.name
 		cost = unit.cost
+		crystals = unit.get("crystals", 0)
 		details = "Train at the Hub (%ds). Up to %d in the queue.\n%s\n%s" % [int(unit.train_seconds), recruiter.max_queue if recruiter else 0, _unit_stats(unit), unit.blurb]
 		if recruiter and recruiter.queued_of(type_id) > 0:
 			title += " (%d)" % recruiter.queued_of(type_id)
@@ -376,15 +391,24 @@ func _update_button(entry: String) -> void:
 				var data := BuildingCatalog.get_data(entry)
 				title = data.get("short", data.name)
 				cost = data.cost
+				crystals = data.get("crystals", 0)
+				if data.power != 0:
+					power_text = "%+d power" % data.power
 				details = (data.name + "\n" if data.has("short") else "") + _building_details(data)
 				active = building != null and building.placing == entry
 	var per_tile := " / tile" if entry == "walkway" else ""
 	button.text = "\n%s\n%d scrap%s" % [title, cost, per_tile]
+	if crystals > 0:
+		button.text = "\n%s\n%d + %d cr" % [title, cost, crystals]
+		details = "Costs %d scrap and %d crystals.\n%s" % [cost, crystals, details]
 	if entry == "steer":
 		button.text = "\n%s\n%d power" % [title, IslandSteering.STEER_POWER]
+	var power_label: Label = button.get_node("Power")
+	power_label.text = power_text
+	power_label.modulate = Color(0.6, 1.0, 0.6) if power_text.begins_with("+") else Color(0.65, 0.8, 1.0)
 	button.tooltip_text = "%s  [%s]\n%s" % [title, _hotkey(entry), details]
 	button.set_pressed_no_signal(active)
-	var affordable := resources == null or resources.scrap >= cost
+	var affordable := resources == null or resources.can_pay(cost, crystals)
 	if active:
 		button.modulate = Color(1.0, 0.85, 0.4)
 	else:

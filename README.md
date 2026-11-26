@@ -10,9 +10,16 @@ Built with [Godot 4.3](https://godotengine.org/download/archive/4.3-stable/) (st
 2. In the Project Manager, choose **Import** and pick `project.godot` in this folder.
 3. Press **F5** to play.
 
-The current build is a placeholder sky region on hexagonal tiles: your Hub, a generated ring of neutral platforms, the rival HQs, unconnected islands you link with walkways, a ferry route, storm clouds and rival air lanes. A legend in the top right (folded at the start; L opens it) explains the tile colours. Your Commander (gold) and a squad of four Riveteers start on the Hub and can be selected and sent across walkways. You start with 300 scrap and one Dynamo Generator on the Hub, and can build there; a tower the grid can't power shows a NO POWER (or LOW POWER) sign over it; the top bar shows scrap, the power grid and crystals.
+The current build is a placeholder sky region on hexagonal tiles: your Hub, a generated ring of neutral platforms, the rival HQs, unconnected islands you link with walkways, a ferry route, storm clouds and rival air lanes. A legend in the top right (folded at the start; L opens it) explains the tile colours. Your Commander (gold) and a squad of four Riveteers start on the Hub and can be selected and sent across walkways. You start with 300 scrap, 10 crystals and one Dynamo Generator on the Hub, and can build there; a tower the grid can't power shows a NO POWER (or LOW POWER) sign over it; the top bar shows scrap, the power grid and crystals.
 
-Weight matters: buildings and units both add to a platform's load. Over capacity a platform sways (over 100%), sags and slows units (over 115%), then fails (over 130%), dropping its newest building every few seconds. If towers draw more power than generators and harvesters supply, the grid browns out and towers run at reduced efficiency. Units count for half their weight, so a squad can stand on a small island. A Lift Engine (Industry, E) lets its platform carry 10 more and weighs nothing itself; you can build one per island. Income pays out at the end of each wave: every platform you hold besides the Hub pays 25 scrap, every scrap heap on a platform you own pays 50 scrap, every crystal seam on one pays 5 crystals and every Cloud Harvester pays 6 crystals, shown as +N in the top bar and in a popup when the wave is cleared. Kills pay half the attacker's bounty on the spot (8 scrap for a walker), so most of your scrap comes from the islands you hold.
+Weight matters: buildings and units both add to a platform's load. Over capacity a platform sways (over 100%), sags and slows units (over 115%), then fails (over 130%), dropping its newest building every few seconds. If towers draw more power than generators and harvesters supply, the grid browns out and towers run at reduced efficiency. Units count for half their weight, so a squad can stand on a small island. A Lift Engine (Industry, E) lets its platform carry 10 more and weighs nothing itself; you can build one per island. Income pays out at the end of each wave: every platform you hold besides the Hub pays 20 scrap, every scrap heap on a platform you own pays 50 scrap, every crystal seam on one pays 5 crystals and every Cloud Harvester pays 6 crystals, shown as +N in the top bar and in a popup when the wave is cleared. Kills pay half the attacker's bounty on the spot (8 scrap for a walker), so most of your scrap comes from the islands you hold.
+
+Every resource has a job, and they're meant to be scarce, so each purchase is a tradeoff:
+
+- **Scrap** pays for everything. Plain islands pay only 20 a wave, so what's on an island (scrap heaps, crystal seams, generator sockets, harvester anchors) decides which ones are worth claiming. Selling a building refunds half its price.
+- **Crystals** buy the advanced gear on top of its scrap price: Arc Coil 10, Skyhook Gun 10, Airship Hangar 15, Lancer 5, Gunboat 10, plus the Hum powers. You start with 10; Cloud Harvesters (6 a wave) and crystal seams (5 a wave each) pay more.
+- **Power** is a budget. A Dynamo makes 8 on plain deck but 15 on a generator socket, and a Cloud Harvester makes 15. Every tower draws power (shown at the top right of its build button), and short power slows every tower. The Hub has two sockets; more are out on the islands.
+- **Weight** limits how much one island can carry (see above).
 
 Park units on a neutral platform to claim it (it's contested while both sides have units there), then build on it. Rival raiding parties march along walkways, claim platforms on the way, and attack whatever they meet. If you wall off a walkway with buildings they smash through the wall instead of stopping.
 
@@ -46,7 +53,7 @@ Every faction fields the same base troops (stats live in `scripts/units/unit_cat
 | Shieldbearer | 50 | Riot shield. Tough melee fighter. Its shield stops 75% of any shot aimed at it and catches enemy shots that try to fly past it toward allies behind. |
 | Rifleman | 40 | Bolt gun. Long range and hard-hitting, and the only ground troop that can shoot at airships, but fragile. |
 | Sapper | 40 | Engineer. Repairs your damaged buildings nearby (and, slowly, your Hub when nothing else needs it) and does 4x damage to enemy buildings. |
-| Lancer | 60 | Anti-armor. Slow, heavy shots that do 2.5x damage to armored walkers and partly pierce shields. |
+| Lancer | 60 + 5 crystals | Anti-armor. Slow, heavy shots that do 2.5x damage to armored walkers and partly pierce shields. |
 | Medic | 40 | Doesn't fight. Heals the most wounded ally nearby. |
 
 Melee hits, Arc Coil lightning and bombs from the air go around shields. Units can be buffed by anything in the game with `unit.add_buff(id, {"damage": 1.25, ...}, seconds)`, or by an aura with `Unit.buff_allies_near(...)`; the stats a buff can change are listed in `Unit.BUFF_STATS`. Clicking a unit shows its stats and any buffs on the info card.
@@ -69,7 +76,7 @@ Melee hits, Arc Coil lightning and bombs from the air go around shields. Units c
 | Build | Defense (one row per role): ground Q Rivet Turret (50 scrap), W Arc Coil, E Rally Horn; flak A Flak Battery, S Skyhook Gun; air Z Airship Hangar, X Mooring Mast. Industry: Q Dynamo Generator, W Walkway, E Lift Engine, R Cloud Harvester |
 | Company powers | Hum tab, paid in crystals: A Overcharge (15: your towers fire 40% faster for 20 s), S Emergency Lift (20: your platforms ignore overload for 30 s). Each recharges after use |
 | While placing | Left click places, Shift keeps placing, R rotates, Esc or right click cancels |
-| Demolish | Delete over a building (refunds 75%) |
+| Demolish | Delete over a building (refunds 50%) |
 | Build a walkway | Industry tab, W, then click a tile on your platform, then a tile on another platform (15 scrap per tile) |
 | Train units | Army tab: Q Riveteer, W Shieldbearer, E Rifleman, R Sapper, A Lancer, S Medic; with a Hangar, Z Interceptor, X Gunboat |
 | Start the next wave early | Space |

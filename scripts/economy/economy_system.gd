@@ -20,7 +20,9 @@ signal paid_out(income: Dictionary)
 
 @export var scrap_per_heap_per_round := 50
 @export var crystals_per_harvester_per_round := 6
-@export var scrap_per_island_per_round := 25
+## Plain islands pay little: what is on an island (heaps, seams, sockets,
+## anchors) is what makes it worth holding.
+@export var scrap_per_island_per_round := 20
 ## Crystal seams on islands you hold pay this many crystals each.
 @export var crystals_per_seam_per_round := 5
 

@@ -470,7 +470,7 @@ func _check_building(main: Node) -> void:
 	_expect(build.try_place("dynamo", deck) == "", "a Dynamo on Hub deck should be allowed")
 	_expect(res.scrap == start_scrap - 40, "Dynamo should cost 40 scrap")
 	_expect(region.platform_load("Hub") == base_load + 3, "Dynamo should add 3 weight")
-	_expect(region.power_supply() == base_power + 10, "Dynamo on deck should supply 10")
+	_expect(region.power_supply() == base_power + 8, "Dynamo on deck should supply 8")
 	_expect(not region.is_hex_walkable(deck), "a building blocks its tile")
 	_expect(build.try_place("rivet_turret", deck) != "", "can't build on an occupied tile")
 
@@ -479,7 +479,7 @@ func _check_building(main: Node) -> void:
 		socket = hub + Vector2i(-2, 1)
 	_expect(region.get_tile(socket).type == "generator_socket", "Hub should have a free generator socket")
 	_expect(build.try_place("dynamo", socket) == "", "a Dynamo on a socket should be allowed")
-	_expect(region.power_supply() == base_power + 25, "a socketed Dynamo should supply 15")
+	_expect(region.power_supply() == base_power + 23, "a socketed Dynamo should supply 15")
 
 	_expect(build.try_place("harvester", hub + Vector2i(-2, 0)) != "", "harvesters need an anchor")
 	var anchor := Vector2i(999, 999)
@@ -487,11 +487,17 @@ func _check_building(main: Node) -> void:
 		if region.get_tile(hex).type == "harvester_anchor":
 			anchor = hex
 	_expect(build.try_place("harvester", anchor) == "", "a harvester on the Hub anchor should be allowed")
-	_expect(region.power_supply() == base_power + 55, "harvester should add 30 power")
+	_expect(region.power_supply() == base_power + 38, "harvester should add 15 power")
 
 	res.add_scrap(100)
+	var crystals_before := res.crystals
+	res.crystals = 5
+	_expect(build.try_place("arc_coil", hub + Vector2i(-2, 2)).begins_with("Not enough crystals"), "an Arc Coil needs crystals")
+	res.crystals = crystals_before + 10
+	var scrap_pre_coil := res.scrap
 	var coil_err := build.try_place("arc_coil", hub + Vector2i(-2, 2))
 	_expect(coil_err == "", "an Arc Coil should be allowed: " + coil_err)
+	_expect(res.crystals == crystals_before and res.scrap == scrap_pre_coil - 70, "an Arc Coil costs 70 scrap and 10 crystals")
 	_expect(region.power_demand() == 8, "Arc Coil should draw 8")
 	var coil: Building = region.buildings[hub + Vector2i(-2, 2)]
 	coil.set_efficiency(0.0)
@@ -514,8 +520,8 @@ func _check_building(main: Node) -> void:
 	res.scrap = before
 
 	var refund := build.demolish(deck)
-	_expect(refund == 30, "demolishing a Dynamo refunds 30, got %d" % refund)
-	_expect(res.scrap == before + 30, "refund should be added to scrap")
+	_expect(refund == 20, "demolishing a Dynamo refunds half (20), got %d" % refund)
+	_expect(res.scrap == before + 20, "refund should be added to scrap")
 	_expect(region.is_hex_walkable(deck), "demolished tile is walkable again")
 	_expect(region.platform_load("Hub") == base_load + 2 + 3 + 4, "load after demolish should be 9 more than at the start, got %d" % (region.platform_load("Hub") - base_load))
 

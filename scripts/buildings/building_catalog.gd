@@ -3,10 +3,12 @@
 class_name BuildingCatalog
 extends RefCounted
 
-## Fraction of the cost returned when a building is demolished.
-const REFUND_RATIO := 0.75
+## Fraction of the cost (scrap and crystals) returned when a building is
+## demolished. Half, so every build is a commitment.
+const REFUND_RATIO := 0.5
 
 ## short: optional shorter name for the build menu button.
+## crystals: optional crystal price on top of the scrap cost (advanced gear).
 ## power: positive supplies electricity, negative draws it.
 ## tiles: tile types the building may stand on.
 ## role: "ground", "flak" or "hangar" for defenses (see ROLES); none for
@@ -20,7 +22,7 @@ const ROLES := {
 
 const BUILDINGS := {
 	"dynamo": {
-		"name": "Dynamo Generator", "short": "Dynamo", "cost": 40, "power": 10, "weight": 3,
+		"name": "Dynamo Generator", "short": "Dynamo", "cost": 40, "power": 8, "weight": 3,
 		"tiles": ["deck", "generator_socket"], "shape": "generator",
 		"color": Color(0.95, 0.78, 0.25),
 		# Generators on a generator socket produce more.
@@ -28,7 +30,7 @@ const BUILDINGS := {
 		"hp": 120.0,
 	},
 	"harvester": {
-		"name": "Cloud Harvester", "short": "Harvester", "cost": 80, "power": 30, "weight": 2,
+		"name": "Cloud Harvester", "short": "Harvester", "cost": 80, "power": 15, "weight": 2,
 		"tiles": ["harvester_anchor"], "shape": "harvester",
 		"color": Color(0.35, 0.6, 1.0),
 		"hp": 80.0,
@@ -46,7 +48,7 @@ const BUILDINGS := {
 	# within "radius": damage_mult (more damage), cooldown_mult (below 1 =
 	# faster fire), armor (fraction of damage blocked) and heal (hp/second).
 	"rivet_turret": {
-		"name": "Rivet Turret", "cost": 50, "power": -2, "weight": 2,
+		"name": "Rivet Turret", "cost": 50, "power": -3, "weight": 2,
 		"tiles": ["deck"], "shape": "turret", "role": "ground",
 		"color": Color(0.6, 0.62, 0.66),
 		"hp": 150.0,
@@ -55,7 +57,7 @@ const BUILDINGS := {
 		"aura": {"radius": 5.0, "armor": 0.15},
 	},
 	"arc_coil": {
-		"name": "Arc Coil", "cost": 70, "power": -8, "weight": 4,
+		"name": "Arc Coil", "cost": 70, "crystals": 10, "power": -8, "weight": 4,
 		"tiles": ["deck"], "shape": "coil", "role": "ground",
 		"color": Color(0.55, 0.45, 0.95),
 		"hp": 130.0,
@@ -63,7 +65,7 @@ const BUILDINGS := {
 		"attack": {"damage": 16.0, "range": 8.0, "cooldown": 1.5, "chain": 3},
 	},
 	"rally_horn": {
-		"name": "Rally Horn", "cost": 45, "power": -2, "weight": 2,
+		"name": "Rally Horn", "cost": 45, "power": -3, "weight": 2,
 		"tiles": ["deck"], "shape": "horn", "role": "ground",
 		"color": Color(0.85, 0.6, 0.25),
 		"hp": 110.0,
@@ -80,7 +82,7 @@ const BUILDINGS := {
 		"attack": {"damage": 0.0, "range": 12.0, "cooldown": 0.35, "air": 22.0, "air_only": true},
 	},
 	"skyhook_cannon": {
-		"name": "Skyhook Gun", "cost": 75, "power": -5, "weight": 4,
+		"name": "Skyhook Gun", "cost": 75, "crystals": 10, "power": -6, "weight": 4,
 		"tiles": ["deck"], "shape": "skyhook", "role": "flak",
 		"color": Color(0.5, 0.42, 0.35),
 		"hp": 140.0,
@@ -101,7 +103,7 @@ const BUILDINGS := {
 	# lost drones are rebuilt) and builds your patrol airships (AirPatrols),
 	# which fly a loop of Mooring Masts.
 	"airship_hangar": {
-		"name": "Airship Hangar", "short": "Hangar", "cost": 100, "power": -6, "weight": 5,
+		"name": "Airship Hangar", "short": "Hangar", "cost": 100, "crystals": 15, "power": -8, "weight": 5,
 		"tiles": ["deck"], "shape": "airship_hangar", "role": "hangar",
 		"color": Color(0.5, 0.42, 0.33),
 		"hp": 220.0,
@@ -125,6 +127,14 @@ static func get_data(type_id: String) -> Dictionary:
 
 static func refund_for(type_id: String) -> int:
 	return int(floor(BUILDINGS[type_id].cost * REFUND_RATIO))
+
+
+static func crystals_of(type_id: String) -> int:
+	return BUILDINGS[type_id].get("crystals", 0)
+
+
+static func crystal_refund_for(type_id: String) -> int:
+	return int(floor(crystals_of(type_id) * REFUND_RATIO))
 
 
 ## Power a building of this type gives (+) or takes (-) on a given tile type.
