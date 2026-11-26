@@ -14,8 +14,10 @@ Ironbell bridges its way to you and walks; Vesper flies bombers.
    own to reach new islands, then park units there to claim them. How you
    expand is up to you: the Foundry gives scrap, the Generator Rig power.
 2. Ironbell's crews bridge one span at a time from its HQ toward your Hub
-   (red-brown walkways), faster while a wave is out. Its walkers wait at the
-   end of the bridge, then march in. Kills pay scrap.
+   (red-brown walkways), faster while a wave is out. Its walkers camp at the
+   end of the bridge until it reaches you, then march in together. Park
+   units on a platform right beside an Ironbell span for 8 seconds (with no
+   enemy close) to cut it down. Kills pay scrap.
 3. Build during the build phase with the menu in the bottom left (Tab
    switches tabs). Rivet Turrets (Defense, Q) guard where the bridge lands.
    Towers need power: your Hub starts with one Dynamo Generator, and more
@@ -212,6 +214,9 @@ func _ready() -> void:
 	bridges.waves = waves
 	add_child(bridges)
 	raids.bridges = bridges
+	bridges.combat = combat
+	bridges.cutting_started.connect(func(c): show_notice("Your units are cutting %s's bridge: hold them there %d seconds" % [c, int(bridges.cut_seconds)]))
+	bridges.span_cut.connect(func(c, _n): show_notice("You cut %s's bridge! Its crew has to build that span again" % c))
 	bridges.reached_player.connect(func(c, p): show_notice("%s's bridge reached %s: expect walkers!" % [c, p]))
 
 	ferry = FerrySystem.new()
@@ -365,6 +370,8 @@ func _process(delta: float) -> void:
 	match waves.phase:
 		WaveManager.BUILD:
 			_phase_label.text = "Build phase: wave %d in %ds (Space to start now)" % [waves.wave, ceili(waves.time_left)]
+			if waves.camped() > 0:
+				_phase_label.text += "   %d Ironbell raiders camped at their bridge" % waves.camped()
 		WaveManager.WAVE:
 			_phase_label.text = "Wave %d: %d attackers left" % [waves.wave, waves.remaining()]
 		_:
