@@ -147,10 +147,23 @@ func status_text(entry: Dictionary) -> String:
 		WaveManager.BUILD:
 			if entry.units.is_empty():
 				return "Wave %d: sits it out" % waves.wave
+			var target := bomb_target_of(entry)
+			if target != "":
+				return "Wave %d in %s: bombs %s" % [waves.wave, clock(waves.time_left), target]
 			return "Wave %d in %s" % [waves.wave, clock(waves.time_left)]
 		WaveManager.WAVE:
 			var left := waves.remaining_for(entry.corp)
 			return "Attacking: %d left" % left if left > 0 else "Waiting for next wave"
+	return ""
+
+
+## The island this rival's bombers will hit this wave, or "" if it sends none.
+func bomb_target_of(entry: Dictionary) -> String:
+	if waves.fleet == null or entry.defeated:
+		return ""
+	for u in entry.units:
+		if u[0] == VesperFleet.name_of("bomber"):
+			return waves.fleet.bomb_target(entry.corp)
 	return ""
 
 
@@ -173,6 +186,10 @@ func wave_tooltip(entry: Dictionary) -> String:
 		lines.append("  Nothing this wave")
 	for u in entry.units:
 		lines.append("  %d x %s" % [u[1], u[0]])
+	var target := bomb_target_of(entry)
+	if target != "":
+		lines.append("Bombers fly at %s (your outer island with the most" % target)
+		lines.append("built on it). Flak there stops them.")
 	var bonus := waves.health_bonus(-1, entry.corp)
 	if bonus > 0.005 and not entry.units.is_empty():
 		lines.append("Health +%d%%" % roundi(bonus * 100))

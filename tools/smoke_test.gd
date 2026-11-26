@@ -38,6 +38,7 @@ func _initialize() -> void:
 	_check_building(main)
 	_check_build_menu(main)
 	_check_info_panel(main)
+	_check_bomb_target(main)
 	_check_top_bar(main)
 	_check_debug_panel(main)
 	_check_ferry(main)
@@ -1586,6 +1587,43 @@ func _check_air_routes(main: Node) -> void:
 	wind.since_wave = 1
 	wind.from_index = old_wind
 	wind.wind_changed.emit(old_wind, true)
+
+
+## Vesper's bombers go for your outer island with the most built on it,
+## the lane is redrawn to it, and airship buttons wait for a Hangar.
+func _check_bomb_target(main: Node) -> void:
+	var region: SkyRegion = main.region
+	var fleet: VesperFleet = main.fleet
+	var owner_before := region.platform_owner("Generator Rig")
+	region.set_platform_owner("Generator Rig", "")
+	_expect(fleet.bomb_target("Vesper") == "Hub", "with no outer islands built on, bombers go for the Hub")
+	region.set_platform_owner("Generator Rig", "player")
+	var hex := Vector2i(999, 999)
+	for h in region.tiles_of_platform("Generator Rig"):
+		if not region.buildings.has(h) and region.get_tile(h).type in ["deck", "generator_socket"]:
+			hex = h
+			break
+	var placed := false
+	if hex != Vector2i(999, 999):
+		region.place_building(Building.new().setup("dynamo"), hex)
+		placed = true
+	_expect(fleet.bomb_target("Vesper") == "Generator Rig", "bombers go for the outer island you built on, got %s" % fleet.bomb_target("Vesper"))
+	fleet.refresh_lanes()
+	var to := region.air_lane_routes().map(func(l): return l[1])
+	_expect(to == ["Generator Rig"], "Vesper's one drawn lane leads to its target, got %s" % [to])
+	if placed:
+		region.remove_building(hex)
+	region.set_platform_owner("Generator Rig", owner_before)
+	fleet.refresh_lanes()
+	# Airship buttons say they need a Hangar while you have none.
+	var menu: BuildMenu = main.build_menu
+	if main.patrols.hangars.is_empty():
+		menu.show_tab("Army")
+		var b: Button = menu._entry_buttons.get("ship:interceptor")
+		_expect(b != null, "the Army tab has an Interceptor button")
+		if b:
+			menu.refresh()
+			_expect(b.text.contains("needs a Hangar") and b.modulate.a < 0.5, "the Interceptor button is greyed without a Hangar")
 
 
 ## Rivals launch airships in waves: Ironbell carriers drop troops on your

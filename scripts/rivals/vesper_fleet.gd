@@ -1,8 +1,10 @@
 ## Every rival airship (the class keeps its old name; Vesper was the first
 ## corporation to fly). Kinds, in AIRSHIPS:
-##   bomber  - Vesper. Flies an air lane (region.layout.air_lanes) from the
-##             Vesper Aerodrome, then bombs the nearest of your buildings, or
-##             your Hub's headquarters. Ignores your units.
+##   bomber  - Vesper. Each wave its bombers fly one air lane from the Vesper
+##             Aerodrome to your richest outer island (the one with the most
+##             scrap in buildings; the Hub if you have none), then bomb the
+##             nearest of your buildings there, or the Hub's headquarters.
+##             The rival card names the target. Ignores your units.
 ##   gunship - Vesper escort. Hunts your units and drones, in the air and on
 ##             the decks, then your buildings.
 ##   carrier - Ironbell troop carrier. Flies to your platform nearest its HQ,
@@ -64,12 +66,17 @@ const AIRSHIPS := {
 
 var nav: AirNav
 var _count := 0
+## corp -> the island its lane is drawn to, to notice when the target moves.
+var _drawn_target := {}
+var _target_timer := 0.0
 var _next_lane := 0
 var _drawn_version := -1
 
 
 func _ready() -> void:
 	_ensure_nav()
+	# Replace the lanes the map drew with one to this wave's target.
+	refresh_lanes.call_deferred()
 
 
 func _ensure_nav() -> AirNav:
@@ -82,6 +89,14 @@ func _process(delta: float) -> void:
 	# A balloon island moved: replan the drawn lanes around it.
 	if wind and nav and region.tiles_version != _drawn_version:
 		refresh_lanes()
+	# The bombers' target follows what you build: redraw when it moves.
+	_target_timer -= delta
+	if _target_timer <= 0.0:
+		_target_timer = 0.5
+		for corp in _air_corps():
+			if _drawn_target.get(corp, "") != bomb_target(corp):
+				refresh_lanes()
+				break
 	step(delta)
 
 
@@ -225,11 +240,50 @@ func drop_target(corp: String) -> String:
 	return best
 
 
-## Air lanes that start at a corporation's HQ (Vesper's aerodrome by
-## default), as [from, to] platform names.
+## The air lane a corporation's bombers fly this wave (Vesper's by
+## default), as [[from, to]] platform names: from its HQ to bomb_target().
+## Empty for a rival that doesn't fly lanes.
 func lanes(corp := "") -> Array:
 	var from := home if corp == "" else hq_of(corp)
-	return region.layout.air_lanes.filter(func(l): return l[0] == from)
+	if from == "" or not region.layout.air_lanes.any(func(l): return l[0] == from):
+		return []
+	return [[from, bomb_target(corp if corp != "" else RivalCatalog.corp_at(from))]]
+
+
+## Corporations that fly air lanes on this map.
+func _air_corps() -> Array:
+	var out := []
+	for l in region.layout.air_lanes:
+		var corp := RivalCatalog.corp_at(l[0])
+		if corp != "" and not out.has(corp):
+			out.append(corp)
+	return out
+
+
+## The island a rival's bombers go for: your outer island with the most
+## scrap sunk into buildings (ties go to the one further from the Hub), or
+## the Hub when no outer island has any. So flak has to be where your
+## islands are, not just beside your headquarters.
+func bomb_target(_corp := "") -> String:
+	var best := "Hub"
+	var best_value := 0
+	var best_d := -1.0
+	var hub := region.get_platform_position("Hub")
+	for p in region.platforms:
+		if p == "Hub" or region.platform_owner(p) != "player":
+			continue
+		var value := 0
+		for b in region.buildings_on(p):
+			if b.faction == "player" and b.is_alive():
+				value += int(b.get_data().get("cost", 0))
+		if value <= 0:
+			continue
+		var d := hub.distance_to(region.get_platform_position(p))
+		if value > best_value or (value == best_value and d > best_d):
+			best = p
+			best_value = value
+			best_d = d
+	return best
 
 
 ## Launches `size` bombers along the next air lane. Returns them.
@@ -261,9 +315,7 @@ func launch(kind: String, count: int, corp := "") -> Array[Unit]:
 		var all := lanes(corp)
 		if all.is_empty():
 			return out
-		var lane: Array = all[_next_lane % all.size()]
-		if kind == "bomber":
-			_next_lane += 1
+		var lane: Array = all[0]
 		target_name = lane[1]
 		route = route_for(lane)
 	var end := region.get_platform_position(target_name)
@@ -328,8 +380,11 @@ func route_for(lane: Array) -> PackedVector3Array:
 ## Replans and redraws every Vesper air lane for the current wind.
 func refresh_lanes() -> void:
 	_drawn_version = region.tiles_version
-	for lane in lanes():
-		region.set_air_route(lane[0], lane[1], route_for(lane), false)
+	for corp in _air_corps():
+		region.clear_air_routes_from(hq_of(corp))
+		for lane in lanes(corp):
+			region.set_air_route(lane[0], lane[1], route_for(lane), false)
+			_drawn_target[corp] = lane[1]
 	region.air_routes_changed.emit()
 
 
