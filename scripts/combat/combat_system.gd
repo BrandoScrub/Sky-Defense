@@ -28,6 +28,9 @@ var player_tower_rate := 1.0
 ## from the islands you hold rather than from kills.
 const BOUNTY_SHARE := 0.5
 
+## Sappers mend a headquarters at this share of their building repair rate.
+const HQ_REPAIR_SHARE := 0.4
+
 ## Chance to miss for towers on a platform in each overload state.
 const MISS_CHANCE := {"Stable": 0.0, "Swaying": 0.15, "Sagging": 0.3, "Failing": 0.45}
 ## How far an Arc Coil's lightning can jump between targets.
@@ -324,9 +327,20 @@ func _repair(sapper: Unit, faction: String, delta: float) -> bool:
 		if b.hp / b.max_hp < worst:
 			worst = b.hp / b.max_hp
 			best = b
+	var amount := sapper.repair_power * sapper.buff_multiplier("healing") * delta
 	if best == null:
+		# With every building whole, Sappers patch up their own headquarters,
+		# slowly: bombs that land are not gone for good, but it takes time.
+		for hq in get_tree().get_nodes_in_group(Headquarters.GROUP):
+			if hq.faction == faction and hq.is_alive() and hq.hp < hq.max_hp \
+					and _flat_distance(sapper.global_position, hq.global_position) <= sapper.get_attack_range() + region.tile_size * 1.5:
+				hq.repair(amount * HQ_REPAIR_SHARE)
+				if sapper.cooldown_left <= 0.0:
+					sapper.cooldown_left = 0.6
+					_tracer(sapper.global_position + Vector3.UP * 1.2, hq.global_position + Vector3.UP * 2.0, Color(0.9, 0.8, 0.4))
+				return true
 		return false
-	best.repair(sapper.repair_power * sapper.buff_multiplier("healing") * delta)
+	best.repair(amount)
 	if sapper.cooldown_left <= 0.0:
 		sapper.cooldown_left = 0.6
 		_tracer(sapper.global_position + Vector3.UP * 1.2, best.global_position + Vector3.UP * 1.0, Color(0.9, 0.8, 0.4))

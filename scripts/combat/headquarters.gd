@@ -35,6 +35,14 @@ func is_alive() -> bool:
 	return hp > 0.0 and is_inside_tree()
 
 
+## Mends the headquarters (Sappers), up to full health.
+func repair(amount: float) -> void:
+	if hp <= 0.0:
+		return
+	hp = minf(max_hp, hp + amount)
+	_health_bar.set_ratio(hp / max_hp, faction != "player")
+
+
 func take_damage(amount: float) -> void:
 	if hp <= 0.0:
 		return

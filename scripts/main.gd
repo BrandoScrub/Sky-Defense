@@ -385,11 +385,11 @@ func _process(delta: float) -> void:
 		return
 	match waves.phase:
 		WaveManager.BUILD:
-			_phase_label.text = "Build phase: wave %d in %ds (Space to start now)" % [waves.wave, ceili(waves.time_left)]
+			_phase_label.text = "Build phase: wave %d%s in %ds (Space to start now)" % [waves.wave, _of_final(), ceili(waves.time_left)]
 			if waves.camped() > 0:
 				_phase_label.text += "   %d rival raiders camped at their bridge" % waves.camped()
 		WaveManager.WAVE:
-			_phase_label.text = "Wave %d: %d attackers left" % [waves.wave, waves.remaining()]
+			_phase_label.text = "Wave %d%s: %d attackers left" % [waves.wave, _of_final(), waves.remaining()]
 		_:
 			_phase_label.text = ""
 	if recruiter and recruiter.queued > 0:
@@ -400,9 +400,22 @@ func _process(delta: float) -> void:
 		_phase_label.text += "   [%s]" % ("Paused" if Engine.time_scale == 0.0 else "%dx" % int(Engine.time_scale))
 
 
+## " of N" once the match's last wave is known, else "".
+func _of_final() -> String:
+	var last := waves.final_wave()
+	return " of %d" % last if last > 0 else ""
+
+
 func _on_game_over(won: bool) -> void:
 	_game_over = true
-	_banner.text = ("Victory! Every rival corporation is grounded." if won else "Defeat. Your Hub has fallen.") + "\nPress Enter to play again"
+	var grounded := waves.rivals_grounded()
+	var text := "Defeat. Your Hub has fallen."
+	if won and grounded[0] == grounded[1]:
+		text = "Victory! Every rival corporation is grounded."
+	elif won:
+		text = "Victory! You held the sky for %d waves" % waves.match_waves
+		text += (" and grounded %d of %d rivals." % grounded) if grounded[0] > 0 else "."
+	_banner.text = text + "\nPress Enter to play again"
 	_banner.modulate = Color(1.0, 0.85, 0.4) if won else Color(1.0, 0.4, 0.35)
 	_banner.visible = true
 
