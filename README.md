@@ -10,7 +10,7 @@ Built with [Godot 4.3](https://godotengine.org/download/archive/4.3-stable/) (st
 2. In the Project Manager, choose **Import** and pick `project.godot` in this folder.
 3. Press **F5** to play.
 
-The current build is a placeholder sky region on hexagonal tiles: your Hub, five neutral platforms, the rival HQs, unconnected islands you link with walkways, a ferry route, two storm clouds and a rival air lane. A legend in the top right explains the tile colours. Your Commander (gold) and a squad of four Riveteers start on the Hub and can be selected and sent across walkways. You start with 250 scrap and can build on the Hub; the top bar shows scrap and the power grid, and each platform's label shows its load.
+The current build is a placeholder sky region on hexagonal tiles: your Hub, a generated ring of neutral platforms, the rival HQs, unconnected islands you link with walkways, a ferry route, storm clouds and rival air lanes. A legend in the top right explains the tile colours. Your Commander (gold) and a squad of four Riveteers start on the Hub and can be selected and sent across walkways. You start with 250 scrap and one Dynamo Generator on the Hub, and can build there; a tower the grid can't power shows a NO POWER (or LOW POWER) sign over it; the top bar shows scrap and the power grid, and each platform's label shows its load.
 
 Weight matters: buildings and units both add to a platform's load. Over capacity a platform sways (over 100%), sags and slows units (over 115%), then fails (over 130%), dropping its newest building every few seconds. If towers draw more power than generators and harvesters supply, the grid browns out and towers run at reduced efficiency. Income pays out at the end of each wave: every scrap heap on a platform you own pays 50 scrap and every Cloud Harvester pays 6 crystals, shown as +N in the top bar and in a popup when the wave is cleared. Kills still pay scrap on the spot.
 
@@ -18,7 +18,7 @@ Park units on a neutral platform to claim it (it's contested while both sides ha
 
 The game runs in waves. You get 45 seconds to build before wave 1 (25 seconds before later waves), then Ironbell sends a growing party of walkers; clear it to start the next build phase. Turrets, units and both headquarters shoot automatically, and each kill pays 15 scrap. You lose if your Hub headquarters falls and win once both rival headquarters are destroyed; press Enter on the end screen to play again. Use the Army tab to train more units at the Hub (see Ground units below). If your Commander falls, they return to the Hub after 15 seconds. A how-to-play panel is shown until the first wave starts.
 
-There are two rival corporations. Ironbell Consolidated walks: its crews bridge toward your Hub and its walkers come down that bridge. Vesper Aeronautics flies: from wave 2 its bomber airships leave the Vesper Aerodrome (far east), fly the red air lanes, and bomb your buildings or your Hub. Bombers ignore your units, and only anti-air weapons can hit them. Flak towers and hangar drones are built for this, and the Commander and headquarters guns can shoot them too. Ground defenses and Riveteers can't. Reach the Aerodrome on foot by building walkways out to it. When one rival's headquarters falls, that rival stops attacking.
+There are two rival corporations. Ironbell Consolidated walks: its crews bridge toward your Hub and its walkers come down that bridge. Vesper Aeronautics flies: from wave 3 its bomber airships leave the Vesper Aerodrome (far east), fly the red air lanes, and bomb your buildings or your Hub. Bombers ignore your units, and only anti-air weapons can hit them. Flak towers and hangar drones are built for this, and the Commander and headquarters guns can shoot them too. Ground defenses and Riveteers can't. Ironbell troop carriers join from wave 5 and Vesper gunships from wave 7. Reach the Aerodrome on foot by building walkways out to it. When one rival's headquarters falls, that rival stops attacking.
 
 Defenses come in three roles (`scripts/buildings/building_catalog.gd`, run by `scripts/combat/combat_system.gd` and `scripts/combat/defense_system.gd`):
 
@@ -113,7 +113,7 @@ Render screenshots of the level (needs a display; on a server use `xvfb-run`):
 godot --path . --rendering-method gl_compatibility --script res://tools/screenshot.gd -- /path/to/output
 ```
 
-Run the headless smoke test (exits non-zero on failure):
+Run the headless smoke test (exits non-zero on failure). GitHub runs it automatically on every pull request (`.github/workflows/smoke-test.yml`); a red X on a pull request means a check failed, and its Details link shows which one:
 
 ```sh
 godot --headless --path . --script res://tools/smoke_test.gd

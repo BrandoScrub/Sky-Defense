@@ -18,11 +18,13 @@ Ironbell bridges its way to you and walks; Vesper flies bombers.
    end of the bridge, then march in. Kills pay scrap.
 3. Build during the build phase with the menu in the bottom left (Tab
    switches tabs). Rivet Turrets (Defense, Q) guard where the bridge lands.
-   Dynamo Generators (Economy, Q) power them; watch the power number at the top.
-4. From wave 2 Vesper bombers fly the red air lanes and bomb your buildings:
-   Flak Batteries (Defense, W) shred them, Rivet Turrets only scratch them.
-   From wave 3 Ironbell troop carriers drop squads onto your platforms (shoot
-   them down first), and from wave 4 Vesper gunships hunt your units.
+   Towers need power: your Hub starts with one Dynamo Generator, and more
+   (Economy, Q) keep the power number at the top positive. A tower marked
+   NO POWER barely fires.
+4. From wave 3 Vesper bombers fly the red air lanes and bomb your buildings:
+   Flak Batteries (Defense, A) shred them; ground towers can't hit them.
+   From wave 5 Ironbell troop carriers drop squads onto your platforms (shoot
+   them down first), and from wave 7 Vesper gunships hunt your units.
    Airships steer around islands and attack from upwind. The wind (top of
    the screen) turns every 3 waves: the air lanes move and balloon islands drift.
 5. Put Cloud Harvesters (Storm, Q) on storm anchors. Hold more harvesters on a storm
@@ -89,6 +91,7 @@ func _ready() -> void:
 	drift.region = region
 	add_child(drift)
 	_spawn_starting_units()
+	_place_starting_dynamo()
 
 	selection = SelectionController.new()
 	selection.name = "SelectionController"
@@ -380,6 +383,15 @@ func _spawn_starting_units() -> void:
 		r.name = "Riveteer%d" % (i + 1)
 		r.position = region.hex_center(hub_hex + spots[i % spots.size()])
 		units.add_child(r)
+
+
+## The Hub starts with one Dynamo Generator on a generator socket, so the
+## first towers you build have power.
+func _place_starting_dynamo() -> void:
+	for hex in region.tiles_of_platform("Hub"):
+		if region.tiles[hex].type == "generator_socket" and not region.buildings.has(hex):
+			region.place_building(Building.new().setup("dynamo"), hex)
+			return
 
 
 ## Puts the Commander (the hero) on the Hub. When they fall, they come back

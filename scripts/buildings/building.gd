@@ -20,6 +20,8 @@ var max_hp := 100.0
 var cooldown_left := 0.0
 var _health_bar: HealthBar
 
+## Shown over a power-hungry building that the grid can't keep up with.
+var _power_warning: Label3D
 var _materials: Array[StandardMaterial3D] = []
 var _base_colors: Array[Color] = []
 
@@ -84,6 +86,40 @@ func set_efficiency(value: float) -> void:
 	var dark := Color(0.15, 0.15, 0.17)
 	for i in _materials.size():
 		_materials[i].albedo_color = dark.lerp(_base_colors[i], 0.35 + 0.65 * value)
+	_update_power_warning()
+
+
+## A floating "NO POWER" / "LOW POWER" sign while the grid can't keep up, so
+## an unpowered tower doesn't just quietly fire at a crawl.
+func _update_power_warning() -> void:
+	var text := ""
+	if faction != "player":
+		pass
+	elif efficiency < 0.25:
+		text = "NO POWER"
+	elif efficiency < 0.75:
+		text = "LOW POWER"
+	if text == "":
+		if _power_warning:
+			_power_warning.visible = false
+		return
+	if _power_warning == null:
+		_power_warning = Label3D.new()
+		_power_warning.name = "PowerWarning"
+		_power_warning.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		_power_warning.no_depth_test = true
+		_power_warning.font_size = 40
+		_power_warning.outline_size = 10
+		_power_warning.modulate = Color(1.0, 0.75, 0.2)
+		_power_warning.position.y = 4.0
+		add_child(_power_warning)
+	_power_warning.text = text
+	_power_warning.visible = true
+
+
+## The warning text over this building, or "" when it has enough power.
+func power_warning() -> String:
+	return _power_warning.text if _power_warning and _power_warning.visible else ""
 
 
 func _build_shape() -> void:

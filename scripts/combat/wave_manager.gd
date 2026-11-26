@@ -1,6 +1,6 @@
 ## Build phase, then wave phase, like the reference game. Each build phase
 ## runs on a timer (Space ends it early). Each wave sends a bigger Ironbell party
-## and, from wave 2, a flight of Vesper bombers; once every attacker is
+## and, from wave 3, a flight of Vesper bombers; once every attacker is
 ## destroyed the next build phase starts. A rival whose headquarters falls
 ## stops attacking. Destroying both wins; losing the Hub's headquarters loses.
 class_name WaveManager
@@ -21,13 +21,13 @@ const OVER := "over"
 ## Walkers in later waves get this much extra health per wave.
 @export var hp_growth_per_wave := 0.08
 
-@export var first_air_wave := 2
+@export var first_air_wave := 3
 @export var max_flight := 4
 ## Ironbell troop carriers: from this wave, one more every 3 waves.
-@export var first_carrier_wave := 3
+@export var first_carrier_wave := 5
 @export var max_carriers := 3
 ## Vesper gunships escort the bombers: from this wave, one more every 3 waves.
-@export var first_gunship_wave := 4
+@export var first_gunship_wave := 7
 @export var max_gunships := 3
 
 @export var raids: RivalRaids

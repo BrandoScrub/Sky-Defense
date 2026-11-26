@@ -221,42 +221,45 @@ func activate(entry: String) -> void:
 			if patrols:
 				patrols.next_utility_job()
 		"patrol_route":
-			if building:
-				building.cancel_placing()
+			end_tools_except("route")
 			if patrols:
 				if patrols.editing:
 					patrols.cancel_route()
 				else:
 					patrols.begin_route()
 		"walkway":
-			if building:
-				building.cancel_placing()
-			if steering and steering.active:
-				steering.cancel()
+			end_tools_except("walkway")
 			if walkways.active:
 				walkways.cancel()
 			else:
 				walkways.begin()
 		"steer":
-			if building:
-				building.cancel_placing()
-			if walkways and walkways.active:
-				walkways.cancel()
+			end_tools_except("steer")
 			if steering:
 				if steering.active:
 					steering.cancel()
 				else:
 					steering.begin()
 		_:
-			if walkways and walkways.active:
-				walkways.cancel()
-			if steering and steering.active:
-				steering.cancel()
+			end_tools_except("build")
 			if building.placing == entry:
 				building.cancel_placing()
 			else:
 				building.start_placing(entry)
 	refresh()
+
+
+## Ends every click tool except `keep` ("build", "walkway", "steer" or
+## "route"), so only one tool ever listens for clicks at a time.
+func end_tools_except(keep: String) -> void:
+	if keep != "build" and building and building.placing != "":
+		building.cancel_placing()
+	if keep != "walkway" and walkways and walkways.active:
+		walkways.cancel()
+	if keep != "steer" and steering and steering.active:
+		steering.cancel()
+	if keep != "route" and patrols and patrols.editing:
+		patrols.cancel_route()
 
 
 ## Updates costs, affordability and which button is lit.

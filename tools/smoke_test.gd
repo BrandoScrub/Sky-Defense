@@ -371,20 +371,27 @@ func _check_building(main: Node) -> void:
 	var hub: Vector2i = region.platforms["Hub"].center
 	var start_scrap := res.scrap
 	_expect(start_scrap == 250, "player should start with 250 scrap")
+	# The Hub starts with one Dynamo on a generator socket (15 power, 3 weight).
+	var starting := region.buildings_on("Hub").filter(func(b): return b.type_id == "dynamo")
+	_expect(starting.size() == 1 and starting[0].power == 15, "the Hub starts with one socketed Dynamo")
+	var base_power := region.power_supply()
+	var base_load := region.platform_load("Hub")
 
 	var deck := hub + Vector2i(2, 0)
 	_expect(region.get_tile(deck).type == "deck", "test tile should be plain deck")
 	_expect(build.try_place("dynamo", deck) == "", "a Dynamo on Hub deck should be allowed")
 	_expect(res.scrap == start_scrap - 40, "Dynamo should cost 40 scrap")
-	_expect(region.platform_load("Hub") == 3, "Dynamo should add 3 weight")
-	_expect(region.power_supply() == 10, "Dynamo on deck should supply 10")
+	_expect(region.platform_load("Hub") == base_load + 3, "Dynamo should add 3 weight")
+	_expect(region.power_supply() == base_power + 10, "Dynamo on deck should supply 10")
 	_expect(not region.is_hex_walkable(deck), "a building blocks its tile")
 	_expect(build.try_place("rivet_turret", deck) != "", "can't build on an occupied tile")
 
 	var socket := hub + Vector2i(2, -1)
-	_expect(region.get_tile(socket).type == "generator_socket", "Hub should have a generator socket at (2,-1)")
+	if region.buildings.has(socket):
+		socket = hub + Vector2i(-2, 1)
+	_expect(region.get_tile(socket).type == "generator_socket", "Hub should have a free generator socket")
 	_expect(build.try_place("dynamo", socket) == "", "a Dynamo on a socket should be allowed")
-	_expect(region.power_supply() == 25, "a socketed Dynamo should supply 15")
+	_expect(region.power_supply() == base_power + 25, "a socketed Dynamo should supply 15")
 
 	_expect(build.try_place("harvester", hub + Vector2i(-2, 0)) != "", "harvesters need an anchor")
 	var anchor := Vector2i(999, 999)
@@ -392,12 +399,19 @@ func _check_building(main: Node) -> void:
 		if region.get_tile(hex).type == "harvester_anchor":
 			anchor = hex
 	_expect(build.try_place("harvester", anchor) == "", "a harvester on the Hub anchor should be allowed")
-	_expect(region.power_supply() == 55, "harvester should add 30 power")
+	_expect(region.power_supply() == base_power + 55, "harvester should add 30 power")
 
 	res.add_scrap(100)
 	var coil_err := build.try_place("arc_coil", hub + Vector2i(-2, 2))
 	_expect(coil_err == "", "an Arc Coil should be allowed: " + coil_err)
 	_expect(region.power_demand() == 8, "Arc Coil should draw 8")
+	var coil: Building = region.buildings[hub + Vector2i(-2, 2)]
+	coil.set_efficiency(0.0)
+	_expect(coil.power_warning() == "NO POWER", "an unpowered tower shows NO POWER")
+	coil.set_efficiency(0.5)
+	_expect(coil.power_warning() == "LOW POWER", "a browned-out tower shows LOW POWER")
+	coil.set_efficiency(1.0)
+	_expect(coil.power_warning() == "", "a powered tower shows no warning")
 	_expect(build.try_place("rivet_turret", hub) != "", "can't build on the Hub core")
 	_expect(build.try_place("rivet_turret", region.platforms["Foundry"].center) != "", "can't build on an unowned platform")
 	var hero: Unit = main.selection.find_hero()
@@ -415,7 +429,7 @@ func _check_building(main: Node) -> void:
 	_expect(refund == 30, "demolishing a Dynamo refunds 30, got %d" % refund)
 	_expect(res.scrap == before + 30, "refund should be added to scrap")
 	_expect(region.is_hex_walkable(deck), "demolished tile is walkable again")
-	_expect(region.platform_load("Hub") == 2 + 3 + 4, "load after demolish should be 9, got %d" % region.platform_load("Hub"))
+	_expect(region.platform_load("Hub") == base_load + 2 + 3 + 4, "load after demolish should be 9 more than at the start, got %d" % (region.platform_load("Hub") - base_load))
 
 	# Build mode hotkeys create and clear the ghost.
 	build.start_placing("flak_battery")
@@ -472,6 +486,23 @@ func _check_build_menu(main: Node) -> void:
 	menu._unhandled_input(_key(KEY_TAB))
 	_expect(menu.current_tab == "Storm", "Tab should move on to the next tab")
 	menu.show_tab("Army")
+
+	# Only one click tool is live at a time: starting one ends the others.
+	menu.activate("patrol_route")
+	_expect(main.patrols.editing, "the Patrol Route button should start drawing a route")
+	menu.activate("walkway")
+	_expect(main.walkways.active and not main.patrols.editing, "starting a walkway should end route drawing")
+	menu.activate("steer")
+	_expect(main.steering.active and not main.walkways.active, "steering should end the walkway tool")
+	menu.activate("rivet_turret")
+	_expect(main.building.placing == "rivet_turret" and not main.steering.active, "placing a building should end steering")
+	menu.activate("patrol_route")
+	_expect(main.patrols.editing and main.building.placing == "", "drawing a route should end placing")
+	main.patrols.cancel_route()
+	menu.show_tab("Army")
+	# The how-to-play text names the right key for flak.
+	var flak_key: String = BuildMenu.SLOT_KEYS[BuildMenu.TABS["Defense"].find("flak_battery")]
+	_expect(main.HOW_TO_PLAY.contains("Flak Batteries (Defense, %s)" % flak_key), "how to play should give Flak's real key (%s)" % flak_key)
 
 	# The legend folds away and comes back.
 	main.set_legend_open(false)
@@ -1304,9 +1335,9 @@ func _check_combat_and_waves(main: Node) -> void:
 	waves.step(0.1)
 	_expect(waves.phase == WaveManager.BUILD and waves.wave == 2, "clearing wave 1 should start the build phase for wave 2")
 	_expect(waves.party_size_for(2) == 4 and waves.party_size_for(50) == waves.max_party, "waves grow up to a cap")
-	_expect(waves.flight_size_for(1) == 0 and waves.flight_size_for(2) == 1 and waves.flight_size_for(50) == waves.max_flight, "Vesper flights start in wave 2 and grow")
+	_expect(waves.flight_size_for(2) == 0 and waves.flight_size_for(3) == 1 and waves.flight_size_for(50) == waves.max_flight, "Vesper flights start in wave 3 and grow")
 	waves.start_wave()
-	_expect(waves.remaining() == 5, "starting early sends wave 2 now: 4 walkers and 1 bomber, got %d" % waves.remaining())
+	_expect(waves.remaining() == 4, "starting early sends wave 2 now: 4 walkers, got %d" % waves.remaining())
 	for e in get_root().get_tree().get_nodes_in_group(Unit.ENEMY_GROUP):
 		e.take_damage(10000.0)
 	await process_frame
@@ -1403,11 +1434,11 @@ func _check_rival_airships(main: Node) -> void:
 	var combat: CombatSystem = main.combat
 	fleet.set_process(false)
 	# Wave data the top bar reads.
-	_expect(waves.carriers_for(2) == 0 and waves.carriers_for(3) == 1 and waves.carriers_for(99) == waves.max_carriers, "carriers start in wave 3 and grow")
-	_expect(waves.gunships_for(3) == 0 and waves.gunships_for(4) == 1, "gunships start in wave 4")
-	var kinds := waves.composition_for(4).map(func(e): return e.unit)
-	_expect(kinds.has("carrier") and kinds.has("gunship") and kinds.has("bomber") and kinds.has("walker"), "wave 4 sends walkers, carriers, bombers and gunships: %s" % [kinds])
-	var plan_text := str(waves.wave_plan(4))
+	_expect(waves.carriers_for(4) == 0 and waves.carriers_for(5) == 1 and waves.carriers_for(99) == waves.max_carriers, "carriers start in wave 5 and grow")
+	_expect(waves.gunships_for(6) == 0 and waves.gunships_for(7) == 1, "gunships start in wave 7")
+	var kinds := waves.composition_for(7).map(func(e): return e.unit)
+	_expect(kinds.has("carrier") and kinds.has("gunship") and kinds.has("bomber") and kinds.has("walker"), "wave 7 sends walkers, carriers, bombers and gunships: %s" % [kinds])
+	var plan_text := str(waves.wave_plan(7))
 	_expect(plan_text.contains("Troop Carrier") and plan_text.contains("Gunship"), "the wave preview lists the airships")
 	# A carrier flies around islands to your platform and drops its squad.
 	var carrier: Unit = fleet.launch("carrier", 1)[0]
