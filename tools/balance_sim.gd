@@ -32,6 +32,7 @@ func _initialize() -> void:
 		if a.begins_with("rivals="): SkyRegion.rivals_override = RivalCatalog.layout_rivals(int(a.split("=")[1]))
 		if a.begins_with("minutes="): max_seconds = float(a.split("=")[1]) * 60.0
 		if a == "trace=1": trace = true
+		if a.begins_with("difficulty="): Difficulty.level = a.split("=")[1]
 	main = load("res://scenes/main.tscn").instantiate()
 	root.add_child(main)
 	await process_frame
@@ -65,8 +66,8 @@ func _initialize() -> void:
 				("%d/%d" % [main.bridges.spans_built("Ironbell"), main.bridges.crews["Ironbell"].path.size() - 1]) if main.bridges.crews.has("Ironbell") else "-",
 				hq_down.size()])
 	var hub_hq = main.combat.headquarters_on("Hub")
-	print("RESULT strategy=%s won=%s wave=%d t=%.0f hub=%s rival_hqs_down=%d islands=%d peak_army=%d %s" % [
-		strategy, main.waves.won, main.waves.wave, t, ("%.0f" % hub_hq.hp) if hub_hq else "dead",
+	print("RESULT difficulty=%s strategy=%s won=%s wave=%d t=%.0f hub=%s rival_hqs_down=%d islands=%d peak_army=%d %s" % [
+		Difficulty.level, strategy, main.waves.won, main.waves.wave, t, ("%.0f" % hub_hq.hp) if hub_hq else "dead",
 		hq_down.size(), main.economy.islands_held(), peak_army, stats])
 	quit()
 

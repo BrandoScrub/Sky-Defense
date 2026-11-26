@@ -19,6 +19,8 @@ extends Node
 
 signal building_destroyed(building_name: String, faction: String)
 signal headquarters_destroyed(faction: String, platform: String)
+## A headquarters was hit: faction, platform, damage.
+signal headquarters_damaged(faction: String, platform: String, amount: float)
 signal unit_killed(unit: Unit)
 
 ## Fire-rate multiplier for the player's towers (Overcharge sets it).
@@ -72,6 +74,7 @@ func spawn_headquarters() -> void:
 			hq.position = region.hex_center(hex)
 			region.add_child(hq)
 			hq.destroyed.connect(_on_headquarters_destroyed)
+			hq.damaged.connect(func(h, a): headquarters_damaged.emit(h.faction, h.platform, a))
 
 
 ## Advances all fighting by `delta` seconds. Public so tests can drive it.

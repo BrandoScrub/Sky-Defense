@@ -79,23 +79,16 @@ func _check_open_map() -> void:
 		_expect(not region.platforms_linked(w[0], w[1]), "%s and %s should start unconnected" % [w[0], w[1]])
 	_expect(main.bridges.crews.has("Ironbell"), "Ironbell should bridge")
 	_expect(not main.bridges.crews.has("Vesper"), "Vesper flies, it shouldn't bridge")
-	# Waves count from first contact: until Ironbell's bridge lands, a late
-	# wave still sends its first-size party and no carriers, and its top bar
-	# card shows the bridge instead of a countdown.
+	# Every rival follows the match's waves: Ironbell's carriers fly in from
+	# wave 1 while its bridge creeps; its top bar card shows bridge progress.
 	var waves: WaveManager = main.waves
 	_expect(not waves.has_contact("Ironbell") and waves.has_contact("Vesper"), "Ironbell has no contact at the start; Vesper flies so it always does")
-	_expect(waves.count_for("Ironbell", "ground", 6) == RivalCatalog.count_for("Ironbell", "ground", 1), "before contact Ironbell's party stays at its first size")
-	_expect(waves.count_for("Ironbell", "carrier", 6) == 0, "no carriers before contact")
-	_expect(waves.count_for("Vesper", "bomber", 3) == 1, "Vesper's first bomber still comes in wave 3")
+	_expect(waves.count_for("Ironbell", "carrier", 1) >= 1, "Ironbell's troop carriers come from wave 1")
+	_expect(waves.count_for("Vesper", "bomber", 2) == 0 and waves.count_for("Vesper", "bomber", 4) >= 1, "Vesper's bombers start from wave 3")
+	_expect(waves.is_push_wave(3) and not waves.is_push_wave(4), "every 3rd wave is a big push")
+	_expect(waves.count_for("Ironbell", "ground", 3) > RivalCatalog.count_for("Ironbell", "ground", 3), "a big push sends more")
 	var bar_status: String = main.top_bar.status_text(waves.wave_plan()[0])
-	_expect(bar_status.begins_with("Bridge: 0 of"), "Ironbell's card should show its bridge progress, got '%s'" % bar_status)
-	waves.wave = 6
-	waves.contact_wave["Ironbell"] = 6
-	_expect(waves.count_for("Ironbell", "ground", 6) == RivalCatalog.count_for("Ironbell", "ground", 1), "first contact in wave 6 brings the wave-1 party")
-	_expect(is_zero_approx(waves.health_bonus(6, "Ironbell")), "first contact has no extra health")
-	_expect(waves.count_for("Ironbell", "ground", 8) == RivalCatalog.count_for("Ironbell", "ground", 3), "it grows from contact")
-	waves.contact_wave.erase("Ironbell")
-	waves.wave = 1
+	_expect(bar_status.contains("bridge 0/"), "Ironbell's card should show its bridge progress, got '%s'" % bar_status)
 
 	# Expanding: a walkway from the Hub to the Foundry.
 	var hub: Dictionary = region.platforms["Hub"]
@@ -689,7 +682,7 @@ func _check_top_bar(main: Node) -> void:
 	var total := 0
 	for u in ironbell.units:
 		total += u[1]
-	_expect(total == waves.party_size_for(waves.wave), "Ironbell's plan should match its party size")
+	_expect(total == waves.count_for("Ironbell", "ground", waves.wave) + waves.count_for("Ironbell", "carrier", waves.wave), "Ironbell's plan should match its party plus carriers")
 	_expect(bar.wave_tooltip(ironbell).contains("Ironbell Walker"), "hovering Ironbell should list its walkers")
 	if waves.phase == WaveManager.BUILD:
 		_expect(bar.status_text(ironbell).begins_with("Wave %d in" % waves.wave), "Ironbell's card should count down: " + bar.status_text(ironbell))
@@ -1500,23 +1493,22 @@ func _check_combat_and_waves(main: Node) -> void:
 	# Waves: the build timer starts wave 1 with 3 walkers; clearing it starts the next build phase.
 	_expect(waves.phase == WaveManager.BUILD and waves.wave == 1, "game starts in the build phase")
 	waves.step(waves.time_left + 0.1)
-	_expect(waves.phase == WaveManager.WAVE and waves.remaining() == 3, "wave 1 should send 3 walkers")
+	_expect(waves.phase == WaveManager.WAVE and waves.remaining() == 3, "wave 1 should send 2 walkers and a troop carrier")
 	for e in get_root().get_tree().get_nodes_in_group(Unit.ENEMY_GROUP):
 		e.take_damage(10000.0)
 	await process_frame
 	waves.step(0.1)
 	_expect(waves.phase == WaveManager.BUILD and waves.wave == 2, "clearing wave 1 should start the build phase for wave 2")
-	_expect(waves.party_size_for(2) == 4 and waves.party_size_for(50) == waves.max_party, "waves grow up to a cap")
+	_expect(waves.party_size_for(2) == 2 and waves.party_size_for(50) == waves.max_party, "waves grow up to a cap")
 	_expect(waves.flight_size_for(2) == 0 and waves.flight_size_for(3) == 1 and waves.flight_size_for(50) == waves.max_flight, "Vesper flights start in wave 3 and grow")
 	waves.start_wave()
-	_expect(waves.remaining() == 4, "starting early sends wave 2 now: 4 walkers, got %d" % waves.remaining())
+	_expect(waves.remaining() == 3, "starting early sends wave 2 now: 2 walkers and a carrier, got %d" % waves.remaining())
 	for e in get_root().get_tree().get_nodes_in_group(Unit.ENEMY_GROUP):
 		e.take_damage(10000.0)
 	await process_frame
 
-	# The match lasts match_waves waves from first contact (walkways are
-	# prebuilt here, so contact was wave 1).
-	_expect(waves.final_wave() == waves.contact_wave.values().min() + waves.match_waves - 1, "the last wave is counted from first contact, got %d" % waves.final_wave())
+	# The match lasts match_waves waves, counted from wave 1.
+	_expect(waves.final_wave() == waves.match_waves, "the last wave is match_waves, got %d" % waves.final_wave())
 	# One rival down isn't a win, and that rival stops attacking.
 	var won := [false]
 	waves.game_over.connect(func(w): won[0] = w)
@@ -1652,7 +1644,7 @@ func _check_rival_airships(main: Node) -> void:
 	var combat: CombatSystem = main.combat
 	fleet.set_process(false)
 	# Wave data the top bar reads.
-	_expect(waves.carriers_for(4) == 0 and waves.carriers_for(5) == 1 and waves.carriers_for(99) == waves.max_carriers, "carriers start in wave 5 and grow")
+	_expect(waves.carriers_for(1) == 1 and waves.carriers_for(99) == waves.max_carriers, "carriers start in wave 1 and grow")
 	_expect(waves.gunships_for(6) == 0 and waves.gunships_for(7) == 1, "gunships start in wave 7")
 	var kinds := waves.composition_for(7).map(func(e): return e.unit)
 	_expect(kinds.has("carrier") and kinds.has("gunship") and kinds.has("bomber") and kinds.has("walker"), "wave 7 sends walkers, carriers, bombers and gunships: %s" % [kinds])

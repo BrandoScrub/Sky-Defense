@@ -45,7 +45,7 @@ const AIRSHIPS := {
 	},
 	"carrier": {
 		"name": "Ironbell Troop Carrier", "corp": "Ironbell", "hp": 220.0, "damage": 0.0, "range": 0.0,
-		"cooldown": 99.0, "speed": 4.0, "bounty": 35, "footprint": 1.3,
+		"cooldown": 99.0, "speed": 6.0, "bounty": 35, "footprint": 1.3,
 		"color": Color(0.45, 0.22, 0.16), "targets_units": false, "hits_air": false,
 		"troops": ["shieldbearer", "rifleman", "riveteer"],
 	},
