@@ -3,7 +3,9 @@
 ## comes from RivalCatalog: Ironbell's raiding parties grow every wave,
 ## Vesper's bombers join from wave 3, and so on. Once every attacker is
 ## destroyed the next build phase starts. A rival whose headquarters falls
-## stops attacking. Destroying every rival HQ wins; losing the Hub's loses.
+## stops attacking. Losing the Hub's headquarters loses. You win by
+## surviving `match_waves` waves counted from first contact (the wave the
+## first bridge reaches you), or sooner by destroying every rival HQ.
 class_name WaveManager
 extends Node
 
@@ -17,6 +19,8 @@ const OVER := "over"
 
 @export var first_build_seconds := 45.0
 @export var build_seconds := 25.0
+## Waves to survive, counted from first contact, to win. 0: no limit.
+@export var match_waves := 9
 ## Walkers in later waves get this much extra health per wave.
 @export var hp_growth_per_wave := 0.06
 
@@ -79,6 +83,9 @@ func step(delta: float) -> void:
 				start_wave()
 		WAVE:
 			if remaining() == 0:
+				if final_wave() > 0 and wave >= final_wave():
+					_end(true)
+					return
 				wave += 1
 				phase = BUILD
 				time_left = build_seconds
@@ -92,6 +99,40 @@ var hp_bonus := 0.0
 var bridges: RivalBridges
 ## corp -> the wave in which a bridging rival's bridge first reached you.
 var contact_wave := {}
+
+
+## The wave that ends the match if you survive it, or -1 while it isn't
+## known yet (no bridge has reached you) or there's no limit. Counted from
+## the first contact of any bridging rival; with none, from wave 1.
+func final_wave() -> int:
+	if match_waves <= 0:
+		return -1
+	var first := -1
+	if bridges != null and not bridges.crews.is_empty():
+		for corp in contact_wave:
+			if first < 0 or contact_wave[corp] < first:
+				first = contact_wave[corp]
+	else:
+		first = 1
+	return first + match_waves - 1 if first > 0 else -1
+
+
+## Rival headquarters destroyed so far, and how many there were.
+func rivals_grounded() -> Array:
+	var down := 0
+	var total := 0
+	for corp in rival_corps():
+		total += 1
+		if not _hq_alive(RivalCatalog.hq_of(corp)):
+			down += 1
+	return [down, total]
+
+
+func _end(win: bool) -> void:
+	phase = OVER
+	won = win
+	phase_changed.emit(phase, wave)
+	game_over.emit(won)
 
 
 ## True once a rival can reach you: its bridge is done, or it flies.
@@ -363,7 +404,4 @@ func _on_headquarters_destroyed(faction: String, platform: String) -> void:
 			if hq.faction == "rival" and hq.is_alive():
 				rival_defeated.emit(platform)
 				return
-	phase = OVER
-	won = faction == "rival"
-	phase_changed.emit(phase, wave)
-	game_over.emit(won)
+	_end(faction == "rival")

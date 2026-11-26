@@ -1202,6 +1202,14 @@ func _check_unit_roster(main: Node) -> void:
 	units_root.add_child(sapper)
 	_expect(combat._repair(sapper, "player", 1.0) and is_equal_approx(turret.hp, turret.max_hp * 0.5 + sapper.repair_power), "a Sapper repairs a damaged building")
 	_expect(is_equal_approx(UnitCatalog.get_data("sapper").vs_buildings, sapper.vs_buildings) and sapper.vs_buildings > 1.0, "Sappers hit buildings harder")
+	# With nothing else to mend, a Sapper slowly repairs the Hub.
+	turret.hp = turret.max_hp
+	var hub_hq: Headquarters = combat.headquarters_on("Hub")
+	hub_hq.hp = hub_hq.max_hp - 100.0
+	sapper.position = hub_hq.global_position + Vector3(2.0, 0, 0)
+	_expect(combat._repair(sapper, "player", 1.0) and hub_hq.hp > hub_hq.max_hp - 100.0 and hub_hq.hp < hub_hq.max_hp - 100.0 + sapper.repair_power,
+		"a Sapper repairs the Hub, more slowly than a building")
+	hub_hq.hp = hub_hq.max_hp
 	sapper.free()
 	main.building.demolish(hex)
 	combat.set_process(true)
@@ -1506,6 +1514,9 @@ func _check_combat_and_waves(main: Node) -> void:
 		e.take_damage(10000.0)
 	await process_frame
 
+	# The match lasts match_waves waves from first contact (walkways are
+	# prebuilt here, so contact was wave 1).
+	_expect(waves.final_wave() == waves.contact_wave.values().min() + waves.match_waves - 1, "the last wave is counted from first contact, got %d" % waves.final_wave())
 	# One rival down isn't a win, and that rival stops attacking.
 	var won := [false]
 	waves.game_over.connect(func(w): won[0] = w)
@@ -1526,6 +1537,12 @@ func _check_combat_and_waves(main: Node) -> void:
 	# Victory when both rival headquarters have fallen.
 	combat.headquarters_on("Vesper Aerodrome").take_damage(100000.0)
 	_expect(waves.phase == WaveManager.OVER and won[0], "destroying both rival headquarters should win")
+	# Surviving the last wave wins too.
+	waves.phase = WaveManager.WAVE
+	waves.wave = waves.final_wave()
+	won[0] = false
+	waves.step(0.1)
+	_expect(waves.phase == WaveManager.OVER and won[0], "clearing the final wave wins the match")
 
 
 ## The map rules hold for many seeds: rival headquarters in two different
