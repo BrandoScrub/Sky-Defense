@@ -442,7 +442,7 @@ func _check_building(main: Node) -> void:
 	var res: PlayerResources = main.resources
 	var hub: Vector2i = region.platforms["Hub"].center
 	var start_scrap := res.scrap
-	_expect(start_scrap == 250, "player should start with 250 scrap")
+	_expect(start_scrap == 300, "player should start with 300 scrap")
 	# The Hub starts with one Dynamo on a generator socket (15 power, 3 weight).
 	var starting := region.buildings_on("Hub").filter(func(b): return b.type_id == "dynamo")
 	_expect(starting.size() == 1 and starting[0].power == 15, "the Hub starts with one socketed Dynamo")
@@ -1084,7 +1084,7 @@ func _check_unit_roster(main: Node) -> void:
 		u.position = base + offset
 		units_root.add_child(u)
 		return u
-	var shooter: Unit = spawn.call("walker", "rival", Vector3(0, 0, 0))
+	var shooter: Unit = spawn.call("rifleman", "rival", Vector3(0, 0, 0))
 	var rifle: Unit = spawn.call("rifleman", "player", Vector3(0, 0, 6))
 	var shield: Unit = spawn.call("shieldbearer", "player", Vector3(0, 0, 3))
 	await process_frame
@@ -1108,9 +1108,11 @@ func _check_unit_roster(main: Node) -> void:
 
 	# Lancers wreck armor.
 	var lancer: Unit = spawn.call("lancer", "player", Vector3(-3, 0, 0))
-	var walker_hp := shooter.hp
-	combat.deal_hit(lancer, shooter, lancer.damage, Color.WHITE)
-	_expect(is_equal_approx(walker_hp - shooter.hp, lancer.damage * lancer.vs_armor), "a Lancer does bonus damage to armored walkers")
+	var armored: Unit = spawn.call("walker", "rival", Vector3(-6, 0, 0))
+	var walker_hp := armored.hp
+	combat.deal_hit(lancer, armored, lancer.damage, Color.WHITE)
+	_expect(is_equal_approx(walker_hp - armored.hp, lancer.damage * lancer.vs_armor), "a Lancer does bonus damage to armored walkers")
+	_expect(not armored.is_ranged(), "walkers fight up close, so riot shields don't stop them")
 
 	# Medics heal the most wounded ally in range.
 	var medic: Unit = spawn.call("medic", "player", Vector3(1, 0, 6))
@@ -1136,7 +1138,7 @@ func _check_unit_roster(main: Node) -> void:
 	rifle.remove_buff("test_aura")
 	_expect(not rifle.has_buff("test_aura"), "buffs can be removed")
 
-	for u in [shooter, rifle, shield, lancer, medic]:
+	for u in [shooter, armored, rifle, shield, lancer, medic]:
 		u.free()
 
 	# Sappers repair damaged buildings.
@@ -1784,13 +1786,13 @@ func _check_four_rivals() -> void:
 		corps_sending[entry.corp] = true
 	_expect(corps_sending.size() == 4, "every rival sends something by wave 7, got %s" % [corps_sending.keys()])
 	_expect(waves.wave_plan(7).size() == 4, "the top bar gets a card per rival")
-	waves.wave = 3
+	waves.wave = 4
 	waves.start_wave()
 	var by_corp := {}
 	for e in get_root().get_tree().get_nodes_in_group(Unit.ENEMY_GROUP):
 		by_corp[e.get_meta("corp", "")] = by_corp.get(e.get_meta("corp", ""), 0) + 1
-	_expect(by_corp.get("Nimbus", 0) == RivalCatalog.count_for("Nimbus", "ground", 3), "Nimbus sends its wave 3 party, got %s" % [by_corp])
-	_expect(by_corp.get("Aurum", 0) == RivalCatalog.count_for("Aurum", "ground", 3), "Aurum sends its wave 3 party")
+	_expect(by_corp.get("Nimbus", 0) == RivalCatalog.count_for("Nimbus", "ground", 4), "Nimbus sends its wave 4 party, got %s" % [by_corp])
+	_expect(by_corp.get("Aurum", 0) == RivalCatalog.count_for("Aurum", "ground", 4), "Aurum sends its wave 4 party")
 	_expect(waves.remaining_for("Aurum") > 0, "Aurum's raiders count toward the wave")
 	main.queue_free()
 	await process_frame

@@ -9,6 +9,10 @@
 ## `unit` is "ground" for a raiding party (its unit types follow party_mix),
 ## or an airship kind from VesperFleet.AIRSHIPS.
 ##
+## span_seconds: how long a bridging rival takes per walkway span (30 is
+## Ironbell's pace). Extra rivals bridge slower so their raids don't all
+## reach you in the same wave.
+##
 ## Nimbus and Aurum are stand-ins: they reuse today's units so that 3 and 4
 ## rival maps play, until their own storms, buildings and boss ship are
 ## designed. Only Ironbell and Vesper are on by default.
@@ -25,7 +29,7 @@ const RIVALS := {
 		# Colour key in SkyRegion.COLORS for its platforms and top bar card.
 		"tile": "rival",
 		"glow": [Color(1.0, 0.35, 0.15), "Furnace glare"],
-		"bridges": true, "air_lanes": false,
+		"bridges": true, "air_lanes": false, "span_seconds": 30,
 		"party_mix": ["walker", "walker", "walker", "shieldbearer", "rifleman"],
 		"waves": [
 			{"unit": "ground", "first": 1, "base": 3, "every": 1, "max": 10},
@@ -48,7 +52,7 @@ const RIVALS := {
 		"placeholder": true,
 		"tile": "rival",
 		"glow": [Color(0.5, 0.75, 1.0), "Thunder rumble"],
-		"bridges": true, "air_lanes": false,
+		"bridges": true, "air_lanes": false, "span_seconds": 40,
 		"party_mix": ["riveteer", "rifleman", "riveteer", "medic"],
 		"waves": [
 			{"unit": "ground", "first": 2, "base": 2, "every": 2, "max": 7},
@@ -59,10 +63,10 @@ const RIVALS := {
 		"placeholder": true,
 		"tile": "rival",
 		"glow": [Color(1.0, 0.85, 0.35), "Gilded gleam"],
-		"bridges": true, "air_lanes": false,
+		"bridges": true, "air_lanes": false, "span_seconds": 50,
 		"party_mix": ["shieldbearer", "lancer", "shieldbearer", "medic"],
 		"waves": [
-			{"unit": "ground", "first": 3, "base": 2, "every": 3, "max": 5},
+			{"unit": "ground", "first": 4, "base": 2, "every": 3, "max": 5},
 		],
 	},
 }

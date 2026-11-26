@@ -19,7 +19,7 @@ signal paid_out(income: Dictionary)
 
 @export var scrap_per_heap_per_round := 50
 @export var crystals_per_harvester_per_round := 6
-@export var scrap_per_island_per_round := 10
+@export var scrap_per_island_per_round := 15
 
 @export var region: SkyRegion
 @export var resources: PlayerResources
