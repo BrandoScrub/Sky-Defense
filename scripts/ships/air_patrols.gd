@@ -48,14 +48,14 @@ const SCOUT_SIGHT := 34.0
 
 const SHIPS := {
 	"interceptor": {
-		"name": "Skyhawk Interceptor", "role": "Air-to-air", "cost": 70, "build_seconds": 8.0,
-		"hp": 90.0, "damage": 12.0, "range": 6.0, "cooldown": 0.6, "speed": 9.0,
+		"name": "Skyhawk Interceptor", "role": "Air-to-air", "cost": 60, "build_seconds": 8.0,
+		"hp": 90.0, "damage": 15.0, "range": 6.0, "cooldown": 0.6, "speed": 9.0,
 		"hits_air": true, "air_only": true, "targets_units": true, "footprint": 0.55,
 		"color": Color(0.85, 0.7, 0.35),
 	},
 	"gunboat": {
 		"name": "Thunder Gunboat", "role": "Air-to-ground", "cost": 80, "build_seconds": 10.0,
-		"hp": 150.0, "damage": 16.0, "range": 5.0, "cooldown": 1.2, "speed": 6.0,
+		"hp": 150.0, "damage": 18.0, "range": 5.0, "cooldown": 1.2, "speed": 6.0,
 		"hits_air": false, "air_only": false, "targets_units": true, "footprint": 0.8,
 		"vs_buildings": 1.5, "color": Color(0.6, 0.45, 0.25),
 	},

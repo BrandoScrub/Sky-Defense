@@ -22,7 +22,7 @@ func _parse(spec: String) -> Array:
 
 
 func _initialize() -> void:
-	var args := {"atk": "", "def": "", "towers": "", "wave": "1", "air": "", "seconds": "120", "seed": "3"}
+	var args := {"atk": "", "def": "", "towers": "", "wave": "1", "air": "", "seconds": "120", "seed": "3", "ships": ""}
 	for a in OS.get_cmdline_user_args():
 		var kv := a.split("=")
 		if kv.size() == 2:
@@ -68,6 +68,22 @@ func _initialize() -> void:
 		if not placed:
 			break
 	main.loads.set_process(false)
+	# Ships from a hangar on the Hub (list airship_hangar in towers).
+	var ship_wait := 0.0
+	for pair in _parse(args.ships):
+		for k in pair[1]:
+			var err: String = main.patrols.queue_ship(pair[0])
+			if err == "":
+				spent += int(AirPatrols.SHIPS[pair[0]].cost)
+				ship_wait += float(AirPatrols.SHIPS[pair[0]].build_seconds)
+			else:
+				print("ship: ", err)
+	if ship_wait > 0.0:
+		res.scrap = 100000
+		var w := 0.0
+		while w < ship_wait + 3.0:
+			await process_frame
+			w += 1.0 / 60.0
 	var i := 0
 	for pair in _parse(args.def):
 		for k in pair[1]:
@@ -134,6 +150,6 @@ func _initialize() -> void:
 		if b.type_id != "dynamo":
 			towers_left += 1
 	print("DUEL atk=%s air=%s def=%s towers=%s wave=%s | t=%.0f hq_lost=%.0f | attackers left %s | defenders left %s | towers left %d | spent %d earned %d" % [
-		args.atk, args.air, args.def, args.towers, args.wave, t,
+		args.atk, args.air, args.def + ("+" + args.ships if args.ships != "" else ""), args.towers, args.wave, t,
 		1500.0 - (hub_hq.hp if hub_hq and hub_hq.is_alive() else 0.0), alive_atk, alive_def, towers_left, spent, res.scrap - scrap_before])
 	quit()
