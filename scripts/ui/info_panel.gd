@@ -29,12 +29,11 @@ const UNIT_INFO := {
 ## What each building is for, by type id.
 const BUILDING_INFO := {
 	"dynamo": "Burns fuel to power your towers. Makes more on a yellow generator socket.",
-	"lift_engine": "An extra lift rotor under the deck. The platform it stands on can carry %d more weight, and the engine itself weighs nothing." % BuildingCatalog.BUILDINGS.lift_engine.capacity,
+	"lift_engine": "An extra lift rotor under the deck. The platform it stands on can carry %d more weight, and the engine itself weighs nothing. One per island." % BuildingCatalog.BUILDINGS.lift_engine.capacity,
 	"harvester": "Taps a storm cloud from a blue anchor. Gives lots of power, pays crystals at the end of each wave, and counts toward who controls the storm.",
 	"rivet_turret": "Sturdy gun tower against walkers. Its plating gives cover, so your units fighting beside it take less damage. Can't hit aircraft.",
 	"arc_coil": "Chain lightning that jumps between up to 3 walkers. Power hungry, and can't hit aircraft.",
 	"rally_horn": "A brass horn that blares marching tunes. Its own gun is weak, but your units nearby hit harder and fire faster. Can't hit aircraft.",
-	"mending_post": "A steam-powered field workshop. Barely fights, but patches up your units nearby and gives them a little armor. Can't hit aircraft.",
 	"flak_battery": "Rapid anti-air guns. Shreds bombers and other aircraft, but ignores everything on the ground.",
 	"skyhook_cannon": "A long-range harpoon gun for big airships. Slow, but each hit tears a hole in the envelope. Ignores everything on the ground.",
 	"turbine_engine": "A big brass propeller bolted to a turbine island. Build 4 on one island and you can steer it with Steer Island (Industry tab): it moves up to 4 hexes, breaking off its walkways after a warning, and draws 30 power while under way.",
@@ -47,7 +46,7 @@ const TILE_INFO := {
 	"generator_socket": ["Generator socket", "A Dynamo Generator built here makes 15 power instead of 10."],
 	"harvester_anchor": ["Storm harvester anchor", "Cloud Harvesters can only be built here. They tap the nearest storm cloud for power and crystals."],
 	"scrap_heap": ["Scrap heap", "Salvage. Pays scrap at the end of each wave while you own this platform."],
-	"crystal_seam": ["Crystal seam", "A seam of energized crystals. Mining it comes in a later update."],
+	"crystal_seam": ["Crystal seam", "A seam of energized crystals. Each one pays 5 crystals a wave while you hold its island. Crystals buy Hum powers."],
 	"dock": ["Ferry dock", "Airships stop here. Right click a platform with no walkway and your units ride the ferry there."],
 	"spawn": ["Rival wave spawn", "Rival walkers set out from here when a wave starts."],
 	"walkway": ["Walkway", "A metal walkway between platforms. Units walk along it. Islands start unconnected: build walkways from the Industry tab to expand."],

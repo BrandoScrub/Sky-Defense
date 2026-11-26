@@ -5,6 +5,7 @@
 ## spot by CombatSystem):
 ## - Each scrap heap on a platform you own pays scrap.
 ## - Each Cloud Harvester you own pays energized crystals.
+## - Each crystal seam on a platform you own pays energized crystals.
 ## - Every platform you hold besides the Hub pays a little scrap, so
 ##   claiming islands is worth it even without a scrap heap.
 ## Power isn't banked: it's a live budget. When demand outstrips supply, the
@@ -19,7 +20,9 @@ signal paid_out(income: Dictionary)
 
 @export var scrap_per_heap_per_round := 50
 @export var crystals_per_harvester_per_round := 6
-@export var scrap_per_island_per_round := 15
+@export var scrap_per_island_per_round := 25
+## Crystal seams on islands you hold pay this many crystals each.
+@export var crystals_per_seam_per_round := 5
 
 @export var region: SkyRegion
 @export var resources: PlayerResources
@@ -52,19 +55,26 @@ func round_income() -> Dictionary:
 		var t: Dictionary = region.tiles[hex]
 		if t.type == "scrap_heap" and region.platform_owner(t.platform) == "player":
 			heaps += 1
+	var seams := 0
+	for hex in region.tiles:
+		var t: Dictionary = region.tiles[hex]
+		if t.type == "crystal_seam" and region.platform_owner(t.platform) == "player":
+			seams += 1
 	var harvesters := 0
 	for b in region.buildings.values():
 		if b.type_id == "harvester" and b.faction == "player" and region.platform_owner(b.platform) == "player":
 			harvesters += 1
 	var islands := islands_held()
 	var income := {"scrap": heaps * scrap_per_heap_per_round + islands * scrap_per_island_per_round,
-		"crystals": harvesters * crystals_per_harvester_per_round, "sources": []}
+		"crystals": harvesters * crystals_per_harvester_per_round + seams * crystals_per_seam_per_round, "sources": []}
 	if islands > 0:
 		income.sources.append(["%d island%s held" % [islands, "" if islands == 1 else "s"], "+%d scrap" % (islands * scrap_per_island_per_round)])
 	if heaps > 0:
 		income.sources.append(["%d scrap heap%s" % [heaps, "" if heaps == 1 else "s"], "+%d scrap" % (heaps * scrap_per_heap_per_round)])
 	if harvesters > 0:
-		income.sources.append(["%d Cloud Harvester%s" % [harvesters, "" if harvesters == 1 else "s"], "+%d crystals" % income.crystals])
+		income.sources.append(["%d Cloud Harvester%s" % [harvesters, "" if harvesters == 1 else "s"], "+%d crystals" % (harvesters * crystals_per_harvester_per_round)])
+	if seams > 0:
+		income.sources.append(["%d crystal seam%s" % [seams, "" if seams == 1 else "s"], "+%d crystals" % (seams * crystals_per_seam_per_round)])
 	return income
 
 

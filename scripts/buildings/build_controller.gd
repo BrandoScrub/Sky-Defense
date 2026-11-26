@@ -81,6 +81,11 @@ func placement_problem(type_id: String, hex) -> String:
 		return problem
 	if _unit_on(hex):
 		return "Units are standing there"
+	if type_id == "lift_engine":
+		var platform: String = region.get_tile(hex).get("platform", "")
+		for b in region.buildings_on(platform):
+			if b.type_id == "lift_engine":
+				return "One Lift Engine per island"
 	var cost: int = BuildingCatalog.get_data(type_id).cost
 	if not resources.can_afford(cost):
 		return "Not enough scrap (%d needed)" % cost

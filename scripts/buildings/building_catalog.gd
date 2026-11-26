@@ -46,7 +46,7 @@ const BUILDINGS := {
 	# within "radius": damage_mult (more damage), cooldown_mult (below 1 =
 	# faster fire), armor (fraction of damage blocked) and heal (hp/second).
 	"rivet_turret": {
-		"name": "Rivet Turret", "cost": 30, "power": -2, "weight": 2,
+		"name": "Rivet Turret", "cost": 50, "power": -2, "weight": 2,
 		"tiles": ["deck"], "shape": "turret", "role": "ground",
 		"color": Color(0.6, 0.62, 0.66),
 		"hp": 150.0,
@@ -69,14 +69,6 @@ const BUILDINGS := {
 		"hp": 110.0,
 		"attack": {"damage": 4.0, "range": 7.0, "cooldown": 1.0},
 		"aura": {"radius": 7.0, "damage_mult": 1.35, "cooldown_mult": 0.8},
-	},
-	"mending_post": {
-		"name": "Mending Post", "cost": 55, "power": -4, "weight": 3,
-		"tiles": ["deck"], "shape": "mender", "role": "ground",
-		"color": Color(0.4, 0.75, 0.55),
-		"hp": 110.0,
-		"attack": {"damage": 4.0, "range": 6.0, "cooldown": 1.2},
-		"aura": {"radius": 6.0, "heal": 5.0, "armor": 0.1},
 	},
 	# --- Flak: anti-air only. "air_only" towers ignore walkers and buildings;
 	# "air" is their damage against aircraft and airships.
