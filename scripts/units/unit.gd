@@ -337,32 +337,119 @@ func _build_visuals() -> void:
 ## Placeholder bomber airship, plus a shadow on the deck below so it's easy to
 ## see where it is from the top-down camera.
 func _build_aircraft() -> void:
+	var f := footprint
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = body_color
-	mat.roughness = 0.5
+	mat.roughness = 0.65
+	var brass := StandardMaterial3D.new()
+	brass.albedo_color = Color(0.78, 0.58, 0.3)
+	brass.metallic = 0.8
+	brass.roughness = 0.35
+	var iron := StandardMaterial3D.new()
+	iron.albedo_color = Color(0.2, 0.19, 0.19)
+	iron.metallic = 0.6
+	iron.roughness = 0.5
+	var lamp := StandardMaterial3D.new()
+	lamp.albedo_color = Color(1.0, 0.78, 0.4)
+	lamp.emission_enabled = true
+	lamp.emission = Color(1.0, 0.7, 0.35)
+	lamp.emission_energy_multiplier = 2.5
+	# The gas envelope: a long cigar with brass hoops around it.
 	var envelope := MeshInstance3D.new()
 	envelope.name = "Body"
-	var balloon := CapsuleMesh.new()
-	balloon.radius = footprint
-	balloon.height = footprint * 4.0
+	var balloon := SphereMesh.new()
+	balloon.radius = f
+	balloon.height = f * 2.0
+	balloon.radial_segments = 20
+	balloon.rings = 10
 	envelope.mesh = balloon
-	envelope.rotation.x = PI / 2.0
+	envelope.scale = Vector3(1.0, 1.0, 2.2)
 	envelope.material_override = mat
 	add_child(envelope)
+	for z in [-1.2, -0.4, 0.4, 1.2]:
+		var hoop := MeshInstance3D.new()
+		var torus := TorusMesh.new()
+		var r := f * sqrt(maxf(0.05, 1.0 - pow(z / 2.2, 2.0)))
+		torus.inner_radius = r * 0.98
+		torus.outer_radius = r * 1.05
+		torus.rings = 20
+		hoop.mesh = torus
+		hoop.rotation.x = PI / 2.0
+		hoop.position.z = z * f
+		hoop.material_override = brass
+		add_child(hoop)
+	# Gondola slung underneath, with lit windows down each side.
 	var gondola := MeshInstance3D.new()
 	var box := BoxMesh.new()
-	box.size = Vector3(footprint * 0.8, footprint * 0.5, footprint * 1.6)
+	box.size = Vector3(f * 0.7, f * 0.45, f * 1.8)
 	gondola.mesh = box
-	gondola.position.y = -footprint * 1.1
-	gondola.material_override = mat
+	gondola.position.y = -f * 1.15
+	gondola.material_override = iron
 	add_child(gondola)
-	var fin := MeshInstance3D.new()
-	var fin_box := BoxMesh.new()
-	fin_box.size = Vector3(0.1, footprint * 1.2, footprint)
-	fin.mesh = fin_box
-	fin.position = Vector3(0, footprint * 0.5, -footprint * 1.8)
-	fin.material_override = mat
-	add_child(fin)
+	for side in [-1.0, 1.0]:
+		var windows := MeshInstance3D.new()
+		var strip := BoxMesh.new()
+		strip.size = Vector3(0.02, f * 0.12, f * 1.4)
+		windows.mesh = strip
+		windows.position = Vector3(side * f * 0.36, -f * 1.1, 0.0)
+		windows.material_override = lamp
+		add_child(windows)
+		# Struts down to the gondola.
+		var strut := MeshInstance3D.new()
+		strut.mesh = _cyl(0.03, 0.03, f * 0.5)
+		strut.position = Vector3(side * f * 0.3, -f * 0.85, 0.0)
+		strut.material_override = brass
+		add_child(strut)
+		# An outrigger engine with a spinning propeller.
+		var pod := MeshInstance3D.new()
+		pod.mesh = _cyl(f * 0.14, f * 0.18, f * 0.6)
+		pod.rotation.x = PI / 2.0
+		pod.position = Vector3(side * f * 0.85, -f * 0.75, -f * 0.5)
+		pod.material_override = brass
+		add_child(pod)
+		var arm := MeshInstance3D.new()
+		var arm_box := BoxMesh.new()
+		arm_box.size = Vector3(f * 0.5, 0.05, 0.08)
+		arm.mesh = arm_box
+		arm.position = Vector3(side * f * 0.55, -f * 0.85, -f * 0.5)
+		arm.material_override = iron
+		add_child(arm)
+		var prop := MeshInstance3D.new()
+		var blade := BoxMesh.new()
+		blade.size = Vector3(f * 0.7, f * 0.08, 0.03)
+		prop.mesh = blade
+		prop.position = Vector3(side * f * 0.85, -f * 0.75, -f * 0.82)
+		prop.material_override = iron
+		add_child(prop)
+		var spin := prop.create_tween().set_loops()
+		spin.tween_property(prop, "rotation:z", TAU * side, 0.3).from(0.0)
+	# Cruciform tail fins.
+	for i in 4:
+		var fin := MeshInstance3D.new()
+		var fin_box := BoxMesh.new()
+		fin_box.size = Vector3(0.06, f * 0.9, f * 0.8)
+		fin.mesh = fin_box
+		fin.rotation.z = i * PI / 2.0
+		fin.position = Vector3(0, f * 0.55, 0).rotated(Vector3.BACK, i * PI / 2.0) + Vector3(0, 0, -f * 1.8)
+		fin.material_override = mat if i % 2 == 0 else brass
+		add_child(fin)
+	# A brass nose cap and a running lamp.
+	var nose := MeshInstance3D.new()
+	var cap := SphereMesh.new()
+	cap.radius = f * 0.22
+	cap.height = f * 0.44
+	nose.mesh = cap
+	nose.position.z = f * 2.15
+	nose.material_override = brass
+	add_child(nose)
+	var light := MeshInstance3D.new()
+	var bulb := SphereMesh.new()
+	bulb.radius = f * 0.1
+	bulb.height = f * 0.2
+	light.mesh = bulb
+	light.position = Vector3(0, -f * 1.4, f * 0.8)
+	light.material_override = lamp
+	add_child(light)
 	var shadow := MeshInstance3D.new()
 	shadow.name = "Shadow"
 	var disc := CylinderMesh.new()

@@ -5,6 +5,7 @@ class_name SkyBackdrop
 extends Node3D
 
 const SHADER := preload("res://shaders/cloud_sea.gdshader")
+const PUFF_SHADER := preload("res://shaders/cloud_puff.gdshader")
 
 ## Area the cloud sea covers, in world units (it's centred on the region).
 @export var area := Rect2(-150, -170, 300, 300)
@@ -14,11 +15,11 @@ const SHADER := preload("res://shaders/cloud_sea.gdshader")
 ## Each layer: depth below the deck, density, opacity, scroll speed, colours.
 const LAYERS := [
 	{"y": -38.0, "density": 1.0, "opacity": 1.0, "scroll": Vector2(0.002, 0.001),
-		"dark": Color(0.07, 0.07, 0.11), "light": Color(0.2, 0.2, 0.27)},
+		"dark": Color(0.05, 0.06, 0.12), "light": Color(0.17, 0.2, 0.32), "sun": 0.2},
 	{"y": -26.0, "density": 0.7, "opacity": 0.95, "scroll": Vector2(0.005, 0.002),
-		"dark": Color(0.13, 0.13, 0.19), "light": Color(0.38, 0.39, 0.48)},
+		"dark": Color(0.11, 0.13, 0.22), "light": Color(0.36, 0.4, 0.55), "sun": 0.4},
 	{"y": -16.0, "density": 0.45, "opacity": 0.85, "scroll": Vector2(0.009, 0.004),
-		"dark": Color(0.22, 0.23, 0.3), "light": Color(0.62, 0.63, 0.7)},
+		"dark": Color(0.2, 0.22, 0.34), "light": Color(0.58, 0.6, 0.72), "sun": 0.65},
 ]
 
 var rng := RandomNumberGenerator.new()
@@ -56,6 +57,7 @@ func _ready() -> void:
 		mat.set_shader_parameter("scroll", layer.scroll)
 		mat.set_shader_parameter("dark_color", layer.dark)
 		mat.set_shader_parameter("light_color", layer.light)
+		mat.set_shader_parameter("sun_strength", layer.sun)
 		mat.render_priority = _materials.size()
 		plane.material_override = mat
 		plane.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -111,9 +113,8 @@ func _apply_flash() -> void:
 
 ## Billowing columns of storm cloud rising from the sea between platforms.
 func _add_storm_towers() -> void:
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.17, 0.17, 0.23)
-	mat.roughness = 1.0
+	var mat := ShaderMaterial.new()
+	mat.shader = PUFF_SHADER
 	var root := Node3D.new()
 	root.name = "StormTowers"
 	add_child(root)
@@ -127,8 +128,8 @@ func _add_storm_towers() -> void:
 			var r := rng.randf_range(4.0, 9.0) * (1.0 - j * 0.12)
 			sphere.radius = r
 			sphere.height = r * 1.5
-			sphere.radial_segments = 12
-			sphere.rings = 6
+			sphere.radial_segments = 24
+			sphere.rings = 12
 			puff.mesh = sphere
 			puff.material_override = mat
 			puff.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
