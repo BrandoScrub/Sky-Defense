@@ -18,7 +18,10 @@ var resources: PlayerResources
 var waves: WaveManager
 ## Optional: shows next round's income next to scrap and crystals.
 var economy: EconomySystem
+## Optional: shows the Hub's health first, so you can see when you're losing.
+var combat: CombatSystem
 
+var _hub: Label
 var _scrap: Label
 var _power: Label
 var _crystals: Label
@@ -55,6 +58,7 @@ func _ready() -> void:
 	res.name = "Resources"
 	res.add_theme_constant_override("separation", 22)
 	row.add_child(res)
+	_hub = _stat(res, "Hub", "Your Hub's headquarters. If it falls, you lose. Sappers repair it when no enemy is close.")
 	_scrap = _stat(res, "Scrap", "Scrap: the main currency. Spend it on buildings, walkways and troops. Kills pay scrap on the spot; scrap heaps on your platforms pay at the end of each wave (shown as +N).")
 	_power = _stat(res, "Power", "Power: used / made. Towers need power; if they use more than your generators and storms make, they brown out and slow down.")
 	_crystals = _stat(res, "Crystals", "Crystals: an advanced resource. Your Cloud Harvesters pay crystals at the end of each wave (shown as +N).")
@@ -90,6 +94,7 @@ func _process(_delta: float) -> void:
 
 
 func refresh() -> void:
+	_refresh_hub()
 	if resources and region:
 		var income := economy.round_income() if economy else {}
 		_scrap.text = "Scrap %d" % resources.scrap + _income_text(income.get("scrap", 0))
@@ -106,6 +111,31 @@ func refresh() -> void:
 			_overload.text = "Overloaded: " + ", ".join(heavy)
 	if waves:
 		_refresh_rivals()
+
+
+## Hub health: white when healthy, amber under 60%, red under 30%, and it
+## pulses while the Hub is being hit.
+func _refresh_hub() -> void:
+	var hq: Headquarters = combat.headquarters_on("Hub") if combat else null
+	_hub.visible = combat != null
+	if hq == null:
+		_hub.text = "Hub fallen"
+		_hub.modulate = Color(1.0, 0.35, 0.3)
+		return
+	var ratio := hq.hp / hq.max_hp
+	_hub.text = "Hub %d / %d" % [ceili(hq.hp), int(hq.max_hp)]
+	var colour := Color.WHITE
+	if ratio < 0.3:
+		colour = Color(1.0, 0.35, 0.3)
+	elif ratio < 0.6:
+		colour = Color(1.0, 0.75, 0.35)
+	var since := Time.get_ticks_msec() - hq.last_hit_msec
+	if hq.last_hit_msec >= 0 and since < 1500:
+		# Under fire: blink between its colour and bright red.
+		var on := (since / 250) % 2 == 0
+		colour = Color(1.0, 0.25, 0.2) if on else colour
+		_hub.text += "  under attack!"
+	_hub.modulate = colour
 
 
 ## Your platforms that are over their weight limit, as "Name (State)".

@@ -1514,9 +1514,8 @@ func _check_combat_and_waves(main: Node) -> void:
 		e.take_damage(10000.0)
 	await process_frame
 
-	# The match lasts match_waves waves from first contact (walkways are
-	# prebuilt here, so contact was wave 1).
-	_expect(waves.final_wave() == waves.contact_wave.values().min() + waves.match_waves - 1, "the last wave is counted from first contact, got %d" % waves.final_wave())
+	# The match lasts match_waves waves, counted from wave 1.
+	_expect(waves.final_wave() == waves.match_waves, "the last wave is match_waves, got %d" % waves.final_wave())
 	# One rival down isn't a win, and that rival stops attacking.
 	var won := [false]
 	waves.game_over.connect(func(w): won[0] = w)

@@ -227,6 +227,7 @@ func _ready() -> void:
 	waves.bridges = bridges
 	bridges.cutting_started.connect(func(c): show_notice("Your units are cutting %s's bridge: hold them there %d seconds" % [c, int(bridges.cut_seconds)]))
 	bridges.span_cut.connect(func(c, _n): show_notice("You cut %s's bridge! Its crew has to build that span again" % c))
+	combat.headquarters_damaged.connect(_on_hq_damaged)
 	bridges.reached_player.connect(func(c, p): show_notice("%s's bridge reached %s: expect walkers!" % [c, p]))
 
 	ferry = FerrySystem.new()
@@ -300,6 +301,21 @@ func _ready() -> void:
 	drift.cast_off.connect(_on_drift_cast_off)
 	_refresh_resources()
 	_on_build_mode_changed("")
+
+
+## The Hub is being hit: say so at most every few seconds, with its health.
+var _hub_warned_msec := -100000
+
+func _on_hq_damaged(faction: String, platform: String, _amount: float) -> void:
+	if faction != "player" or _game_over:
+		return
+	var now := Time.get_ticks_msec()
+	if now - _hub_warned_msec < 8000:
+		return
+	_hub_warned_msec = now
+	var hq := combat.headquarters_on(platform)
+	if hq:
+		show_notice("The Hub is under attack! %d%% health left" % roundi(100.0 * hq.hp / hq.max_hp))
 
 
 func _on_storm_control_changed(cloud: String, controller: String) -> void:
@@ -582,6 +598,7 @@ func _build_hud() -> void:
 	top_bar.resources = resources
 	top_bar.waves = waves
 	top_bar.economy = economy
+	top_bar.combat = combat
 	layer.add_child(top_bar)
 
 	payout_popup = PayoutPopup.new()
