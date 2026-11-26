@@ -22,6 +22,8 @@ var economy: EconomySystem
 var combat: CombatSystem
 
 var _hub: Label
+## Rival HQs wrecked so far: the second way to win.
+var _hqs: Label
 var _scrap: Label
 var _power: Label
 var _crystals: Label
@@ -62,6 +64,7 @@ func _ready() -> void:
 	_scrap = _stat(res, "Scrap", "Scrap: the main currency. Spend it on buildings, walkways and troops. Kills pay scrap on the spot; scrap heaps on your platforms pay at the end of each wave (shown as +N).")
 	_power = _stat(res, "Power", "Power: used / made. Towers need power; if they use more than your generators and storms make, they brown out and slow down.")
 	_crystals = _stat(res, "Crystals", "Crystals: an advanced resource. Your Cloud Harvesters pay crystals at the end of each wave (shown as +N).")
+	_hqs = _stat(res, "RivalHQs", "The other way to win: wreck every rival headquarters (bridge out to them and attack). Or survive every wave.")
 	_overload = _stat(res, "Overload", "A platform is carrying more than it can lift. Overloaded platforms sway, sag and drop buildings. Demolish something, move units off, or add a Lift Engine (Industry, E).")
 	_overload.modulate = Color(1.0, 0.55, 0.45)
 	_overload.visible = false
@@ -110,6 +113,8 @@ func refresh() -> void:
 		if not heavy.is_empty():
 			_overload.text = "Overloaded: " + ", ".join(heavy)
 	if waves:
+		var grounded := waves.rivals_grounded()
+		_hqs.text = "Rival HQs down %d / %d" % grounded
 		_refresh_rivals()
 
 
@@ -170,20 +175,20 @@ func _refresh_rivals() -> void:
 func status_text(entry: Dictionary) -> String:
 	if entry.defeated:
 		return "Defeated"
-	# Until its bridge reaches you, a bridging rival's real clock is the bridge.
+	var bridge := ""
 	if not waves.has_contact(entry.corp):
-		return "Bridge: %d of %d spans" % bridge_progress(entry.corp)
+		bridge = ", bridge %d/%d" % bridge_progress(entry.corp)
 	match waves.phase:
 		WaveManager.BUILD:
 			if entry.units.is_empty():
-				return "Wave %d: sits it out" % waves.wave
+				return "Wave %d: sits it out%s" % [waves.wave, bridge]
 			var target := bomb_target_of(entry)
 			if target != "":
 				return "Wave %d in %s: bombs %s" % [waves.wave, clock(waves.time_left), target]
-			return "Wave %d in %s" % [waves.wave, clock(waves.time_left)]
+			return "Wave %d in %s%s" % [waves.wave, clock(waves.time_left), bridge]
 		WaveManager.WAVE:
 			var left := waves.remaining_for(entry.corp)
-			return "Attacking: %d left" % left if left > 0 else "Waiting for next wave"
+			return ("Attacking: %d left" % left if left > 0 else "Waiting for next wave") + bridge
 	return ""
 
 
@@ -221,13 +226,15 @@ func wave_tooltip(entry: Dictionary) -> String:
 		lines.append("Bombers fly at %s (your outer island with the most" % target)
 		lines.append("built on it). Flak there stops them.")
 	var bonus := waves.health_bonus(-1, entry.corp)
+	if waves.is_push_wave() and not entry.units.is_empty():
+		lines.append("Big push: the wind turns, 40% more attackers")
 	if bonus > 0.005 and not entry.units.is_empty():
 		lines.append("Health +%d%%" % roundi(bonus * 100))
 	if not waves.has_contact(entry.corp):
 		var progress := bridge_progress(entry.corp)
-		lines.append("Bridge %d of %d spans built. Its walkers camp at the end" % progress)
-		lines.append("until it reaches you; its army grows only after that.")
-		lines.append("Cut a span to set it back.")
+		lines.append("Bridge %d of %d spans built. Its walkers creep along it," % progress)
+		lines.append("taking each island they reach (and wrecking what you built")
+		lines.append("there). Cut a span to set it back. Troop carriers fly in anyway.")
 	return "\n".join(lines)
 
 

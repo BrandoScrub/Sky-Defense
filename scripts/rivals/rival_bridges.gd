@@ -27,7 +27,7 @@ signal reached_player(corp: String, platform_name: String)
 ## Optional: crews speed up while a wave is out.
 @export var waves: WaveManager
 ## Seconds per span between waves.
-@export var span_seconds := 12.0
+@export var span_seconds := 30.0
 ## How much faster crews work while a wave is out (1 = no faster).
 @export var wave_speedup := 1.0
 ## Seconds your units need beside a span to cut it down.

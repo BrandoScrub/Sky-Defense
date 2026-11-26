@@ -21,7 +21,7 @@ const OVER := "over"
 ## Waves to survive to win. 0: no limit.
 @export var match_waves := 10
 ## Walkers in later waves get this much extra health per wave.
-@export var hp_growth_per_wave := 0.06
+@export var hp_growth_per_wave := 0.08
 
 ## The first ground rival's raids (Ironbell). Kept for older callers; every
 ## ground rival's raids are in raids_by_corp.
@@ -75,6 +75,7 @@ func _process(delta: float) -> void:
 
 func step(delta: float) -> void:
 	_check_contact()
+	_track_garrisons(delta)
 	match phase:
 		BUILD:
 			time_left -= delta
@@ -144,32 +145,36 @@ func _check_contact() -> void:
 			contact_wave[corp] = wave
 
 
-## The wave number a rival's army size and health follow for global wave `n`.
-## Flying rivals follow the match's waves. Bridging rivals count from first
-## contact: their first party to reach you is their wave-1 party, however
-## late the bridge lands, and it grows from there. Before contact their camp
-## stays at that first size.
-func rival_wave(corp: String, n := -1) -> int:
-	if n < 0:
-		n = wave
-	if not _counts_from_contact(corp):
-		return n
-	var first := maxi(RivalCatalog.first_wave(corp, "ground"), 1)
-	if not contact_wave.has(corp):
-		return first
-	# A rival that starts late (Aurum) still starts at its own first wave.
-	return first + maxi(n - maxi(contact_wave[corp], first), 0)
+## The wave number a rival's army size and health follow for global wave
+## `n`. Every rival follows the match's waves (Ironbell no longer waits for
+## its bridge: its troop carriers fly in from wave 1).
+func rival_wave(_corp: String, n := -1) -> int:
+	return wave if n < 0 else n
 
 
-## How many of `unit` a rival sends in global wave `n`. A bridging rival
-## sends only its ground party (at its first size) until the bridge lands.
+## Every 3rd wave (when the wind turns) is a big push: every rival sends
+## 40% more.
+const PUSH_EVERY := 3
+const PUSH_MULT := 1.4
+
+
+func is_push_wave(n := -1) -> bool:
+	return (wave if n < 0 else n) % PUSH_EVERY == 0
+
+
+## How many of `unit` a rival sends in global wave `n`, after the big push
+## and the difficulty.
 func count_for(corp: String, unit: String, n: int) -> int:
-	if _counts_from_contact(corp):
-		if n < RivalCatalog.first_wave(corp, "ground"):
-			return 0
-		if not contact_wave.has(corp) and unit != "ground":
-			return 0
-	return RivalCatalog.count_for(corp, unit, rival_wave(corp, n))
+	var base := RivalCatalog.count_for(corp, unit, rival_wave(corp, n))
+	if base <= 0:
+		return 0
+	var mult: float = Difficulty.get_data().count
+	# Troop carriers already land on top of you, so a push doesn't add more.
+	if is_push_wave(n) and unit != "carrier":
+		mult *= PUSH_MULT
+	# Rounded down from x.25 up, so a lone carrier stays one in a push but
+	# 2 walkers become 3.
+	return maxi(1, floori(base * mult + 0.25))
 
 
 ## Rivals taking part, in order.
@@ -264,7 +269,7 @@ func start_wave() -> void:
 	# late bridge doesn't bring every wave at once).
 	var leftovers := {}
 	for node in get_tree().get_nodes_in_group(Unit.ENEMY_GROUP):
-		if not node.flying and node.hp > 0.0:
+		if not node.flying and node.hp > 0.0 and not is_garrison(node):
 			var corp: String = node.get_meta("corp", raids.corp if raids else "")
 			if not leftovers.has(corp):
 				leftovers[corp] = []
@@ -308,7 +313,7 @@ func _track(corp: String, units: Array) -> void:
 
 func _toughen(u: Unit, corp := "") -> void:
 	var n := rival_wave(corp) if corp != "" else wave
-	u.max_hp *= (1.0 + hp_growth_per_wave * (n - 1)) * (1.0 + hp_bonus)
+	u.max_hp *= (1.0 + hp_growth_per_wave * (n - 1)) * (1.0 + hp_bonus) * Difficulty.get_data().hp
 	u.hp = u.max_hp
 
 
@@ -333,10 +338,38 @@ func _alive(units: Array) -> int:
 
 
 func _is_camped(u: Unit) -> bool:
+	if is_garrison(u):
+		return true
 	var bridges: RivalBridges = raids.bridges if raids else null
 	if bridges == null or u.flying:
 		return false
 	return bridges.is_waiting_at_frontier(u.get_meta("corp", raids.corp), u)
+
+
+## Seconds a raider must stand still on an island its side took before it
+## counts as that island's garrison.
+const GARRISON_SECONDS := 3.0
+
+
+## A rival ground unit holding an island it took, with no way on (e.g.
+## troops a carrier dropped on an island cut off from your Hub). Garrisons
+## don't hold the wave open: you win the island back by sending troops.
+func is_garrison(u: Unit) -> bool:
+	return float(u.get_meta("hold_t", 0.0)) >= GARRISON_SECONDS
+
+
+func _track_garrisons(delta: float) -> void:
+	if combat == null or combat.region == null or not is_inside_tree():
+		return
+	var region: SkyRegion = combat.region
+	for node in get_tree().get_nodes_in_group(Unit.ENEMY_GROUP):
+		var u := node as Unit
+		if u.flying or u.hp <= 0.0:
+			continue
+		var here := region.platform_at(u.global_position)
+		var holding: bool = not u.is_moving() and here != "" and region.platform_owner(here) == "rival" \
+			and region.platforms[here].kind != "rival"
+		u.set_meta("hold_t", float(u.get_meta("hold_t", 0.0)) + delta if holding else 0.0)
 
 
 ## Raiders camped at the end of an unfinished bridge, waiting for it.
@@ -383,7 +416,7 @@ func health_bonus(n := -1, corp := "") -> float:
 		n = wave
 	if corp != "":
 		n = rival_wave(corp, n)
-	return (1.0 + hp_growth_per_wave * (n - 1)) * (1.0 + hp_bonus) - 1.0
+	return (1.0 + hp_growth_per_wave * (n - 1)) * (1.0 + hp_bonus) * Difficulty.get_data().hp - 1.0
 
 
 func _on_headquarters_destroyed(faction: String, platform: String) -> void:

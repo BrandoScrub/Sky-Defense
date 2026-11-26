@@ -11,8 +11,8 @@ const GROUP := "headquarters"
 
 var faction := "player"
 var platform := ""
-var max_hp := 1500.0
-var hp := 1500.0
+var max_hp := 2000.0
+var hp := 2000.0
 var cooldown_left := 0.0
 ## Time.get_ticks_msec() of the last hit, or -1.
 var last_hit_msec := -1

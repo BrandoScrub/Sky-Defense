@@ -32,8 +32,10 @@ const RIVALS := {
 		"bridges": true, "air_lanes": false, "span_seconds": 30,
 		"party_mix": ["walker", "walker", "walker", "shieldbearer", "rifleman"],
 		"waves": [
-			{"unit": "ground", "first": 1, "base": 3, "every": 1, "max": 10},
-			{"unit": "carrier", "first": 5, "base": 1, "every": 3, "max": 3},
+			# Walkers creep island by island along the bridge...
+			{"unit": "ground", "first": 1, "base": 2, "every": 2, "max": 8},
+			# ...while troop carriers fly squads straight at you every wave.
+			{"unit": "carrier", "first": 1, "base": 1, "every": 4, "max": 2},
 		],
 	},
 	"Vesper": {

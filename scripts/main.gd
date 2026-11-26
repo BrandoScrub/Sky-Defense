@@ -101,6 +101,7 @@ func _ready() -> void:
 
 	resources = PlayerResources.new()
 	resources.name = "PlayerResources"
+	resources.scrap = Difficulty.get_data().scrap
 	add_child(resources)
 
 	# Added after selection so it sees mouse clicks first while placing.
@@ -402,8 +403,10 @@ func _process(delta: float) -> void:
 	match waves.phase:
 		WaveManager.BUILD:
 			_phase_label.text = "Build phase: wave %d%s in %ds (Space to start now)" % [waves.wave, _of_final(), ceili(waves.time_left)]
-			if waves.camped() > 0:
-				_phase_label.text += "   %d rival raiders camped at their bridge" % waves.camped()
+			if waves.is_push_wave():
+				_phase_label.text = "BIG PUSH next: wave %d%s in %ds, every rival sends 40%% more" % [waves.wave, _of_final(), ceili(waves.time_left)]
+			elif waves.camped() > 0:
+				_phase_label.text += "   %d raiders camped" % waves.camped()
 		WaveManager.WAVE:
 			_phase_label.text = "Wave %d%s: %d attackers left" % [waves.wave, _of_final(), waves.remaining()]
 		_:
@@ -666,6 +669,55 @@ func _build_hud() -> void:
 	_banner.visible = false
 	layer.add_child(_banner)
 
+	_build_difficulty_picker(layer)
+
+
+## Easy / Normal / Hard, bottom centre, until wave 1 starts.
+var _difficulty_row: HBoxContainer
+var _difficulty_buttons := {}
+
+func _build_difficulty_picker(layer: CanvasLayer) -> void:
+	var panel := PanelContainer.new()
+	panel.name = "Difficulty"
+	panel.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	panel.offset_bottom = -96
+	_difficulty_row = HBoxContainer.new()
+	_difficulty_row.add_theme_constant_override("separation", 6)
+	panel.add_child(_difficulty_row)
+	var label := Label.new()
+	label.text = "Difficulty (until wave 1):"
+	_difficulty_row.add_child(label)
+	var group := ButtonGroup.new()
+	for level in Difficulty.ORDER:
+		var b := Button.new()
+		b.text = level
+		b.toggle_mode = true
+		b.button_group = group
+		b.focus_mode = Control.FOCUS_NONE
+		b.button_pressed = level == Difficulty.level
+		var d: Dictionary = Difficulty.LEVELS[level]
+		b.tooltip_text = "%s: %d%% attackers, %d%% health, %d starting scrap" % [level, roundi(d.count * 100), roundi(d.hp * 100), d.scrap]
+		b.pressed.connect(set_difficulty.bind(level))
+		_difficulty_row.add_child(b)
+		_difficulty_buttons[level] = b
+	layer.add_child(panel)
+	waves.phase_changed.connect(func(_p, _w): panel.visible = waves.wave == 1 and waves.phase == WaveManager.BUILD)
+
+
+## Switches difficulty before wave 1, adjusting starting scrap by the
+## difference (so scrap already spent stays spent).
+func set_difficulty(level: String) -> void:
+	if waves.wave != 1 or waves.phase != WaveManager.BUILD or not Difficulty.LEVELS.has(level):
+		return
+	var before: int = Difficulty.get_data().scrap
+	Difficulty.level = level
+	resources.add_scrap(Difficulty.get_data().scrap - before)
+	if _difficulty_buttons.has(level):
+		_difficulty_buttons[level].button_pressed = true
+	show_notice("Difficulty: %s" % level)
+
 
 func _hud_label(node_name: String, font_size: int) -> Label:
 	var label := Label.new()
@@ -714,7 +766,21 @@ func _on_platform_claimed(platform_name: String, new_owner: String) -> void:
 	if new_owner == "player":
 		show_notice("You claimed %s" % platform_name)
 	else:
-		show_notice("A rival claimed %s" % platform_name)
+		# Losing an island costs what you built there.
+		var wrecked := 0
+		for b in region.buildings_on(platform_name):
+			if b.faction == "player":
+				region.remove_building(b.hex)
+				b.queue_free()
+				wrecked += 1
+		var corp := ""
+		for u in region.units_on_platform(platform_name, Unit.ENEMY_GROUP):
+			corp = u.get_meta("corp", corp)
+		var who := corp if corp != "" else "A rival"
+		if wrecked > 0:
+			show_notice("%s took %s and wrecked %d of your building%s there" % [who, platform_name, wrecked, "" if wrecked == 1 else "s"])
+		else:
+			show_notice("%s took %s" % [who, platform_name])
 
 
 ## Colour key for the placeholder tiles, top right. Click its title (or
