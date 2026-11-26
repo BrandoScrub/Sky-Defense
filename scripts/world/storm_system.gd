@@ -132,8 +132,6 @@ func rival_build() -> String:
 		var b := Building.new().setup("harvester")
 		region.place_building(b, hex)
 		b.faction = "rival"
-		for mat in b._materials:
-			mat.albedo_color = mat.albedo_color.lerp(Color(0.75, 0.2, 0.15), 0.6)
 		rival_harvester_built.emit(t.platform)
 		return t.platform
 	return ""

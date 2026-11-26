@@ -15,6 +15,7 @@ func _initialize() -> void:
 		quit(1))
 	_check_input_map()
 	_check_hex_math()
+	_check_models()
 	# A fixed map so results repeat (seed 3: Ironbell northwest, Vesper east).
 	SkyRegion.seed_override = 3
 	_check_layout_rules()
@@ -172,6 +173,38 @@ func _expect(condition: bool, message: String) -> void:
 	if not condition:
 		_failures += 1
 		printerr("FAIL: " + message)
+
+
+## Every building, unit, airship and headquarters has its own model made of
+## shared kit parts, and a rival's copy uses the rival palette.
+func _check_models() -> void:
+	var known := ["generator", "harvester", "lift", "turret", "coil", "horn", "mender", "flak", "skyhook", "engine", "airship_hangar", "mast"]
+	for id in BuildingCatalog.BUILDINGS:
+		var shape: String = BuildingCatalog.get_data(id).shape
+		_expect(known.has(shape), "building %s needs a model in BuildingModels (shape %s)" % [id, shape])
+		var b := Building.new().setup(id)
+		_expect(b.get_node("Model").get_child_count() >= 12, "%s should be built from kit parts" % id)
+		var before := b._materials.size()
+		b.faction = "rival"
+		_expect(b.get_node("Model").get_child_count() >= 12 and b._materials.size() == before, "%s rebuilds in rival colours" % id)
+		b.set_ghost(true)
+		b.free()
+	_expect(ModelKit.new(Color.WHITE, "rival").mat("brass").albedo_color != ModelKit.new(Color.WHITE, "player").mat("brass").albedo_color,
+		"rival trim differs from player brass")
+	var parts := {}
+	for type in UnitCatalog.UNITS:
+		var u := UnitCatalog.make(type, "rival" if type == "walker" else "player")
+		parts[type] = UnitModels.build(u).get_child_count()
+		_expect(parts[type] >= 15, "%s should be built from kit parts" % type)
+		u.free()
+	for corp in ["", "Ironbell", "Vesper", "Nimbus", "Aurum"]:
+		var plinth := Node3D.new()
+		HqModels.build(plinth, corp, 0.6)
+		_expect(plinth.get_node("Headquarters").get_child_count() >= 20, "the %s headquarters has a model" % (corp if corp != "" else "player"))
+		plinth.free()
+	var boat := UnitModels.ferry()
+	_expect(boat.get_child_count() >= 15, "the ferry has a model")
+	boat.free()
 
 
 func _check_input_map() -> void:

@@ -638,7 +638,6 @@ func _build_hull(balloon_name: String) -> Node3D:
 	var root := Node3D.new()
 	root.name = "Balloon_" + balloon_name.replace(" ", "")
 	var wood := _mat(Color(0.42, 0.28, 0.16))
-	var canvas := _mat(Color(0.86, 0.78, 0.6))
 	var brass := _mat(Color(0.75, 0.56, 0.26))
 	var span := region.tile_size * HexGrid.SQRT3 * (RADIUS + 0.45)
 	var keel := MeshInstance3D.new()
@@ -655,15 +654,9 @@ func _build_hull(balloon_name: String) -> Node3D:
 	for i in 3:
 		var angle := TAU * i / 3.0 + PI / 6.0
 		var out := Vector3(cos(angle), 0, sin(angle))
-		var bag := MeshInstance3D.new()
-		var capsule := CapsuleMesh.new()
-		capsule.radius = 0.9
-		capsule.height = 3.2
-		bag.mesh = capsule
-		bag.rotation = Vector3(PI / 2.0, -angle + PI / 2.0, 0)
-		bag.position = out * (span + 0.9) + Vector3.UP * 0.6
-		bag.material_override = canvas
-		root.add_child(bag)
+		# The same hooped gas bag the airships use (ModelKit).
+		var bag := ModelKit.shared(Color(0.86, 0.78, 0.6)).balloon(root, out * (span + 0.9) + Vector3.UP * 0.6, 0.9, 3.4, "canvas", 3)
+		bag.rotation.y = -angle + PI / 2.0
 		var strut := MeshInstance3D.new()
 		var box := BoxMesh.new()
 		box.size = Vector3(1.2, 0.12, 0.12)

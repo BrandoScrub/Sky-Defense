@@ -787,10 +787,10 @@ func _make_tile(hex: Vector2i) -> void:
 	get_node("Tiles").add_child(tile)
 	_tile_nodes[hex] = tile
 	if t.type != "deck" and not is_walkway:
-		_add_prop(tile, t.type, height)
+		_add_prop(tile, t.type, height, platforms[t.platform].get("corp", "") if t.platform != "" else "")
 
 
-func _add_prop(tile: Node3D, type: String, tile_height: float) -> void:
+func _add_prop(tile: Node3D, type: String, tile_height: float, corp := "") -> void:
 	var prop := MeshInstance3D.new()
 	prop.name = "Prop"
 	var top := tile_height / 2.0
@@ -832,32 +832,17 @@ func _add_prop(tile: Node3D, type: String, tile_height: float) -> void:
 			prop.position.y = top + 1.25
 	prop.material_override = _material(COLORS[type], type == "crystal_seam" or type == "spawn")
 	tile.add_child(prop)
-	_add_prop_details(prop, type)
+	_add_prop_details(prop, type, corp)
 
 
 ## Extra placeholder pieces that make each feature read at a glance.
-func _add_prop_details(prop: MeshInstance3D, type: String) -> void:
+func _add_prop_details(prop: MeshInstance3D, type: String, corp := "") -> void:
 	var brass := _material(Color(0.75, 0.56, 0.26))
 	var iron := _material(Color(0.22, 0.21, 0.2))
 	match type:
 		"core", "rival_core":
-			# A clock-tower headquarters: column, dome and a glowing beacon.
-			var player := type == "core"
-			var column := _part(_cylinder_mesh(0.9, 1.1, 2.6, 8), Vector3(0, 1.9, 0),
-				_material(Color(0.55, 0.4, 0.22) if player else Color(0.35, 0.12, 0.1)))
-			prop.add_child(column)
-			var dome := SphereMesh.new()
-			dome.radius = 1.2
-			dome.height = 1.6
-			prop.add_child(_part(dome, Vector3(0, 3.3, 0), brass if player else iron))
-			prop.add_child(_part(_cylinder_mesh(0.0, 0.25, 1.6, 6), Vector3(0, 4.6, 0), iron))
-			var beacon := SphereMesh.new()
-			beacon.radius = 0.35
-			beacon.height = 0.7
-			prop.add_child(_part(beacon, Vector3(0, 5.5, 0),
-				_material(Color(1.0, 0.8, 0.4) if player else Color(1.0, 0.3, 0.2), true)))
-			for x in [-1.0, 1.0]:
-				prop.add_child(_part(_cylinder_mesh(0.25, 0.3, 2.2, 8), Vector3(x * 1.3, 1.7, 0.6), iron))
+			# The headquarters building stands on this plinth (see HqModels).
+			HqModels.build(prop, "" if type == "core" else (corp if corp != "" else "Ironbell"), 0.6)
 		"scrap_heap":
 			for i in 4:
 				var box := BoxMesh.new()

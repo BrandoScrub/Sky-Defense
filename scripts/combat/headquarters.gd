@@ -23,7 +23,7 @@ func _ready() -> void:
 	_health_bar = HealthBar.new()
 	_health_bar.width = 4.0
 	_health_bar.height = 0.3
-	_health_bar.position.y = 5.0
+	_health_bar.position.y = 6.9
 	add_child(_health_bar)
 
 
