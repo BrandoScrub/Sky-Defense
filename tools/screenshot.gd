@@ -29,7 +29,7 @@ func _initialize() -> void:
 	cam._apply_zoom()
 	await _settle()
 	_save(out_dir + "/fog-of-war.png")
-	main._help.visible = false
+	main.set_tips_open(false)
 	cam.position = region.get_platform_position("Hub") + Vector3(8, 0, 2)
 	cam.zoom = 0.7
 	cam._target_zoom = 0.7

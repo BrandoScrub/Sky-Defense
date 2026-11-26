@@ -40,7 +40,7 @@ const COLORS := {
 	"cloud": Color(0.4, 0.55, 1.0, 0.35),
 	"ferry": Color(0.2, 0.75, 0.7, 0.8),
 	"air_lane": Color(1.0, 0.3, 0.25, 0.35),
-	"underside": Color(0.25, 0.24, 0.24),
+	"underside": Color(0.4, 0.37, 0.36),
 }
 
 ## Human-readable names for the legend.
@@ -467,8 +467,8 @@ func set_platform_owner(platform_name: String, new_owner: String) -> void:
 	var color: Color = COLORS[{"player": "hub", "rival": "rival"}.get(new_owner, _neutral_kind(platform_name))]
 	for hex in tiles_of_platform(platform_name):
 		var node: MeshInstance3D = _tile_nodes.get(hex)
-		if node:
-			node.material_override = _material(color)
+		if node and tiles[hex].type != "walkway":
+			node.material_override = _deck_material(color, surface_of(platform_name))
 	owner_changed.emit(platform_name, new_owner)
 
 
@@ -782,7 +782,7 @@ func _make_tile(hex: Vector2i) -> void:
 	var tile := MeshInstance3D.new()
 	tile.name = "Tile_%d_%d" % [hex.x, hex.y]
 	tile.mesh = _hex_mesh(height, tile_size * TILE_GAP)
-	tile.material_override = _material(COLORS[kind])
+	tile.material_override = _deck_material(COLORS[kind], "walkway" if is_walkway else surface_of(t.platform))
 	tile.position = hex_center(hex) + Vector3.DOWN * height / 2.0
 	get_node("Tiles").add_child(tile)
 	_tile_nodes[hex] = tile
@@ -917,7 +917,7 @@ func _add_underside(p: Dictionary) -> void:
 	mesh.height = 4.0 + p.radius * 2.0
 	mesh.radial_segments = 6
 	cone.mesh = mesh
-	cone.material_override = _material(COLORS.underside)
+	cone.material_override = _deck_material(COLORS.underside, "city")
 	cone.position = hex_center(p.center) + Vector3.DOWN * (DECK_HEIGHT + mesh.height / 2.0)
 	cone.rotation.y = PI / 6.0
 	add_child(cone)
@@ -1013,11 +1013,11 @@ func _add_trim(p: Dictionary) -> void:
 
 ## Island colours under the deck, by style.
 const UNDERSIDE_COLORS := {
-	"rock": Color(0.34, 0.28, 0.23),
-	"turbine": Color(0.27, 0.27, 0.29),
-	"crystal": Color(0.2, 0.22, 0.28),
-	"grassy": Color(0.38, 0.27, 0.17),
-	"overcharged": Color(0.18, 0.17, 0.26),
+	"rock": Color(0.5, 0.42, 0.34),
+	"turbine": Color(0.42, 0.42, 0.46),
+	"crystal": Color(0.32, 0.34, 0.42),
+	"grassy": Color(0.52, 0.38, 0.26),
+	"overcharged": Color(0.3, 0.27, 0.4),
 }
 
 
@@ -1034,7 +1034,8 @@ func _add_island_underside(p: Dictionary) -> void:
 	add_child(root)
 	var style: String = p.style
 	var variant: String = p.get("variant", "")
-	var mat := _material(UNDERSIDE_COLORS.get(variant if variant != "" else style, COLORS.underside))
+	var mat := _deck_material(UNDERSIDE_COLORS.get(variant if variant != "" else style, COLORS.underside),
+		variant if variant != "" else style)
 	var root_mat := _material(Color(0.22, 0.16, 0.1))
 	var crystal := _material(Color(0.35, 0.95, 1.0), true)
 	var brass := _material(Color(0.7, 0.52, 0.25))
@@ -1261,6 +1262,36 @@ func _hex_mesh(height: float, radius: float) -> CylinderMesh:
 	return _hex_mesh_cache[key]
 
 
+const DECK_SHADER := preload("res://shaders/deck.gdshader")
+## Deck patterns by island style (see shaders/deck.gdshader).
+const SURFACES := {"city": 0, "turbine": 1, "rock": 2, "grassy": 3, "overcharged": 4, "walkway": 5}
+
+
+## Which deck pattern a platform's tiles get: riveted plates for city
+## platforms, tread plate on turbines, flagstones on rock, grass or glowing
+## slate on crystal islands.
+func surface_of(platform_name: String) -> String:
+	var p: Dictionary = platforms.get(platform_name, {})
+	var style: String = p.get("style", "city")
+	if style == "crystal":
+		return p.get("variant", "grassy")
+	return style if SURFACES.has(style) else "city"
+
+
+## A deck tile's material: the ownership colour with its island's pattern.
+func _deck_material(color: Color, surface: String) -> Material:
+	var key := ["deck", color, surface]
+	if _material_cache.has(key):
+		return _material_cache[key]
+	var mat := ShaderMaterial.new()
+	mat.shader = DECK_SHADER
+	mat.set_shader_parameter("tint", color)
+	mat.set_shader_parameter("surface", SURFACES.get(surface, 0))
+	mat.set_shader_parameter("radius", tile_size * TILE_GAP)
+	_material_cache[key] = mat
+	return mat
+
+
 func _material(color: Color, glow := false) -> StandardMaterial3D:
 	var key := [color, glow]
 	if _material_cache.has(key):
@@ -1273,7 +1304,7 @@ func _material(color: Color, glow := false) -> StandardMaterial3D:
 	if glow:
 		mat.emission_enabled = true
 		mat.emission = Color(color.r, color.g, color.b)
-		mat.emission_energy_multiplier = 0.8
+		mat.emission_energy_multiplier = 1.8
 	_material_cache[key] = mat
 	return mat
 
@@ -1330,7 +1361,7 @@ func add_tiles(new_tiles: Dictionary) -> void:
 		_make_tile(hex)
 		var owner_name := platform_owner(tiles[hex].platform) if tiles[hex].platform != "" else ""
 		if owner_name != "":
-			_tile_nodes[hex].material_override = _material(COLORS[{"player": "hub", "rival": "rival"}[owner_name]])
+			_tile_nodes[hex].material_override = _deck_material(COLORS[{"player": "hub", "rival": "rival"}[owner_name]], surface_of(tiles[hex].platform))
 		if WALKABLE.has(tiles[hex].type):
 			_add_walk_point(hex)
 			if buildings.has(hex):

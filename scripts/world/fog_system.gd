@@ -380,9 +380,11 @@ func _build_beacons() -> void:
 		hint.text = glow[1] + "?"
 		hint.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		hint.no_depth_test = true
-		hint.font_size = 64
-		hint.outline_size = 12
-		hint.pixel_size = 0.04
+		# Same size on screen at any zoom, small enough not to cover the HUD.
+		hint.fixed_size = true
+		hint.font_size = 32
+		hint.outline_size = 8
+		hint.pixel_size = 0.0008
 		hint.modulate = glow[0].lightened(0.4)
 		hint.position = Vector3.UP * (5.0 + p.radius)
 		beacon.add_child(hint)

@@ -6,40 +6,22 @@ const SQUAD_SIZE := 4
 ## Seconds before a fallen Commander is back on the Hub.
 const HERO_RESPAWN_SECONDS := 15.0
 
-const HOW_TO_PLAY := """How to play
-Goal: destroy every rival HQ before they destroy your Hub.
-Ironbell bridges its way to you and walks; Vesper flies bombers.
-
-1. Islands start unconnected. Build walkways (Industry, W) from a platform you
-   own to reach new islands, then park units there to claim them. How you
-   expand is up to you: the Foundry gives scrap, the Generator Rig power.
-2. Ironbell's crews bridge one span at a time from its HQ toward your Hub
-   (red-brown walkways), faster while a wave is out. Its walkers camp at the
-   end of the bridge until it reaches you, then march in together. Park
-   units on a platform right beside an Ironbell span for 8 seconds (with no
-   enemy close) to cut it down. Kills pay scrap.
-3. Build during the build phase with the menu in the bottom left (Tab
-   switches tabs). Rivet Turrets (Defense, Q) guard where the bridge lands.
-   Towers need power: your Hub starts with one Dynamo Generator, and more
-   (Industry, Q) keep the power number at the top positive. A tower marked
-   NO POWER barely fires.
-4. From wave 3 Vesper bombers fly the red air lanes and bomb your buildings:
-   Flak Batteries (Defense, A) shred them; ground towers can't hit them.
-   From wave 5 Ironbell troop carriers drop squads onto your platforms (shoot
-   them down first), and from wave 7 Vesper gunships hunt your units.
-   Airships steer around islands and attack from upwind. The wind (top of
-   the screen) turns every 3 waves: the air lanes move and balloon islands drift.
-5. Put Cloud Harvesters (Industry, R) on storm anchors. Hold more harvesters on a storm
-   than Ironbell to get its power; if Ironbell holds it, lightning strikes.
-6. Right click the Crystal Spire to send units there by airship ferry.
-7. Keep platforms under their weight limit or they sag and shed buildings.
-   A Lift Engine (Industry, E) lets a platform carry 10 more. Every island
-   you hold pays 10 scrap a wave; scrap heaps pay 50.
-   Crystals from harvesters buy Hum powers (Hum, Q and W).
-8. Dark storm clouds hide the sky you haven't scouted. Glowing islands hint
-   at what's inside: crystal, generators, or a rival's HQ.
-
-Click anything to see what it is and what it does."""
+## The how-to-play guide, one short card at a time (top left, under the
+## selection line). Players page through with Next / Back, close it with x,
+## and bring it back with the Tips button or the / key.
+const TIPS := [
+	"Welcome, tycoon. Destroy every rival HQ before they destroy your Hub. Ironbell bridges its way to you on foot; Vesper flies bombers.",
+	"Controls: left click or drag to select, right click to move, Alt + right click to attack-move. Ctrl + A: all on screen. H: hero. Ctrl + 1-5 saves a group, 1-5 recalls it. Shift + WASD pans.",
+	"Islands start unconnected. Build a walkway (Industry, W) from a platform you own, then park units on the far island to claim it. The Foundry gives scrap, the Generator Rig power.",
+	"Ironbell's crews bridge one span at a time toward your Hub (red-brown walkways). Its walkers camp at the bridge end until it reaches you. Park units beside an Ironbell span for 8 seconds, with no enemy close, to cut it down.",
+	"Build from the grid at the bottom left (Tab switches tabs). Rivet Turrets (Defense, Q) guard where the bridge lands. Towers need power: keep the Power number positive with Dynamos (Industry, Q). A tower marked NO POWER barely fires.",
+	"From wave 3 Vesper bombers fly the red air lanes: Flak Batteries (Defense, A) shred them, ground towers can't. Troop carriers come from wave 5, gunships from wave 7. The wind turns every 3 waves.",
+	"Put Cloud Harvesters (Industry, R) on storm anchors. Hold more harvesters on a storm than Ironbell to get its power, or its lightning strikes you. Crystals buy Hum powers (Hum, Q and W).",
+	"Keep platforms under their weight limit or they sag and shed buildings. A Lift Engine (Industry, E) carries 10 more. Each island you hold pays 10 scrap a wave. Right click the Crystal Spire to ferry units there.",
+	"Dark storm clouds hide the sky you haven't scouted. Glowing islands hint at what's inside. Click anything to see what it is and what it does.",
+]
+## Width of the tips card, in pixels.
+const TIPS_WIDTH := 360.0
 
 @onready var camera: RtsCamera = $RtsCamera
 @onready var region: SkyRegion = $Region
@@ -79,6 +61,10 @@ var info_panel: InfoPanel
 var _notice: Label
 var _notice_tween: Tween
 var _help: PanelContainer
+var _help_text: Label
+var _help_page: Label
+var _help_button: Button
+var _tip := 0
 var _legend_entries: VBoxContainer
 var _legend_toggle: Button
 var _right_column: VBoxContainer
@@ -353,6 +339,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("toggle_legend") and _legend_entries:
 		set_legend_open(not _legend_entries.visible)
 		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("toggle_tips") and _help:
+		set_tips_open(not _help.visible)
+		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("camera_focus_hub"):
 		camera.focus_on(region.get_platform_position("Hub"))
 		get_viewport().set_input_as_handled()
@@ -456,10 +445,76 @@ func _spawn_hero() -> Unit:
 	return hero
 
 
-## The how-to-play panel goes away once the first wave starts.
+## The tips card folds down to its button once the first wave starts.
 func _on_phase_changed(phase: String, _wave: int) -> void:
 	if phase == WaveManager.WAVE and _help:
-		_help.visible = false
+		set_tips_open(false)
+
+
+## A small card with one tip at a time, so the screen stays playable from the
+## first second. It never blocks anything outside its own small rect.
+func _build_tips(layer: CanvasLayer) -> void:
+	var pos := Vector2(16, TopBar.HEIGHT + 40)
+	_help_button = Button.new()
+	_help_button.name = "TipsButton"
+	_help_button.text = "?  Tips (/)"
+	_help_button.focus_mode = Control.FOCUS_NONE
+	_help_button.position = pos
+	_help_button.tooltip_text = "Show the how-to-play tips (/)"
+	_help_button.pressed.connect(set_tips_open.bind(true))
+	layer.add_child(_help_button)
+
+	_help = PanelContainer.new()
+	_help.name = "HowToPlay"
+	_help.position = pos
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 4)
+	_help.add_child(box)
+	var header := HBoxContainer.new()
+	box.add_child(header)
+	_help_page = Label.new()
+	_help_page.add_theme_font_size_override("font_size", 13)
+	_help_page.add_theme_color_override("font_color", Color(1.0, 0.82, 0.45))
+	_help_page.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(_help_page)
+	var close := Button.new()
+	close.text = "x"
+	close.flat = true
+	close.focus_mode = Control.FOCUS_NONE
+	close.tooltip_text = "Hide tips (/)"
+	close.pressed.connect(set_tips_open.bind(false))
+	header.add_child(close)
+	_help_text = Label.new()
+	_help_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_help_text.custom_minimum_size.x = TIPS_WIDTH
+	_help_text.add_theme_font_size_override("font_size", 15)
+	box.add_child(_help_text)
+	var nav := HBoxContainer.new()
+	nav.alignment = BoxContainer.ALIGNMENT_END
+	box.add_child(nav)
+	for step in [[-1, "<  Back"], [1, "Next  >"]]:
+		var b := Button.new()
+		b.text = step[1]
+		b.focus_mode = Control.FOCUS_NONE
+		b.pressed.connect(show_tip.bind(step[0], true))
+		nav.add_child(b)
+	layer.add_child(_help)
+	show_tip(0)
+	set_tips_open(true)
+
+
+## Shows tip i (or steps by i when relative), wrapping around the ends.
+func show_tip(i: int, relative := false) -> void:
+	_tip = posmod(_tip + i if relative else i, TIPS.size())
+	_help_page.text = "How to play  %d / %d" % [_tip + 1, TIPS.size()]
+	_help_text.text = TIPS[_tip]
+	# Shrink to fit the new text.
+	_help.size = Vector2.ZERO
+
+
+func set_tips_open(open: bool) -> void:
+	_help.visible = open
+	_help_button.visible = not open
 
 
 func _on_hero_died(_hero: Unit) -> void:
@@ -558,20 +613,7 @@ func _build_hud() -> void:
 	_phase_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	layer.add_child(_phase_label)
 
-	_help = PanelContainer.new()
-	_help.name = "HowToPlay"
-	# Top left, under the selection text, so it stays clear of the build menu.
-	_help.position = Vector2(16, TopBar.HEIGHT + 90)
-	var help_box := VBoxContainer.new()
-	_help.add_child(help_box)
-	var help_text := Label.new()
-	help_text.text = HOW_TO_PLAY
-	help_box.add_child(help_text)
-	var got_it := Button.new()
-	got_it.text = "Got it"
-	got_it.pressed.connect(func(): _help.visible = false)
-	help_box.add_child(got_it)
-	layer.add_child(_help)
+	_build_tips(layer)
 	waves.phase_changed.connect(_on_phase_changed)
 
 	_banner = _hud_label("Banner", 48)
@@ -665,7 +707,9 @@ func _build_legend() -> Control:
 	_legend_entries = box
 	_legend_toggle = toggle
 	toggle.pressed.connect(func(): set_legend_open(not box.visible))
-	set_legend_open(true)
+	# On short screens the legend starts folded so it can't run into the
+	# info card at the bottom right.
+	set_legend_open(get_viewport().get_visible_rect().size.y >= 1000)
 	return panel
 
 
@@ -687,9 +731,9 @@ func _fit_right_column() -> void:
 
 
 func _on_selection_changed(units: Array[Unit]) -> void:
-	var help := "Left click or drag to select, right click to move, Alt + right click to attack-move.\nCtrl + A: all on screen   H: hero   Ctrl + 1-5: save group   1-5: recall group"
+	# Controls live in the tips card; this line only names the selection.
 	if units.is_empty():
-		_status.text = "Nothing selected\n" + help
+		_status.text = ""
 		return
 	var counts := {}
 	for u in units:
@@ -697,4 +741,4 @@ func _on_selection_changed(units: Array[Unit]) -> void:
 	var parts := PackedStringArray()
 	for n in counts:
 		parts.append("%s x%d" % [n, counts[n]] if counts[n] > 1 else n)
-	_status.text = "Selected: " + ", ".join(parts) + "\n" + help
+	_status.text = "Selected: " + ", ".join(parts)
