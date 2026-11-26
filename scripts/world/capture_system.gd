@@ -57,7 +57,7 @@ func step(delta: float) -> void:
 				region.set_platform_status(platform_name, "")
 				platform_claimed.emit(platform_name, side)
 			else:
-				var verb := "Claiming" if side == "player" else "Ironbell claiming"
+				var verb := "Claiming" if side == "player" else "%s claiming" % _rival_corp_on(platform_name)
 				region.set_platform_status(platform_name, "%s %d%%" % [verb, int(claim.progress * 100)])
 		else:
 			claim.progress = maxf(0.0, claim.progress - decay_per_second * delta)
@@ -67,6 +67,15 @@ func step(delta: float) -> void:
 			else:
 				region.set_platform_status(platform_name, "%d%%" % int(claim.progress * 100))
 		claims[platform_name] = claim
+
+
+## The corporation of the rival units on a platform, for its claim label.
+func _rival_corp_on(platform_name: String) -> String:
+	for u in region.units_on_platform(platform_name, Unit.ENEMY_GROUP):
+		var corp: String = u.get_meta("corp", "")
+		if corp != "":
+			return corp
+	return "Rival"
 
 
 func is_claimable(platform_name: String) -> bool:

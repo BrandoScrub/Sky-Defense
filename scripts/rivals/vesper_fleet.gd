@@ -135,16 +135,32 @@ func _step_bomber(unit: Unit) -> void:
 
 
 func _step_gunship(unit: Unit) -> void:
+	if combat == null:
+		return
+	# Your units and drones come first: a gunship flies to the nearest one
+	# within hunt range, even past buildings, and only goes for buildings or
+	# the Hub when there is no one left to hunt.
+	var prey = combat.nearest_enemy_unit(unit.global_position, "rival", gunship_hunt_range, true)
+	if prey != null:
+		var gap := Vector2(unit.global_position.x - prey.global_position.x, unit.global_position.z - prey.global_position.z).length()
+		if gap <= unit.attack_range * 0.9:
+			return
+		# Re-aim at most twice a second while chasing a moving target.
+		var chase_left: float = unit.get_meta("rechase", 0.0) - get_process_delta_time()
+		unit.set_meta("rechase", chase_left)
+		if unit.is_moving() and chase_left > 0.0:
+			return
+		unit.set_meta("rechase", 0.5)
+		_fly(unit, prey.global_position)
+		return
 	# While flying it attack-moves: combat stops it to shoot whatever's near.
 	if unit.is_moving():
 		return
-	if combat == null or combat.nearest_enemy(unit.global_position, "rival", unit.attack_range, true, true) != null:
+	if combat.nearest_enemy(unit.global_position, "rival", unit.attack_range, true, true) != null:
 		return
-	var prey = combat.nearest_enemy(unit.global_position, "rival", gunship_hunt_range, true, true)
-	if prey == null:
-		prey = target_for(unit)
-	if prey != null:
-		_fly(unit, prey.global_position)
+	var target = target_for(unit)
+	if target != null:
+		_fly(unit, target.global_position)
 
 
 func _step_carrier(unit: Unit, delta: float) -> void:
@@ -179,6 +195,7 @@ func drop_troops(carrier: Unit) -> Array[Unit]:
 	for i in spec.troops.size():
 		_count += 1
 		var u := UnitCatalog.make(spec.troops[i], "rival")
+		u.set_meta("corp", carrier.get_meta("corp", "Ironbell"))
 		u.name = "Dropped%s%d" % [String(spec.troops[i]).capitalize(), _count]
 		u.set_meta("raid_index", _count)
 		u.position = region.snap_to_walkable(Vector3(carrier.position.x, 0, carrier.position.z) + offsets[i])
@@ -289,6 +306,8 @@ func _make(kind: String) -> Unit:
 	u.footprint = spec.footprint
 	u.body_color = spec.color
 	u.set_meta("airship", kind)
+	if kind == "gunship":
+		u.set_meta("hunt_range", gunship_hunt_range)
 	return u
 
 
