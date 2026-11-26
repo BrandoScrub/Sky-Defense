@@ -80,7 +80,7 @@ var wind_multiplier := 1.0
 @export var heal_power := 0.0
 ## Hit points per second repaired on one damaged friendly building (sappers).
 @export var repair_power := 0.0
-## Launched from a Drone Hangar; DefenseSystem flies it.
+## Launched from an Airship Hangar; DefenseSystem flies it.
 @export var is_drone := false
 
 ## Bonuses from nearby support buildings (see DefenseSystem). They work on

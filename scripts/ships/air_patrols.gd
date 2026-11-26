@@ -1,8 +1,8 @@
-## Player airship patrols. Build an Airship Hangar, then Relay Stations and
-## Refuel Points on your platforms, and order ships from the Ships tab. Each
-## ship launches from a hangar and flies a loop: hangar, then every point on
-## that hangar's patrol route in order, then home again, fighting whatever
-## its role lets it hit on the way.
+## Player airship patrols. Build an Airship Hangar, then Mooring Masts on
+## your platforms (Defense tab), and order ships from the Army tab. Each ship
+## launches from a hangar and flies a loop: hangar, then every mast on that
+## hangar's patrol route in order, then home again, fighting whatever its
+## role lets it hit on the way.
 ##
 ## Ship roles (SHIPS):
 ##   interceptor - air-to-air. Only shoots aircraft and airships.
@@ -13,15 +13,14 @@
 ##                 your platforms on its route that enemies are on, then
 ##                 flies home to pick up more for 45 scrap).
 ##
-## Fuel: ships burn fuel while flying and fill up at Refuel Points and the
-## hangar. A ship low on fuel breaks off and flies to the nearest one; one
-## that runs dry goes down. Relay Stations link ships to your command net:
-## ships near one spot enemies twice as far away, and a station sees far
-## through the fog.
+## Range: ships only chase enemies within PATROL_RANGE of one of your
+## hangars or Mooring Masts, so masts decide which part of the sky is
+## covered. There is no fuel to manage. Near a mast, ships spot enemies
+## twice as far away, and a mast sees far through the fog.
 ##
-## The route: Set Patrol Route (Ships tab), click a hangar, then click Relay
-## Stations and Refuel Points in order; right click to finish. A hangar with
-## no route set patrols all your stations and refuel points, nearest first.
+## The route: Patrol Route (Defense tab), click a hangar, then click Mooring
+## Masts in order; right click to finish. A hangar with no route set patrols
+## all your masts, nearest first.
 class_name AirPatrols
 extends Node
 
@@ -31,15 +30,16 @@ signal ship_launched(ship: Unit)
 signal routes_changed
 
 const HANGAR := "airship_hangar"
-const RELAY := "relay_station"
-const REFUEL := "refuel_point"
+const MAST := "mooring_mast"
 const ALTITUDE := 6.0
 const MAX_SHIPS_PER_HANGAR := 4
 const HUNT_RADIUS := 12.0
-## Within this of a Relay Station, ships hunt twice as far.
-const RELAY_RADIUS := 14.0
-## Within this of a Refuel Point or the hangar, a ship fills up.
-const REFUEL_RADIUS := 2.5
+## Within this of a Mooring Mast, ships hunt twice as far.
+const MAST_RADIUS := 14.0
+## Ships only chase enemies this close to one of your hangars or masts.
+const PATROL_RANGE := 18.0
+## How close a ship must be to its hangar to count as home (troop reload).
+const DOCK_RADIUS := 2.5
 const TROOP_RELOAD_COST := 45
 const TROOPS := ["riveteer", "riveteer", "riveteer"]
 const REPAIR_RADIUS := 7.0
@@ -49,19 +49,19 @@ const SCOUT_SIGHT := 34.0
 const SHIPS := {
 	"interceptor": {
 		"name": "Skyhawk Interceptor", "role": "Air-to-air", "cost": 70, "build_seconds": 8.0,
-		"hp": 90.0, "damage": 12.0, "range": 6.0, "cooldown": 0.6, "speed": 9.0, "fuel": 50.0,
+		"hp": 90.0, "damage": 12.0, "range": 6.0, "cooldown": 0.6, "speed": 9.0,
 		"hits_air": true, "air_only": true, "targets_units": true, "footprint": 0.55,
 		"color": Color(0.85, 0.7, 0.35),
 	},
 	"gunboat": {
 		"name": "Thunder Gunboat", "role": "Air-to-ground", "cost": 80, "build_seconds": 10.0,
-		"hp": 150.0, "damage": 16.0, "range": 5.0, "cooldown": 1.2, "speed": 6.0, "fuel": 45.0,
+		"hp": 150.0, "damage": 16.0, "range": 5.0, "cooldown": 1.2, "speed": 6.0,
 		"hits_air": false, "air_only": false, "targets_units": true, "footprint": 0.8,
 		"vs_buildings": 1.5, "color": Color(0.6, 0.45, 0.25),
 	},
 	"utility": {
 		"name": "Tender", "role": "Utility", "cost": 60, "build_seconds": 8.0,
-		"hp": 100.0, "damage": 0.0, "range": 0.0, "cooldown": 99.0, "speed": 7.0, "fuel": 60.0,
+		"hp": 100.0, "damage": 0.0, "range": 0.0, "cooldown": 99.0, "speed": 7.0,
 		"hits_air": false, "air_only": false, "targets_units": false, "footprint": 0.7,
 		"color": Color(0.55, 0.7, 0.6),
 	},
@@ -118,7 +118,7 @@ func queue_ship(kind: String) -> String:
 			best_n = n
 			best = h
 	if hangars.is_empty():
-		return "Build an Airship Hangar first (Ships tab)"
+		return "Build an Airship Hangar first (Defense tab)"
 	if best == null:
 		return "Every hangar is full (%d ships each)" % MAX_SHIPS_PER_HANGAR
 	var cost: int = SHIPS[kind].cost
@@ -143,8 +143,8 @@ func ship_count(kind := "") -> int:
 	return n
 
 
-## A hangar's patrol: its set route, or every station and refuel point you
-## own, nearest first.
+## A hangar's patrol: its set route, or every Mooring Mast you own, nearest
+## first.
 func route_of(hangar: Building) -> Array:
 	var state: Dictionary = hangars.get(hangar, {})
 	var set_route: Array = state.get("route", []).filter(func(b): return is_instance_valid(b) and b.is_alive())
@@ -155,16 +155,16 @@ func route_of(hangar: Building) -> Array:
 	return points
 
 
-## Every Relay Station and Refuel Point you own.
+## Every Mooring Mast you own.
 func waypoints() -> Array:
 	var out := []
 	for b in region.buildings.values():
-		if b.faction == "player" and b.is_alive() and (b.type_id == RELAY or b.type_id == REFUEL):
+		if b.faction == "player" and b.is_alive() and b.type_id == MAST:
 			out.append(b)
 	return out
 
 
-## Sets a hangar's route. Every point must be a Relay Station or Refuel Point.
+## Sets a hangar's route. Every point must be a Mooring Mast.
 func set_route(hangar: Building, points: Array) -> void:
 	_sync_hangars()
 	if hangars.has(hangar):
@@ -183,7 +183,7 @@ func begin_route() -> void:
 	_edit_hangar = null
 	_edit_points = []
 	mode_changed.emit(true)
-	notice.emit("Click an Airship Hangar, then its Relay Stations and Refuel Points in order. Right click to finish")
+	notice.emit("Click an Airship Hangar, then its Mooring Masts in order. Right click to finish")
 
 
 func cancel_route() -> void:
@@ -201,14 +201,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		if _edit_hangar == null:
 			if b and b.type_id == HANGAR and b.faction == "player":
 				_edit_hangar = b
-				notice.emit("Now click Relay Stations and Refuel Points in patrol order. Right click to finish")
+				notice.emit("Now click Mooring Masts in patrol order. Right click to finish")
 			else:
 				notice.emit("Click one of your Airship Hangars first")
-		elif b and (b.type_id == RELAY or b.type_id == REFUEL) and b.faction == "player":
+		elif b and b.type_id == MAST and b.faction == "player":
 			_edit_points.append(b)
 			notice.emit("Patrol point %d: %s on %s" % [_edit_points.size(), b.get_data().name, b.platform])
 		else:
-			notice.emit("Click a Relay Station or Refuel Point")
+			notice.emit("Click a Mooring Mast")
 		get_viewport().set_input_as_handled()
 	elif event.is_action_released("select"):
 		get_viewport().set_input_as_handled()
@@ -225,7 +225,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 # --- Simulation -------------------------------------------------------------
 
-## Advances building, fuel and patrols. Public so tests can drive it.
+## Advances building and patrols. Public so tests can drive it.
 func step(delta: float) -> void:
 	_sync_hangars()
 	for h in hangars.keys():
@@ -269,8 +269,6 @@ func _launch(hangar: Building, entry: String) -> Unit:
 	u.body_color = spec.color
 	u.set_meta("ship", kind)
 	u.set_meta("job", job)
-	u.set_meta("fuel", spec.fuel)
-	u.set_meta("max_fuel", spec.fuel)
 	u.set_meta("leg", 0)
 	u.set_meta("state", "patrol")
 	if job == "scout":
@@ -285,41 +283,13 @@ func _launch(hangar: Building, entry: String) -> Unit:
 
 
 func _fly(ship: Unit, hangar: Building, delta: float) -> void:
-	# Fuel: refill near the hangar or a Refuel Point, burn it elsewhere.
-	var fuel: float = ship.get_meta("fuel")
-	var max_fuel: float = ship.get_meta("max_fuel")
-	var depot := nearest_depot(ship, hangar)
-	var near_depot := depot != null and _flat(ship.global_position, depot.global_position) <= REFUEL_RADIUS
-	if near_depot:
-		fuel = max_fuel
-		if ship.get_meta("state") == "refuel":
-			ship.set_meta("state", "patrol")
-			ship.stop()
-	else:
-		fuel -= delta
-	ship.set_meta("fuel", fuel)
-	if fuel <= 0.0:
-		notice.emit("Your %s ran out of fuel and went down" % ship.display_name)
-		ship.take_damage(ship.hp + 1.0)
-		return
-	# Low on fuel: break off for the nearest depot, with a little to spare.
-	if depot and ship.get_meta("state") != "refuel" and not near_depot:
-		var need := _flat(ship.global_position, depot.global_position) / maxf(ship.move_speed, 0.1) + 4.0
-		if fuel <= need:
-			ship.set_meta("state", "refuel")
-			_go(ship, depot.global_position, false)
-			return
 	var job: String = ship.get_meta("job")
 	if job == "repair":
 		_repair_near(ship, delta)
 	elif job == "troops":
 		_maybe_drop(ship, hangar)
-	if ship.get_meta("state") == "refuel":
-		if not ship.is_moving() and depot:
-			_go(ship, depot.global_position, false)
-		return
 	if ship.get_meta("state") == "reload":
-		if _flat(ship.global_position, hangar.global_position) <= REFUEL_RADIUS:
+		if _flat(ship.global_position, hangar.global_position) <= DOCK_RADIUS:
 			_reload(ship)
 		elif not ship.is_moving():
 			_go(ship, hangar.global_position, false)
@@ -329,11 +299,12 @@ func _fly(ship: Unit, hangar: Building, delta: float) -> void:
 	# Something in reach: CombatSystem is shooting it.
 	if combat and ship.attack_range > 0.0 and combat.nearest_enemy(ship.global_position, "player", ship.attack_range, ship.hits_air, ship.targets_units, ship.air_only) != null:
 		return
-	# Hunt nearby enemies the ship can hit, further when linked to a relay.
+	# Hunt nearby enemies the ship can hit, further near a mast, but only
+	# inside the sky your hangars and masts cover.
 	if combat and ship.attack_range > 0.0:
 		var radius := hunt_radius(ship)
 		var prey = combat.nearest_enemy(ship.global_position, "player", radius, ship.hits_air, ship.targets_units, ship.air_only)
-		if prey != null:
+		if prey != null and in_range(prey.global_position):
 			_go(ship, prey.global_position, true)
 			return
 	_next_leg(ship, hangar)
@@ -342,22 +313,19 @@ func _fly(ship: Unit, hangar: Building, delta: float) -> void:
 ## How far a ship looks for enemies.
 func hunt_radius(ship: Unit) -> float:
 	for b in waypoints():
-		if b.type_id == RELAY and _flat(ship.global_position, b.global_position) <= RELAY_RADIUS:
+		if _flat(ship.global_position, b.global_position) <= MAST_RADIUS:
 			return HUNT_RADIUS * 2.0
 	return HUNT_RADIUS
 
 
-## The closest place to refuel: the hangar or a Refuel Point.
-func nearest_depot(ship: Unit, hangar: Building) -> Node3D:
-	var best: Node3D = hangar if is_instance_valid(hangar) and hangar.is_alive() else null
-	var best_d := _flat(ship.global_position, best.global_position) if best else INF
-	for b in waypoints():
-		if b.type_id == REFUEL:
-			var d := _flat(ship.global_position, b.global_position)
-			if d < best_d:
-				best_d = d
-				best = b
-	return best
+## True if a point is inside the sky your patrols cover: within
+## PATROL_RANGE of one of your Airship Hangars or Mooring Masts.
+func in_range(point: Vector3) -> bool:
+	for b in region.buildings.values():
+		if b.faction == "player" and b.is_alive() and (b.type_id == HANGAR or b.type_id == MAST):
+			if _flat(point, b.global_position) <= PATROL_RANGE:
+				return true
+	return false
 
 
 func _next_leg(ship: Unit, hangar: Building) -> void:

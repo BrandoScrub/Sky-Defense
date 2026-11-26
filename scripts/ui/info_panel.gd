@@ -15,7 +15,7 @@ const PICK_RADIUS := 28.0
 ## here use their blurb from UnitCatalog.
 const UNIT_INFO := {
 	"Commander": "Leads your squad. Tougher and faster than a Riveteer, and can shoot aircraft. Comes back to the Hub 15 seconds after falling.",
-	"Skyhawk Interceptor": "Your air-to-air airship. Patrols from its Airship Hangar along your Relay Stations and Refuel Points and shoots down enemy aircraft. Can't hit anything on the ground.",
+	"Skyhawk Interceptor": "Your air-to-air airship. Patrols from its Airship Hangar along your Mooring Masts and shoots down enemy aircraft within reach of them. Can't hit anything on the ground.",
 	"Thunder Gunboat": "Your air-to-ground airship. Patrols your route and shells enemy troops and buildings below. Can't hit aircraft.",
 	"Repair Tender": "Your utility airship, on repair duty. Mends your buildings it flies over. Doesn't fight.",
 	"Scout Tender": "Your utility airship, on scouting duty. Fast, and sees far through the storm clouds. Doesn't fight.",
@@ -23,7 +23,7 @@ const UNIT_INFO := {
 	"Vesper Gunship": "Vesper's escort airship. Flies with the bombers, around islands and with the wind, and hunts your units and drones, in the air and on the decks. Only anti-air can hit it.",
 	"Ironbell Troop Carrier": "Ironbell's troop airship. Flies around islands to your platform nearest Ironbell, hovers, and drops a squad (Shieldbearer, Rifleman, Riveteer) onto the deck. Shoot it down first and the squad goes down with it.",
 	"Vesper Bomber": "Vesper's bomber airship. Flies the red air lanes around islands, attacking from upwind, and bombs your buildings and Hub. Only anti-air can hit it: flak towers, drones, the Commander and headquarters guns.",
-	"Defense Drone": "A small clockwork flyer from a Drone Hangar. Chases anything that comes near its hangar, aircraft included, then flies home. Only anti-air can hit it. The hangar builds a new one when it's lost.",
+	"Defense Drone": "A small clockwork flyer from an Airship Hangar. Chases anything that comes near its hangar, aircraft included, then flies home. Only anti-air can hit it. The hangar builds a new one when it's lost.",
 }
 
 ## What each building is for, by type id.
@@ -37,11 +37,9 @@ const BUILDING_INFO := {
 	"mending_post": "A steam-powered field workshop. Barely fights, but patches up your units nearby and gives them a little armor. Can't hit aircraft.",
 	"flak_battery": "Rapid anti-air guns. Shreds bombers and other aircraft, but ignores everything on the ground.",
 	"skyhook_cannon": "A long-range harpoon gun for big airships. Slow, but each hit tears a hole in the envelope. Ignores everything on the ground.",
-	"turbine_engine": "A big brass propeller bolted to a turbine island. Build 4 on one island and you can steer it with Steer Island (Ships tab): it moves up to 4 hexes, breaking off its walkways after a warning, and draws 30 power while under way.",
-	"airship_hangar": "Builds your patrol airships (Ships tab, Z X C). They fly a loop from here through your Relay Stations and Refuel Points. Holds 4 ships. If it falls, its ships go to another hangar or go down.",
-	"relay_station": "A patrol point. Ships near it spot enemies twice as far away, and it sees far through the storm clouds.",
-	"refuel_point": "A patrol point where airships fill their fuel. Ships low on fuel fly to the nearest one, or the hangar.",
-	"drone_hangar": "Launches defensive drones that chase off anything coming near, air or ground, then return. Rebuilds lost drones over time.",
+	"turbine_engine": "A big brass propeller bolted to a turbine island. Build 4 on one island and you can steer it with Steer Island (Industry tab): it moves up to 4 hexes, breaking off its walkways after a warning, and draws 30 power while under way.",
+	"airship_hangar": "Keeps 2 defensive drones in the air that chase off anything coming near, then return. Also builds your patrol airships (Army tab, Z X C), which fly a loop from here through your Mooring Masts. Holds 4 ships. If it falls, its ships go to another hangar or go down.",
+	"mooring_mast": "A patrol point for your airships. Ships only hunt within reach of a hangar or mast, so masts decide which sky you cover. Ships near one spot enemies twice as far away, and it sees far through the storm clouds.",
 }
 
 ## What each tile feature is for, by tile type.
@@ -52,7 +50,7 @@ const TILE_INFO := {
 	"crystal_seam": ["Crystal seam", "A seam of energized crystals. Mining it comes in a later update."],
 	"dock": ["Ferry dock", "Airships stop here. Right click a platform with no walkway and your units ride the ferry there."],
 	"spawn": ["Rival wave spawn", "Rival walkers set out from here when a wave starts."],
-	"walkway": ["Walkway", "A metal walkway between platforms. Units walk along it. Islands start unconnected: build walkways from the Economy tab to expand."],
+	"walkway": ["Walkway", "A metal walkway between platforms. Units walk along it. Islands start unconnected: build walkways from the Industry tab to expand."],
 	"rival_walkway": ["Ironbell bridge", "A span Ironbell's crews bridged toward your Hub. Its walkers march along it. Your units can use it too."],
 }
 
@@ -250,8 +248,6 @@ func describe(thing) -> Dictionary:
 			stats.append("Repairs %d/s" % int(u.repair_power))
 		if u.flying:
 			stats.append("Flying")
-		if u.has_meta("fuel"):
-			stats.append("Fuel %d / %ds" % [ceili(u.get_meta("fuel")), int(u.get_meta("max_fuel"))])
 		if u.air_only:
 			stats.append("Air targets only")
 		if u.damage_mult > 1.0 or u.cooldown_mult < 1.0 or u.armor > 0.0:
@@ -316,7 +312,7 @@ func describe(thing) -> Dictionary:
 			"air_lane":
 				info.title = "Rival air lane"
 				info.subtitle = "%s to %s" % [thing.a, thing.b]
-				info.body = "Vesper bombers fly this route toward your buildings, steering around islands and attacking from upwind. It moves when the wind turns (every 3 waves). Put flak towers or a Drone Hangar under it."
+				info.body = "Vesper bombers fly this route toward your buildings, steering around islands and attacking from upwind. It moves when the wind turns (every 3 waves). Put flak towers or an Airship Hangar under it."
 				if wind:
 					info.stats = "Wind from the %s, turns in %d wave%s" % [wind.from_name(), wind.waves_until_shift(wind.waves.wave), "" if wind.waves_until_shift(wind.waves.wave) == 1 else "s"]
 	return info

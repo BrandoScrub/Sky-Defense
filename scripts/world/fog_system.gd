@@ -22,7 +22,7 @@ signal platform_revealed(platform_name: String)
 @export var cell_size := 6.0
 ## How far a player unit sees.
 @export var unit_sight := 13.0
-## How far a Relay Station sees.
+## How far a Mooring Mast sees.
 @export var relay_sight := 22.0
 ## How far past its own edge a player-owned platform sees.
 @export var platform_sight := 12.0
@@ -136,13 +136,13 @@ func update_visibility() -> void:
 		var unit := node as Unit
 		if unit and unit.is_alive():
 			_see(unit.position, unit_sight)
-	# Your patrol airships (Scout Tenders see much further) and Relay Stations.
+	# Your patrol airships (Scout Tenders see much further) and Mooring Masts.
 	for node in get_tree().get_nodes_in_group(Unit.DRONE_GROUP):
 		var ship := node as Unit
 		if ship and ship.faction == "player" and ship.is_alive() and ship.has_meta("ship"):
 			_see(ship.position, ship.get_meta("sight", unit_sight))
 	for b in region.buildings.values():
-		if b.faction == "player" and b.type_id == "relay_station" and b.is_alive():
+		if b.faction == "player" and b.type_id == "mooring_mast" and b.is_alive():
 			_see(b.global_position, relay_sight)
 	_refresh_nodes()
 

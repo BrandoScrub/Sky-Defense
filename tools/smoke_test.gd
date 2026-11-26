@@ -482,7 +482,7 @@ func _check_build_menu(main: Node) -> void:
 	_expect(menu != null, "the HUD should have a build menu")
 	if menu == null:
 		return
-	_expect(menu.get_node("Box/Tabs").get_child_count() == 5, "the build menu should have 5 tabs")
+	_expect(menu.get_node("Box/Tabs").get_child_count() == 4, "the build menu should have 4 tabs")
 	for tab_name in BuildMenu.TABS:
 		menu.show_tab(tab_name)
 		var filled: int = BuildMenu.TABS[tab_name].filter(func(e): return e != "").size()
@@ -496,8 +496,11 @@ func _check_build_menu(main: Node) -> void:
 	_expect(main.building.placing == "flak_battery", "the Flak Battery button should start placing")
 	_expect(menu._entry_buttons["flak_battery"].button_pressed, "the active building's button should be lit")
 	main.building.start_placing("dynamo")
-	_expect(menu.current_tab == "Economy", "placing a Dynamo should switch to the Economy tab")
+	_expect(menu.current_tab == "Industry", "placing a Dynamo should switch to the Industry tab")
+	_expect(main.region.show_loads, "platform loads show while placing a building")
 	main.building.cancel_placing()
+	_expect(not main.region.show_loads, "platform loads hide again when placing ends")
+	_expect(BuildMenu.TABS.keys() == ["Army", "Defense", "Industry", "Hum"], "four build tabs: Army, Defense, Industry, Hum")
 	menu.activate("walkway")
 	_expect(main.walkways.active, "the Walkway button should start a walkway")
 	menu.activate("walkway")
@@ -511,19 +514,19 @@ func _check_build_menu(main: Node) -> void:
 	_expect(main.building.placing == "flak_battery", "A on the Defense tab should pick the Flak Battery")
 	main.building.cancel_placing()
 	menu._unhandled_input(_key(KEY_Z))
-	_expect(main.building.placing == "drone_hangar", "Z on the Defense tab should pick the Drone Hangar")
+	_expect(main.building.placing == "airship_hangar", "Z on the Defense tab should pick the Airship Hangar")
 	main.building.cancel_placing()
 	menu._unhandled_input(_key(KEY_S))
 	_expect(main.building.placing == "skyhook_cannon", "S on the Defense tab should pick the Skyhook Gun")
 	main.building.cancel_placing()
-	menu.show_tab("Economy")
+	menu.show_tab("Industry")
 	menu._unhandled_input(_key(KEY_Q))
-	_expect(main.building.placing == "dynamo", "Q on the Economy tab should pick the Dynamo")
+	_expect(main.building.placing == "dynamo", "Q on the Industry tab should pick the Dynamo")
 	main.building.cancel_placing()
 	menu._unhandled_input(_key(KEY_W, true))
 	_expect(not main.walkways.active, "Shift + W is for the camera, not the grid")
 	menu._unhandled_input(_key(KEY_TAB))
-	_expect(menu.current_tab == "Storm", "Tab should move on to the next tab")
+	_expect(menu.current_tab == "Hum", "Tab should move on to the next tab")
 	menu.show_tab("Army")
 
 	# Only one click tool is live at a time: starting one ends the others.
@@ -618,6 +621,7 @@ func _check_top_bar(main: Node) -> void:
 		return
 	bar.refresh()
 	_expect(bar._scrap.text == "Scrap %d" % main.resources.scrap, "the top bar should show scrap")
+	_expect(not bar._overload.visible, "no overload warning while every platform is stable")
 	var plan := waves.wave_plan()
 	_expect(plan.size() >= 2, "the wave plan should list every rival")
 	for entry in plan:
@@ -1193,19 +1197,19 @@ func _check_defense_roles(main: Node) -> void:
 
 	# Hangar: launches drones, they shoot down a bomber, and die with the hangar.
 	var hangar_hex := hub + Vector2i(2, -2)
-	var hangar_err := build.try_place("drone_hangar", hangar_hex)
-	_expect(hangar_err == "", "place a Drone Hangar: " + hangar_err)
+	var hangar_err := build.try_place("airship_hangar", hangar_hex)
+	_expect(hangar_err == "", "place an Airship Hangar: " + hangar_err)
 	var hangar: Building = region.buildings[hangar_hex]
 	defenses.step(0.1)
 	_expect(defenses.drones_of(hangar).size() == 1, "a new hangar launches a drone right away")
 	for i in 400:
 		defenses.step(0.05)
 	var drones: Array = defenses.drones_of(hangar)
-	_expect(drones.size() == 3, "the hangar should fill up to 3 drones, got %d" % drones.size())
+	_expect(drones.size() == 2, "the hangar should fill up to 2 drones, got %d" % drones.size())
 	_expect(not main.selection.all_units().has(drones[0]), "drones aren't selectable squad units")
 	_expect(not drones[0].is_in_group(Unit.GROUP), "drones don't count as squad units (capture, load, army size)")
 	_expect(main.info_panel.describe(drones[0]).body != "", "the info card describes drones")
-	_expect(main.info_panel.describe(hangar).stats.contains("Drones up: 3 / 3"), "the hangar's card shows its drones")
+	_expect(main.info_panel.describe(hangar).stats.contains("Drones up: 2 / 2"), "the hangar's card shows its drones")
 	var bomber: Unit = main.fleet.send_flight(1)[0]
 	bomber.stop()
 	bomber.position = hangar.global_position + Vector3(6, VesperFleet.ALTITUDE, 0)
@@ -1629,8 +1633,8 @@ func _check_island_steering(main: Node) -> void:
 	region.storm_bonus -= 200
 
 
-## Player airships: built at an Airship Hangar, patrolling Relay Stations and
-## Refuel Points, with fuel and three roles.
+## Player airships: built at an Airship Hangar, patrolling Mooring Masts,
+## hunting only within reach of a hangar or mast, with three roles.
 func _check_air_patrols(main: Node) -> void:
 	var region: SkyRegion = main.region
 	var patrols: AirPatrols = main.patrols
@@ -1644,15 +1648,15 @@ func _check_air_patrols(main: Node) -> void:
 	for hex in region.tiles_of_platform("Hub"):
 		if region.build_problem(AirPatrols.HANGAR, hex) == "" and HexGrid.distance(hex, region.platforms["Hub"].center) >= 2:
 			spots.append(hex)
-	_expect(spots.size() >= 3, "room on the Hub for a hangar and two patrol points")
+	_expect(spots.size() >= 3, "room on the Hub for a hangar and two masts")
 	if spots.size() < 3:
 		return
 	_expect(build.try_place(AirPatrols.HANGAR, spots[0]) == "", "build an Airship Hangar")
-	_expect(build.try_place(AirPatrols.RELAY, spots[spots.size() - 1]) == "", "build a Relay Station")
-	_expect(build.try_place(AirPatrols.REFUEL, spots[spots.size() / 2]) == "", "build a Refuel Point")
+	_expect(build.try_place(AirPatrols.MAST, spots[spots.size() - 1]) == "", "build a Mooring Mast")
+	_expect(build.try_place(AirPatrols.MAST, spots[spots.size() / 2]) == "", "build a second Mooring Mast")
 	var hangar: Building = region.buildings[spots[0]]
-	var relay: Building = region.buildings[spots[spots.size() - 1]]
-	var refuel: Building = region.buildings[spots[spots.size() / 2]]
+	var far_mast: Building = region.buildings[spots[spots.size() - 1]]
+	var near_mast: Building = region.buildings[spots[spots.size() / 2]]
 	_expect(patrols.queue_ship("interceptor") == "", "order an interceptor")
 	patrols.step(AirPatrols.SHIPS.interceptor.build_seconds + 0.1)
 	_expect(patrols.hangars.has(hangar) and patrols.hangars[hangar].ships.size() == 1, "the hangar launches the ship")
@@ -1660,8 +1664,8 @@ func _check_air_patrols(main: Node) -> void:
 	_expect(ship.flying and ship.is_drone and ship.air_only and ship.faction == "player", "an interceptor is a player airship that hits only aircraft")
 	_expect(not main.selection.all_units().has(ship), "patrol ships fly themselves")
 	_expect(patrols.route_of(hangar).size() == 2, "without a set route, ships visit every patrol point")
-	patrols.set_route(hangar, [refuel])
-	_expect(patrols.route_of(hangar) == [refuel], "a set route is followed")
+	patrols.set_route(hangar, [near_mast])
+	_expect(patrols.route_of(hangar) == [near_mast], "a set route is followed")
 	patrols.step(0.1)
 	_expect(ship.is_moving(), "the ship sets out on patrol")
 	# Air-to-air ignores ground troops.
@@ -1669,18 +1673,19 @@ func _check_air_patrols(main: Node) -> void:
 	walker.position = Vector3(ship.position.x + 2, 0, ship.position.z)
 	main.get_node("Units").add_child(walker)
 	_expect(combat.nearest_enemy(ship.global_position, "player", 10.0, ship.hits_air, ship.targets_units, ship.air_only) == null, "interceptors ignore ground troops")
-	# Fuel: a ship far out and nearly dry breaks off for a refuel.
+	# No fuel: a ship far from home doesn't run dry or crash.
+	_expect(not ship.has_meta("fuel"), "ships have no fuel to manage")
 	ship.stop()
-	ship.position = refuel.global_position + Vector3(30, AirPatrols.ALTITUDE, 0)
-	ship.set_meta("fuel", 3.0)
-	patrols.step(0.1)
-	_expect(ship.get_meta("state") == "refuel" and ship.is_moving(), "a ship low on fuel heads for a Refuel Point")
-	ship.position = refuel.global_position + Vector3.UP * AirPatrols.ALTITUDE
-	patrols.step(0.1)
-	_expect(is_equal_approx(ship.get_meta("fuel"), ship.get_meta("max_fuel")) and ship.get_meta("state") == "patrol", "it fills up and goes back on patrol")
-	_expect(patrols.hunt_radius(ship) == AirPatrols.HUNT_RADIUS or relay.global_position.distance_to(ship.global_position) <= AirPatrols.RELAY_RADIUS + 7, "hunt radius without a relay")
-	ship.position = relay.global_position + Vector3.UP * AirPatrols.ALTITUDE
-	_expect(patrols.hunt_radius(ship) == AirPatrols.HUNT_RADIUS * 2.0, "near a Relay Station, ships spot twice as far")
+	ship.position = near_mast.global_position + Vector3(30, AirPatrols.ALTITUDE, 0)
+	for i in 100:
+		patrols.step(0.5)
+	_expect(is_instance_valid(ship) and ship.is_alive(), "a ship far out for a long time doesn't crash")
+	# Range: ships only hunt inside the sky your hangars and masts cover.
+	_expect(patrols.in_range(near_mast.global_position), "the sky over a mast is covered")
+	_expect(not patrols.in_range(near_mast.global_position + Vector3(AirPatrols.PATROL_RANGE * 4, 0, 0)), "far-off sky isn't covered")
+	_expect(patrols.hunt_radius(ship) == AirPatrols.HUNT_RADIUS or far_mast.global_position.distance_to(ship.global_position) <= AirPatrols.MAST_RADIUS + 7, "hunt radius away from a mast")
+	ship.position = far_mast.global_position + Vector3.UP * AirPatrols.ALTITUDE
+	_expect(patrols.hunt_radius(ship) == AirPatrols.HUNT_RADIUS * 2.0, "near a Mooring Mast, ships spot twice as far")
 	# Gunboat: air-to-ground.
 	_expect(patrols.queue_ship("gunboat") == "", "order a gunboat")
 	patrols.step(AirPatrols.SHIPS.gunboat.build_seconds + 0.1)

@@ -1,6 +1,6 @@
 ## Steering turbine islands. Turbine Engines can only be built on turbine
 ## islands; once one of your turbine islands has ENGINES_NEEDED engines you
-## can order it to move: pick Steer Island on the Ships tab, click the island,
+## can order it to move: pick Steer Island on the Industry tab, click the island,
 ## then click open sky in the direction it should go. It moves up to
 ## MAX_HEXES whole hexes that way, stopping early if something is in the way.
 ##

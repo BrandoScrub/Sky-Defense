@@ -112,6 +112,8 @@ var buildings := {}
 
 ## platform name -> overload state written by LoadSystem ("Stable" etc.)
 var load_states := {}
+## True while the player is building: every platform label shows its load.
+var show_loads := false
 var _labels := {}
 ## platform name -> extra status line for its label (claim progress etc.)
 var _label_status := {}
@@ -420,14 +422,27 @@ func refresh_label(platform_name: String) -> void:
 	_refresh_label(platform_name)
 
 
+## Platform labels show their load only while you build (or when a platform
+## is overloaded), so weight is in front of you when it matters and out of
+## the way the rest of the time. Click a platform to see its load any time.
+func set_show_loads(on: bool) -> void:
+	if show_loads == on:
+		return
+	show_loads = on
+	for platform_name in _labels:
+		_refresh_label(platform_name)
+
+
 func _refresh_label(platform_name: String) -> void:
 	var label: Label3D = _labels.get(platform_name)
 	if label == null:
 		return
 	var used := platform_load(platform_name)
 	var cap := platform_capacity(platform_name)
-	label.text = "%s\nLoad %d / %d" % [platform_name, used, cap]
 	var state: String = load_states.get(platform_name, "Stable")
+	label.text = platform_name
+	if show_loads or state != "Stable":
+		label.text += "\nLoad %d / %d" % [used, cap]
 	if state != "Stable":
 		label.text += "  (%s)" % state
 	var status: String = _label_status.get(platform_name, "")

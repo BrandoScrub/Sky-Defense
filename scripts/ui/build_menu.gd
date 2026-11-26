@@ -1,13 +1,14 @@
 ## The build menu in the bottom-left corner: a row of tabs (Army, Defense,
-## Economy, Storm, Ships) above a 4 x 4 command grid, like a classic RTS. Each grid
+## Industry, Hum) above a 4 x 4 command grid, like a classic RTS. Each grid
 ## slot has a fixed key that matches its place on the keyboard:
 ##   Q W E R
 ##   A S D F
 ##   Z X C V
 ##   T G B N
 ## What a slot does depends on the tab, so Q is a Rivet Turret on the Defense
-## tab and a Dynamo on the Economy tab. On the Defense tab each row is one
-## role: ground defenses on Q W E R, flak on A S D F, hangars on Z X C V. Tab cycles the tabs. Keys pressed with
+## tab and a Dynamo on the Industry tab. On the Defense tab each row is one
+## role: ground defenses on Q W E R, flak on A S D F, the air network
+## (hangar, masts, patrol route) on Z X C. Tab cycles the tabs. Keys pressed with
 ## Shift, Ctrl or Alt are left alone (Shift + W A S D pans the camera).
 class_name BuildMenu
 extends PanelContainer
@@ -24,26 +25,26 @@ const SLOT_KEYS := ["Q", "W", "E", "R", "A", "S", "D", "F", "Z", "X", "C", "V", 
 ## "walkway", "unit:<id>" to train a unit from UnitCatalog, or "power:<id>"
 ## to use a company power from CompanyPowers (paid in crystals).
 const TABS := {
-	"Army": ["unit:riveteer", "unit:shieldbearer", "unit:rifleman", "unit:sapper", "unit:lancer", "unit:medic"],
+	# Row 1-2 ground troops, row 3 patrol airships (V picks the utility
+	# ship's job). Airships are built at an Airship Hangar.
+	"Army": [
+		"unit:riveteer", "unit:shieldbearer", "unit:rifleman", "unit:sapper",
+		"unit:lancer", "unit:medic", "", "",
+		"ship:interceptor", "ship:gunboat", "ship:utility", "utility_job",
+	],
 	"Defense": [
 		"rivet_turret", "arc_coil", "rally_horn", "mending_post",
 		"flak_battery", "skyhook_cannon", "", "",
-		"drone_hangar",
+		"airship_hangar", "mooring_mast", "patrol_route",
 	],
-	"Economy": ["dynamo", "walkway", "lift_engine"],
-	# Row 1 storm buildings, row 2 company powers bought with crystals.
-	"Storm": [
-		"harvester", "", "", "",
-		"power:overcharge", "power:emergency_lift",
+	# Row 1 power, expansion and capacity, row 2 turbine islands (4 Turbine
+	# Engines let you steer one).
+	"Industry": [
+		"dynamo", "walkway", "lift_engine", "harvester",
+		"turbine_engine", "steer",
 	],
-	# Turbine Engines, and the order to steer a turbine island with 4 of them.
-	# Row 1 islands, row 2 the patrol network, row 3 the ships (V picks the
-	# utility ship's job).
-	"Ships": [
-		"turbine_engine", "steer", "", "",
-		"airship_hangar", "relay_station", "refuel_point", "patrol_route",
-		"ship:interceptor", "ship:gunboat", "ship:utility", "utility_job",
-	],
+	# Everything bought with crystals (Humglass).
+	"Hum": ["power:overcharge", "power:emergency_lift"],
 }
 
 const DEFAULT_HINT := "Tab: next tab   Shift + WASD: move camera   Del: demolish   Space: start wave   P: pause   F1-F3: speed"
@@ -161,7 +162,7 @@ static func entry_at(tab_name: String, slot: int) -> String:
 
 func _process(_delta: float) -> void:
 	# The training counts change over time, so keep the Army buttons live.
-	if current_tab == "Army" or current_tab == "Ships":
+	if current_tab == "Army" or current_tab == "Hum":
 		for entry in _entry_buttons:
 			_update_button(entry)
 
@@ -331,7 +332,7 @@ func _update_button(entry: String) -> void:
 		var spec: Dictionary = AirPatrols.SHIPS[kind]
 		title = patrols.ship_name(kind) if patrols else spec.name
 		cost = spec.cost
-		details = "%s airship, built at an Airship Hangar (%ds). Patrols your route of Relay Stations and Refuel Points.\nHealth %d, fuel %ds" % [spec.role, int(spec.build_seconds), int(spec.hp), int(spec.fuel)]
+		details = "%s airship, built at an Airship Hangar (%ds). Patrols your Mooring Masts and only hunts within reach of a hangar or mast.\nHealth %d" % [spec.role, int(spec.build_seconds), int(spec.hp)]
 		if kind == "utility":
 			details += "\nJob (V to change): repair mends buildings it flies over, scout sees far through the fog, troops drops Riveteers where enemies land."
 		if patrols and patrols.ship_count(kind) > 0:
@@ -342,7 +343,7 @@ func _update_button(entry: String) -> void:
 			details = "Picks the job of the next utility ship: Repair, Scout or Troops."
 		else:
 			title = "Patrol Route"
-			details = "Click an Airship Hangar, then Relay Stations and Refuel Points in order. Right click to finish.\nWithout a route, ships visit all of them, nearest first."
+			details = "Click an Airship Hangar, then Mooring Masts in order. Right click to finish.\nWithout a route, ships visit every mast, nearest first."
 			active = patrols != null and patrols.editing
 		button.text = "\n%s" % title
 		button.tooltip_text = "%s  [%s]\n%s" % [title, _hotkey(entry), details]
@@ -447,6 +448,8 @@ static func defense_lines(data: Dictionary) -> PackedStringArray:
 	if data.has("hangar"):
 		var h: Dictionary = data.hangar
 		lines.append("%d drones, one rebuilt every %ds, patrol range %d" % [int(h.drones), int(h.rebuild), int(h.leash)])
+		if data.name == "Airship Hangar":
+			lines.append("Builds patrol airships (Army tab, Z X C), up to %d" % AirPatrols.MAX_SHIPS_PER_HANGAR)
 	return lines
 
 

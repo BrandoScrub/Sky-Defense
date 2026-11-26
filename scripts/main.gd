@@ -10,7 +10,7 @@ const HOW_TO_PLAY := """How to play
 Goal: destroy every rival HQ before they destroy your Hub.
 Ironbell bridges its way to you and walks; Vesper flies bombers.
 
-1. Islands start unconnected. Build walkways (Economy, W) from a platform you
+1. Islands start unconnected. Build walkways (Industry, W) from a platform you
    own to reach new islands, then park units there to claim them. How you
    expand is up to you: the Foundry gives scrap, the Generator Rig power.
 2. Ironbell's crews bridge one span at a time from its HQ toward your Hub
@@ -21,7 +21,7 @@ Ironbell bridges its way to you and walks; Vesper flies bombers.
 3. Build during the build phase with the menu in the bottom left (Tab
    switches tabs). Rivet Turrets (Defense, Q) guard where the bridge lands.
    Towers need power: your Hub starts with one Dynamo Generator, and more
-   (Economy, Q) keep the power number at the top positive. A tower marked
+   (Industry, Q) keep the power number at the top positive. A tower marked
    NO POWER barely fires.
 4. From wave 3 Vesper bombers fly the red air lanes and bomb your buildings:
    Flak Batteries (Defense, A) shred them; ground towers can't hit them.
@@ -29,13 +29,13 @@ Ironbell bridges its way to you and walks; Vesper flies bombers.
    them down first), and from wave 7 Vesper gunships hunt your units.
    Airships steer around islands and attack from upwind. The wind (top of
    the screen) turns every 3 waves: the air lanes move and balloon islands drift.
-5. Put Cloud Harvesters (Storm, Q) on storm anchors. Hold more harvesters on a storm
+5. Put Cloud Harvesters (Industry, R) on storm anchors. Hold more harvesters on a storm
    than Ironbell to get its power; if Ironbell holds it, lightning strikes.
 6. Right click the Crystal Spire to send units there by airship ferry.
 7. Keep platforms under their weight limit or they sag and shed buildings.
-   A Lift Engine (Economy, E) lets a platform carry 10 more. Every island
+   A Lift Engine (Industry, E) lets a platform carry 10 more. Every island
    you hold pays 10 scrap a wave; scrap heaps pay 50.
-   Crystals from harvesters buy company powers (Storm, A and S).
+   Crystals from harvesters buy Hum powers (Hum, Q and W).
 8. Dark storm clouds hide the sky you haven't scouted. Glowing islands hint
    at what's inside: crystal, generators, or a rival's HQ.
 
@@ -127,7 +127,7 @@ func _ready() -> void:
 	walkways.resources = resources
 	add_child(walkways)
 
-	# Steering turbine islands with Turbine Engines (Ships tab).
+	# Steering turbine islands with Turbine Engines (Industry tab).
 	steering = IslandSteering.new()
 	steering.name = "IslandSteering"
 	steering.region = region
@@ -178,7 +178,7 @@ func _ready() -> void:
 	for r in all_raids.values():
 		r.combat = combat
 
-	# Your patrol airships (Ships tab).
+	# Your patrol airships (Army tab; hangars and masts on the Defense tab).
 	patrols = AirPatrols.new()
 	patrols.name = "AirPatrols"
 	patrols.region = region
@@ -187,7 +187,7 @@ func _ready() -> void:
 	patrols.camera = camera
 	add_child(patrols)
 
-	# Company powers, bought with crystals (Storm tab).
+	# Company powers, bought with crystals (Hum tab).
 	powers = CompanyPowers.new()
 	powers.name = "CompanyPowers"
 	powers.resources = resources
@@ -279,7 +279,7 @@ func _ready() -> void:
 	patrols.notice.connect(show_notice)
 	powers.notice.connect(show_notice)
 	powers.changed.connect(build_menu.refresh)
-	patrols.mode_changed.connect(func(on): build_menu.set_hint("Patrol Route: click an Airship Hangar, then Relay Stations and Refuel Points in order. Right click: finish. Esc: cancel." if on else ""))
+	patrols.mode_changed.connect(func(on): build_menu.set_hint("Patrol Route: click an Airship Hangar, then Mooring Masts in order. Right click: finish. Esc: cancel." if on else ""))
 	patrols.ship_launched.connect(func(s): show_notice("Your %s took off from the hangar" % s.display_name))
 	region.buildings_changed.connect(patrols.mark_routes_dirty)
 	steering.mode_changed.connect(func(on): build_menu.set_hint("Steer Island: click your turbine island, then open sky in the direction to go. Esc or right click: cancel." if on else ""))
@@ -613,9 +613,10 @@ func _refresh_resources() -> void:
 func _on_build_mode_changed(type_id: String) -> void:
 	if type_id != "":
 		var data := BuildingCatalog.get_data(type_id)
-		build_menu.set_hint("Placing %s (weight %d). Left click: place. Shift: keep placing. R: rotate. Esc or right click: cancel." % [data.name, data.weight])
+		build_menu.set_hint("Placing %s (weight %d; platform loads are shown while you build). Left click: place. Shift: keep placing. R: rotate. Esc or right click: cancel." % [data.name, data.weight])
 	else:
 		build_menu.set_hint("")
+	region.set_show_loads(type_id != "")
 
 
 func _on_walkway_mode_changed(active: bool) -> void:
