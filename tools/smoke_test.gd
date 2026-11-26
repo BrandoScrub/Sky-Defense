@@ -541,7 +541,7 @@ func _check_build_menu(main: Node) -> void:
 	menu.show_tab("Army")
 	# The how-to-play text names the right key for flak.
 	var flak_key: String = BuildMenu.SLOT_KEYS[BuildMenu.TABS["Defense"].find("flak_battery")]
-	_expect(main.HOW_TO_PLAY.contains("Flak Batteries (Defense, %s)" % flak_key), "how to play should give Flak's real key (%s)" % flak_key)
+	_expect("\n".join(main.TIPS).contains("Flak Batteries (Defense, %s)" % flak_key), "how to play should give Flak's real key (%s)" % flak_key)
 
 	# The legend folds away and comes back.
 	main.set_legend_open(false)
