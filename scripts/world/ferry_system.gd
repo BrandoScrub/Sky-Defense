@@ -171,47 +171,6 @@ func _prune() -> void:
 		f.passengers = f.passengers.filter(func(u): return is_instance_valid(u) and u.is_alive())
 
 
-## Placeholder airship: a gas envelope over an open gondola with a propeller.
+## The ferry's model: a deck boat under a gas bag (see UnitModels.ferry).
 func _build_ship() -> Node3D:
-	var ship := Node3D.new()
-	var envelope := MeshInstance3D.new()
-	var balloon := CapsuleMesh.new()
-	balloon.radius = 1.1
-	balloon.height = 4.6
-	envelope.mesh = balloon
-	envelope.rotation.x = PI / 2.0
-	envelope.position.y = 1.3
-	envelope.material_override = _mat(Color(0.62, 0.5, 0.36))
-	ship.add_child(envelope)
-	var gondola := MeshInstance3D.new()
-	var hull := BoxMesh.new()
-	hull.size = Vector3(2.0, 0.5, 2.8)
-	gondola.mesh = hull
-	gondola.position.y = -1.6
-	gondola.material_override = _mat(Color(0.35, 0.25, 0.18))
-	ship.add_child(gondola)
-	for x in [-0.8, 0.8]:
-		var rope := MeshInstance3D.new()
-		var line := CylinderMesh.new()
-		line.top_radius = 0.04
-		line.bottom_radius = 0.04
-		line.height = 2.4
-		rope.mesh = line
-		rope.position = Vector3(x, -0.3, 0)
-		rope.material_override = _mat(Color(0.2, 0.2, 0.2))
-		ship.add_child(rope)
-	var prop := MeshInstance3D.new()
-	var blade := BoxMesh.new()
-	blade.size = Vector3(1.6, 0.15, 0.1)
-	prop.mesh = blade
-	prop.position = Vector3(0, 1.3, -2.5)
-	prop.material_override = _mat(Color(0.8, 0.65, 0.3))
-	ship.add_child(prop)
-	return ship
-
-
-func _mat(color: Color) -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
-	m.albedo_color = color
-	m.roughness = 0.7
-	return m
+	return UnitModels.ferry(SkyRegion.COLORS.ferry)

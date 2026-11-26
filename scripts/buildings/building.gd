@@ -4,6 +4,8 @@ class_name Building
 extends Node3D
 
 const SIZE := 2.0
+## Models are drawn a little larger than modelled so they fill their tile.
+const MODEL_SCALE := 1.2
 
 var type_id := ""
 var hex := Vector2i.ZERO
@@ -13,8 +15,15 @@ var power := 0
 
 ## 0..1, how well this building is powered (consumers dim in a brownout).
 var efficiency := 1.0
-## "player" or "rival", from the platform's owner when placed.
-var faction := "player"
+## "player" or "rival", from the platform's owner when placed. A rival's
+## buildings are rebuilt in its colours.
+var faction := "player":
+	set(value):
+		if value == faction:
+			return
+		faction = value
+		if _model:
+			_build_shape()
 var hp := 100.0
 var max_hp := 100.0
 var cooldown_left := 0.0
@@ -22,8 +31,11 @@ var _health_bar: HealthBar
 
 ## Shown over a power-hungry building that the grid can't keep up with.
 var _power_warning: Label3D
+## The parts of the model (see BuildingModels); rebuilt if the side changes.
+var _model: Node3D
 var _materials: Array[StandardMaterial3D] = []
 var _base_colors: Array[Color] = []
+var _base_glow: Array[float] = []
 
 
 func setup(id: String) -> Building:
@@ -75,6 +87,7 @@ func set_ghost(valid: bool) -> void:
 	for mat in _materials:
 		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		mat.albedo_color = tint
+		mat.emission_enabled = false
 		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 
 
@@ -86,6 +99,8 @@ func set_efficiency(value: float) -> void:
 	var dark := Color(0.15, 0.15, 0.17)
 	for i in _materials.size():
 		_materials[i].albedo_color = dark.lerp(_base_colors[i], 0.35 + 0.65 * value)
+		# Lamps and live parts go out with the power.
+		_materials[i].emission_energy_multiplier = _base_glow[i] * value
 	_update_power_warning()
 
 
@@ -122,118 +137,25 @@ func power_warning() -> String:
 	return _power_warning.text if _power_warning and _power_warning.visible else ""
 
 
+## Builds the model from the shared parts kit, in this side's colours.
 func _build_shape() -> void:
+	if _model:
+		remove_child(_model)
+		_model.queue_free()
 	var data := get_data()
-	var color: Color = data.color
-	match data.shape:
-		"generator":
-			_add(_cylinder(0.8, 0.9, 1.4, 12), Vector3(0, 0.7, 0), color)
-			_add(_cylinder(0.25, 0.25, 1.2, 8), Vector3(0.4, 1.8, 0), Color(0.3, 0.28, 0.26))
-		"harvester":
-			_add(_cylinder(0.15, 0.2, 3.5, 6), Vector3(0, 1.75, 0), Color(0.5, 0.45, 0.4))
-			var balloon := SphereMesh.new()
-			balloon.radius = 0.9
-			balloon.height = 1.4
-			_add(balloon, Vector3(0, 4.0, 0), color)
-		"turret":
-			_add(_cylinder(0.7, 0.8, 0.6, 6), Vector3(0, 0.3, 0), color)
-			var barrel := BoxMesh.new()
-			barrel.size = Vector3(0.25, 0.25, 1.4)
-			_add(barrel, Vector3(0, 0.85, 0.5), color.darkened(0.3))
-		"flak":
-			_add(_cylinder(0.8, 0.9, 0.5, 8), Vector3(0, 0.25, 0), color)
-			for x in [-0.3, 0.3]:
-				var gun := BoxMesh.new()
-				gun.size = Vector3(0.2, 1.2, 0.2)
-				var part := _add(gun, Vector3(x, 1.0, 0.1), color.darkened(0.3))
-				part.rotation.x = -0.5
-		"horn":
-			_add(_cylinder(0.5, 0.7, 0.5, 8), Vector3(0, 0.25, 0), Color(0.4, 0.32, 0.25))
-			_add(_cylinder(0.12, 0.12, 2.0, 6), Vector3(0, 1.4, 0), Color(0.35, 0.3, 0.28))
-			var bell := _add(_cylinder(0.6, 0.12, 1.0, 10), Vector3(0, 2.4, 0.35), color)
-			bell.rotation.x = PI / 2.0
-		"mender":
-			_add(_cylinder(0.75, 0.85, 0.9, 8), Vector3(0, 0.45, 0), Color(0.85, 0.85, 0.8))
-			for size in [Vector3(1.1, 0.3, 0.35), Vector3(0.35, 0.3, 1.1)]:
-				var cross := BoxMesh.new()
-				cross.size = size
-				_add(cross, Vector3(0, 1.05, 0), color)
-			_add(_cylinder(0.15, 0.15, 0.8, 6), Vector3(0.45, 1.3, -0.3), Color(0.5, 0.5, 0.5))
-		"skyhook":
-			_add(_cylinder(0.7, 0.85, 0.6, 8), Vector3(0, 0.3, 0), color)
-			var cannon := BoxMesh.new()
-			cannon.size = Vector3(0.35, 0.35, 2.2)
-			var gun := _add(cannon, Vector3(0, 1.3, 0.3), color.darkened(0.35))
-			gun.rotation.x = -0.9
-			_add(_cylinder(0.22, 0.22, 0.25, 8), Vector3(0, 2.05, 0.95), Color(0.75, 0.7, 0.6))
-		"engine":
-			# A brass turbine on a stand, propeller facing out.
-			_add(_cylinder(0.55, 0.75, 0.5, 8), Vector3(0, 0.25, 0), Color(0.3, 0.28, 0.26))
-			var housing := _add(_cylinder(0.55, 0.7, 1.5, 12), Vector3(0, 1.1, 0), color)
-			housing.rotation.x = PI / 2.0
-			for k in 3:
-				var blade := BoxMesh.new()
-				blade.size = Vector3(0.18, 1.6, 0.06)
-				var part := _add(blade, Vector3(0, 1.1, 0.85), Color(0.2, 0.19, 0.18))
-				part.rotation.z = k * TAU / 3.0
-		"lift":
-			# A squat housing with a flat rotor on top, pushing the deck up.
-			_add(_cylinder(0.6, 0.8, 0.9, 10), Vector3(0, 0.45, 0), color.darkened(0.3))
-			_add(_cylinder(0.12, 0.12, 0.6, 6), Vector3(0, 1.2, 0), Color(0.25, 0.23, 0.22))
-			for k in 4:
-				var blade := BoxMesh.new()
-				blade.size = Vector3(1.8, 0.05, 0.22)
-				var part := _add(blade, Vector3(0, 1.5, 0), color)
-				part.rotation.y = k * PI / 4.0
-		"airship_hangar":
-			# A long barrel-roofed shed with a mooring mast.
-			var hull := BoxMesh.new()
-			hull.size = Vector3(1.9, 1.2, 1.9)
-			_add(hull, Vector3(0, 0.6, 0), color)
-			var vault := _add(_cylinder(0.95, 0.95, 1.9, 14), Vector3(0, 1.2, 0), color.darkened(0.3))
-			vault.rotation.z = PI / 2.0
-			_add(_cylinder(0.08, 0.1, 2.6, 6), Vector3(0.75, 2.2, 0.75), Color(0.25, 0.23, 0.22))
-			var tip := SphereMesh.new()
-			tip.radius = 0.16
-			tip.height = 0.32
-			_add(tip, Vector3(0.75, 3.55, 0.75), Color(1.0, 0.8, 0.4))
-		"mast":
-			# A fuel tank at the foot of a lattice mast with a beacon on top.
-			_add(_cylinder(0.42, 0.42, 1.0, 10), Vector3(-0.35, 0.5, 0.2), Color(0.75, 0.35, 0.2))
-			_add(_cylinder(0.12, 0.3, 3.2, 4), Vector3(0.2, 1.6, -0.1), Color(0.3, 0.28, 0.26))
-			var dish := _add(_cylinder(0.6, 0.15, 0.3, 12), Vector3(0.2, 2.6, 0.15), color)
-			dish.rotation.x = -0.9
-			var beacon := SphereMesh.new()
-			beacon.radius = 0.2
-			beacon.height = 0.4
-			_add(beacon, Vector3(0.2, 3.35, -0.1), Color(0.5, 0.9, 1.0))
-		"coil":
-			_add(_cylinder(0.35, 0.6, 2.4, 8), Vector3(0, 1.2, 0), Color(0.55, 0.4, 0.25))
-			var top := TorusMesh.new()
-			top.inner_radius = 0.4
-			top.outer_radius = 0.8
-			_add(top, Vector3(0, 2.5, 0), color)
-
-
-func _cylinder(top: float, bottom: float, height: float, sides: int) -> CylinderMesh:
-	var mesh := CylinderMesh.new()
-	mesh.top_radius = top
-	mesh.bottom_radius = bottom
-	mesh.height = height
-	mesh.radial_segments = sides
-	return mesh
-
-
-func _add(mesh: Mesh, at: Vector3, color: Color) -> MeshInstance3D:
-	var part := MeshInstance3D.new()
-	part.mesh = mesh
-	part.position = at
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = color
-	mat.roughness = 0.6
-	mat.metallic = 0.4
-	part.material_override = mat
-	_materials.append(mat)
-	_base_colors.append(color)
-	add_child(part)
-	return part
+	var kit := ModelKit.new(data.color, faction)
+	_model = Node3D.new()
+	_model.name = "Model"
+	_model.scale = Vector3.ONE * MODEL_SCALE
+	add_child(_model)
+	BuildingModels.build(_model, data.shape, kit)
+	_materials = kit.materials()
+	_base_colors.clear()
+	_base_glow.clear()
+	for mat in _materials:
+		_base_colors.append(mat.albedo_color)
+		_base_glow.append(mat.emission_energy_multiplier if mat.emission_enabled else 0.0)
+	# A rebuilt model starts fully lit: dim it again if the grid is short.
+	var was := efficiency
+	efficiency = 1.0
+	set_efficiency(was)
