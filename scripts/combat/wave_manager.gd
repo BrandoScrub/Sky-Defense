@@ -71,6 +71,7 @@ func _process(delta: float) -> void:
 
 
 func step(delta: float) -> void:
+	_check_contact()
 	match phase:
 		BUILD:
 			time_left -= delta
@@ -86,6 +87,58 @@ func step(delta: float) -> void:
 
 ## Extra walker toughness, e.g. from storms Ironbell controls (StormSystem).
 var hp_bonus := 0.0
+
+## Optional: bridging rivals count their waves from first contact when set.
+var bridges: RivalBridges
+## corp -> the wave in which a bridging rival's bridge first reached you.
+var contact_wave := {}
+
+
+## True once a rival can reach you: its bridge is done, or it flies.
+func has_contact(corp: String) -> bool:
+	return not _counts_from_contact(corp) or contact_wave.has(corp)
+
+
+func _counts_from_contact(corp: String) -> bool:
+	return bridges != null and bridges.crews.has(corp)
+
+
+## Notes the wave a bridging rival's bridge reaches you in. Called each step,
+## so a bridge finished mid-wave counts for that wave.
+func _check_contact() -> void:
+	if bridges == null:
+		return
+	for corp in bridges.crews:
+		if not contact_wave.has(corp) and bridges.is_done(corp):
+			contact_wave[corp] = wave
+
+
+## The wave number a rival's army size and health follow for global wave `n`.
+## Flying rivals follow the match's waves. Bridging rivals count from first
+## contact: their first party to reach you is their wave-1 party, however
+## late the bridge lands, and it grows from there. Before contact their camp
+## stays at that first size.
+func rival_wave(corp: String, n := -1) -> int:
+	if n < 0:
+		n = wave
+	if not _counts_from_contact(corp):
+		return n
+	var first := maxi(RivalCatalog.first_wave(corp, "ground"), 1)
+	if not contact_wave.has(corp):
+		return first
+	# A rival that starts late (Aurum) still starts at its own first wave.
+	return first + maxi(n - maxi(contact_wave[corp], first), 0)
+
+
+## How many of `unit` a rival sends in global wave `n`. A bridging rival
+## sends only its ground party (at its first size) until the bridge lands.
+func count_for(corp: String, unit: String, n: int) -> int:
+	if _counts_from_contact(corp):
+		if n < RivalCatalog.first_wave(corp, "ground"):
+			return 0
+		if not contact_wave.has(corp) and unit != "ground":
+			return 0
+	return RivalCatalog.count_for(corp, unit, rival_wave(corp, n))
 
 
 ## Rivals taking part, in order.
@@ -137,7 +190,7 @@ func composition_for(n: int) -> Array:
 		if not _hq_alive(hq):
 			continue
 		for w in RivalCatalog.get_data(corp).get("waves", []):
-			var count := RivalCatalog.count_for(corp, w.unit, n)
+			var count := count_for(corp, w.unit, n)
 			if count <= 0:
 				continue
 			if w.unit == "ground":
@@ -171,6 +224,7 @@ func _hq_alive(platform: String) -> bool:
 func start_wave() -> void:
 	if phase != BUILD:
 		return
+	_check_contact()
 	phase = WAVE
 	_wave_units = []
 	_wave_units_by_corp = {}
@@ -198,8 +252,9 @@ func start_wave() -> void:
 		var size: int = ground[corp] - leftovers.get(corp, []).size()
 		if size > 0:
 			_track(corp, _raids_for(corp).send_party(size))
-	for u in _wave_units:
-		_toughen(u)
+	for corp in _wave_units_by_corp:
+		for u in _wave_units_by_corp[corp]:
+			_toughen(u, corp)
 	# Already toughened in the wave they came with.
 	for corp in leftovers:
 		_track(corp, leftovers[corp])
@@ -209,7 +264,7 @@ func start_wave() -> void:
 ## Troops dropped by a carrier join the wave (and must be beaten to end it).
 func add_wave_units(units: Array, corp := "Ironbell") -> void:
 	for u in units:
-		_toughen(u)
+		_toughen(u, corp)
 	_track(corp, units)
 
 
@@ -220,8 +275,9 @@ func _track(corp: String, units: Array) -> void:
 	_wave_units_by_corp[corp].append_array(units)
 
 
-func _toughen(u: Unit) -> void:
-	u.max_hp *= (1.0 + hp_growth_per_wave * (wave - 1)) * (1.0 + hp_bonus)
+func _toughen(u: Unit, corp := "") -> void:
+	var n := rival_wave(corp) if corp != "" else wave
+	u.max_hp *= (1.0 + hp_growth_per_wave * (n - 1)) * (1.0 + hp_bonus)
 	u.hp = u.max_hp
 
 
@@ -291,9 +347,11 @@ func _plan_entry(corp: String, hq: String, counts: Dictionary) -> Dictionary:
 
 
 ## How much tougher than normal this wave's attackers are, e.g. 0.16 = +16%.
-func health_bonus(n := -1) -> float:
+func health_bonus(n := -1, corp := "") -> float:
 	if n < 0:
 		n = wave
+	if corp != "":
+		n = rival_wave(corp, n)
 	return (1.0 + hp_growth_per_wave * (n - 1)) * (1.0 + hp_bonus) - 1.0
 
 

@@ -78,6 +78,23 @@ func _check_open_map() -> void:
 		_expect(not region.platforms_linked(w[0], w[1]), "%s and %s should start unconnected" % [w[0], w[1]])
 	_expect(main.bridges.crews.has("Ironbell"), "Ironbell should bridge")
 	_expect(not main.bridges.crews.has("Vesper"), "Vesper flies, it shouldn't bridge")
+	# Waves count from first contact: until Ironbell's bridge lands, a late
+	# wave still sends its first-size party and no carriers, and its top bar
+	# card shows the bridge instead of a countdown.
+	var waves: WaveManager = main.waves
+	_expect(not waves.has_contact("Ironbell") and waves.has_contact("Vesper"), "Ironbell has no contact at the start; Vesper flies so it always does")
+	_expect(waves.count_for("Ironbell", "ground", 6) == RivalCatalog.count_for("Ironbell", "ground", 1), "before contact Ironbell's party stays at its first size")
+	_expect(waves.count_for("Ironbell", "carrier", 6) == 0, "no carriers before contact")
+	_expect(waves.count_for("Vesper", "bomber", 3) == 1, "Vesper's first bomber still comes in wave 3")
+	var bar_status: String = main.top_bar.status_text(waves.wave_plan()[0])
+	_expect(bar_status.begins_with("Bridge: 0 of"), "Ironbell's card should show its bridge progress, got '%s'" % bar_status)
+	waves.wave = 6
+	waves.contact_wave["Ironbell"] = 6
+	_expect(waves.count_for("Ironbell", "ground", 6) == RivalCatalog.count_for("Ironbell", "ground", 1), "first contact in wave 6 brings the wave-1 party")
+	_expect(is_zero_approx(waves.health_bonus(6, "Ironbell")), "first contact has no extra health")
+	_expect(waves.count_for("Ironbell", "ground", 8) == RivalCatalog.count_for("Ironbell", "ground", 3), "it grows from contact")
+	waves.contact_wave.erase("Ironbell")
+	waves.wave = 1
 
 	# Expanding: a walkway from the Hub to the Foundry.
 	var hub: Dictionary = region.platforms["Hub"]
