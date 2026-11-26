@@ -1238,6 +1238,19 @@ func set_air_route(a_name: String, b_name: String, route: PackedVector3Array, an
 		air_routes_changed.emit()
 
 
+## Removes every drawn air lane that starts at `a_name`.
+func clear_air_routes_from(a_name: String) -> void:
+	for key in air_routes.keys():
+		var names: PackedStringArray = key.split("|")
+		if names[0] != a_name:
+			continue
+		air_routes.erase(key)
+		var old := get_node_or_null(("AirLane_%s_%s" % [names[0], names[1]]).replace(" ", ""))
+		if old:
+			remove_child(old)
+			old.queue_free()
+
+
 ## The drawn air lanes as [from, to, waypoints] (waypoints include the start).
 func air_lane_routes() -> Array:
 	var out := []

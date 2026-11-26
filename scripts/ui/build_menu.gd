@@ -25,17 +25,18 @@ const SLOT_KEYS := ["Q", "W", "E", "R", "A", "S", "D", "F", "Z", "X", "C", "V", 
 ## "walkway", "unit:<id>" to train a unit from UnitCatalog, or "power:<id>"
 ## to use a company power from CompanyPowers (paid in crystals).
 const TABS := {
-	# Row 1-2 ground troops, row 3 patrol airships (V picks the utility
-	# ship's job). Airships are built at an Airship Hangar.
+	# Row 1-2 ground troops, row 3 patrol airships, built at an Airship
+	# Hangar. (Tenders and hand-drawn patrol routes are parked: ships patrol
+	# every Mooring Mast, nearest first.)
 	"Army": [
 		"unit:riveteer", "unit:shieldbearer", "unit:rifleman", "unit:sapper",
 		"unit:lancer", "unit:medic", "", "",
-		"ship:interceptor", "ship:gunboat", "ship:utility", "utility_job",
+		"ship:interceptor", "ship:gunboat",
 	],
 	"Defense": [
 		"rivet_turret", "arc_coil", "rally_horn", "",
 		"flak_battery", "skyhook_cannon", "", "",
-		"airship_hangar", "mooring_mast", "patrol_route",
+		"airship_hangar", "mooring_mast",
 	],
 	# Power, expansion and capacity. Turbine Engines and Steer Island are
 	# parked (still in the code) until moving islands are designed in.
@@ -388,6 +389,10 @@ func _update_button(entry: String) -> void:
 		button.modulate = Color(1.0, 0.85, 0.4)
 	else:
 		button.modulate = Color.WHITE if affordable else Color(1.0, 0.6, 0.6, 0.8)
+	# Airships are built at a Hangar: greyed out until you have one.
+	if entry.begins_with("ship:") and (patrols == null or patrols.hangars.is_empty()):
+		button.text = "\n%s\nneeds a Hangar" % title
+		button.modulate = Color(1, 1, 1, 0.4)
 
 
 func _unit_stats(unit: Dictionary) -> String:
