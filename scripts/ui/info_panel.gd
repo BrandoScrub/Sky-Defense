@@ -29,6 +29,7 @@ const UNIT_INFO := {
 ## What each building is for, by type id.
 const BUILDING_INFO := {
 	"dynamo": "Burns fuel to power your towers. Makes more on a yellow generator socket.",
+	"lift_engine": "An extra lift rotor under the deck. The platform it stands on can carry %d more weight, and the engine itself weighs nothing." % BuildingCatalog.BUILDINGS.lift_engine.capacity,
 	"harvester": "Taps a storm cloud from a blue anchor. Gives lots of power, pays crystals at the end of each wave, and counts toward who controls the storm.",
 	"rivet_turret": "Sturdy gun tower against walkers. Its plating gives cover, so your units fighting beside it take less damage. Can't hit aircraft.",
 	"arc_coil": "Chain lightning that jumps between up to 3 walkers. Power hungry, and can't hit aircraft.",

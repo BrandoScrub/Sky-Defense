@@ -32,6 +32,14 @@ const BUILDINGS := {
 		"color": Color(0.35, 0.6, 1.0),
 		"hp": 80.0,
 	},
+	# Extra lift under a platform: it can carry more weight ("capacity").
+	"lift_engine": {
+		"name": "Lift Engine", "cost": 60, "power": -3, "weight": 0,
+		"tiles": ["deck"], "shape": "lift",
+		"color": Color(0.45, 0.6, 0.7),
+		"hp": 120.0,
+		"capacity": 10,
+	},
 	# --- Ground defenses: modest guns that can't hit aircraft, but make your
 	# own ground units nearby stronger. "aura" lists what they give allies
 	# within "radius": damage_mult (more damage), cooldown_mult (below 1 =

@@ -24,6 +24,8 @@ const SWAY := {STABLE: 0.0, SWAYING: 0.03, SAGGING: 0.06, FAILING: 0.1}
 @export var failing_seconds_per_loss := 6.0
 
 @export var region: SkyRegion
+## While true (Emergency Lift), the player's platforms count as Stable.
+var ignore_player_overload := false
 
 ## platform name -> state string
 var states := {}
@@ -51,6 +53,8 @@ func step(delta: float) -> void:
 	_time += delta
 	for platform_name in region.platforms:
 		var state := state_for(region.platform_load(platform_name), region.platform_capacity(platform_name))
+		if ignore_player_overload and region.platform_owner(platform_name) == "player":
+			state = STABLE
 		states[platform_name] = state
 		region.load_states[platform_name] = state
 		_sway(platform_name, state)

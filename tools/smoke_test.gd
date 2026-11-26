@@ -731,16 +731,48 @@ func _check_weight_power_income(main: Node) -> void:
 	var spots := [Vector2i(0, 1), Vector2i(0, -1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(0, 1)]
 	for i in units.size():
 		units[i].position = region.hex_center(rig + spots[i])
-	_expect(region.platform_load("Generator Rig") == 14, "units add their weight (hero 2 + 4 x 1)")
+	_expect(region.platform_load("Generator Rig") == 11, "units add half their weight (hero 2 + 4 x 1 = 6, counts 3), got %d" % region.platform_load("Generator Rig"))
 	loads.step(0.1)
-	_expect(loads.state_of("Generator Rig") == LoadSystem.FAILING, "140% load should be failing")
+	_expect(loads.state_of("Generator Rig") == LoadSystem.SWAYING, "110% load should sway")
+	_expect(is_equal_approx(units[0].speed_multiplier, 1.0), "swaying doesn't slow units")
+	# Shrink the Rig to push it over the edge: 11 / 8 is 137%.
+	var rig_cap: int = region.platforms["Generator Rig"].capacity
+	region.platforms["Generator Rig"].capacity = 8
+	loads.step(0.1)
+	_expect(loads.state_of("Generator Rig") == LoadSystem.FAILING, "137% load should be failing")
 	_expect(is_equal_approx(units[0].speed_multiplier, 0.4), "units on a failing platform move at 40%")
+	# Emergency Lift (a company power) holds it steady while it runs.
+	var powers: CompanyPowers = main.powers
+	res.crystals = 0
+	_expect(powers.use("emergency_lift") != "", "company powers cost crystals")
+	res.add_crystals(50)
+	_expect(powers.use("emergency_lift") == "" and res.crystals == 30, "Emergency Lift costs 20 crystals")
+	loads.step(6.0)
+	_expect(loads.state_of("Generator Rig") == LoadSystem.STABLE, "Emergency Lift keeps your platforms stable")
+	_expect(region.buildings_on("Generator Rig").size() == 3, "nothing breaks off under Emergency Lift")
+	powers.step(CompanyPowers.POWERS.emergency_lift.seconds + 0.1)
+	_expect(not powers.is_running("emergency_lift") and powers.use("emergency_lift") != "", "Emergency Lift wears off and recharges")
+	powers.step(CompanyPowers.POWERS.emergency_lift.cooldown + 0.1)
+	loads.step(0.1)
+	_expect(loads.state_of("Generator Rig") == LoadSystem.FAILING, "overload returns when Emergency Lift ends")
 	loads.step(6.0)
 	_expect(region.buildings_on("Generator Rig").size() == 2, "the newest building should break off")
 	_expect(not region.buildings.has(rig + Vector2i(-1, 0)), "the Flak Battery (newest) is the one lost")
 	loads.step(0.1)
-	_expect(loads.state_of("Generator Rig") == LoadSystem.SWAYING, "110% load should sway")
-	_expect(is_equal_approx(units[0].speed_multiplier, 1.0), "swaying doesn't slow units")
+	_expect(loads.state_of("Generator Rig") == LoadSystem.STABLE, "8 of 8 is stable")
+	# A Lift Engine adds 10 capacity, and weighs nothing itself.
+	region.platforms["Generator Rig"].capacity = rig_cap
+	var lift_hex := rig + Vector2i(-1, 0)
+	_expect(build.try_place("lift_engine", lift_hex) == "", "a Lift Engine on the Rig")
+	_expect(region.platform_capacity("Generator Rig") == rig_cap + 10, "a Lift Engine adds 10 capacity")
+	_expect(region.platform_load("Generator Rig") == 8, "a Lift Engine weighs nothing")
+	build.demolish(lift_hex)
+	_expect(region.platform_capacity("Generator Rig") == rig_cap, "capacity drops when the Lift Engine goes")
+	# Overcharge makes your towers fire faster while it runs.
+	_expect(powers.use("overcharge") == "" and is_equal_approx(main.combat.player_tower_rate, CompanyPowers.OVERCHARGE_RATE), "Overcharge speeds up your towers")
+	powers.step(CompanyPowers.POWERS.overcharge.seconds + 0.1)
+	_expect(is_equal_approx(main.combat.player_tower_rate, 1.0), "Overcharge wears off")
+	powers.step(100.0)
 
 	# Brownout: remove every power source, then restore one.
 	for b in region.buildings.values().duplicate():
@@ -770,16 +802,19 @@ func _check_weight_power_income(main: Node) -> void:
 	economy.step(30.0)
 	_expect(res.scrap == scrap_before and res.crystals == crystals_before, "income waits for the end of the round")
 	var preview := economy.round_income()
-	_expect(preview.scrap == 2 * economy.scrap_per_heap_per_round, "2 heaps should pay %d scrap a round, got %d" % [2 * economy.scrap_per_heap_per_round, preview.scrap])
+	var islands := economy.islands_held()
+	_expect(islands >= 2, "we hold the Foundry and the Rig, got %d islands" % islands)
+	var expected := 2 * economy.scrap_per_heap_per_round + islands * economy.scrap_per_island_per_round
+	_expect(preview.scrap == expected, "2 heaps and %d islands should pay %d scrap a round, got %d" % [islands, expected, preview.scrap])
 	var paid := economy.pay_round(1)
 	_expect(res.scrap == scrap_before + paid.scrap and paid.scrap == preview.scrap, "the round payout should add the heaps' scrap")
 	_expect(res.crystals == crystals_before + economy.crystals_per_harvester_per_round, "1 harvester should pay %d crystals a round" % economy.crystals_per_harvester_per_round)
-	_expect(paid.sources.size() == 2, "the payout should list heaps and harvesters")
+	_expect(paid.sources.size() == 3, "the payout should list islands, heaps and harvesters")
 	_expect(main.payout_popup.visible and main.payout_popup._lines.text.contains("scrap heap"), "the payout popup should list the income")
 	region.set_platform_owner("Foundry", "")
 	scrap_before = res.scrap
 	economy.pay_round(2)
-	_expect(res.scrap == scrap_before, "unowned scrap heaps give nothing")
+	_expect(res.scrap == scrap_before + economy.islands_held() * economy.scrap_per_island_per_round, "unowned scrap heaps give nothing")
 
 
 func _check_ferry(main: Node) -> void:

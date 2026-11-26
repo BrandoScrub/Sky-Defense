@@ -21,6 +21,9 @@ signal building_destroyed(building_name: String, faction: String)
 signal headquarters_destroyed(faction: String, platform: String)
 signal unit_killed(unit: Unit)
 
+## Fire-rate multiplier for the player's towers (Overcharge sets it).
+var player_tower_rate := 1.0
+
 ## Chance to miss for towers on a platform in each overload state.
 const MISS_CHANCE := {"Stable": 0.0, "Swaying": 0.15, "Sagging": 0.3, "Failing": 0.45}
 ## How far an Arc Coil's lightning can jump between targets.
@@ -101,7 +104,8 @@ func step(delta: float) -> void:
 		var attack: Dictionary = b.get_attack()
 		if attack.is_empty() or not b.is_alive():
 			continue
-		b.cooldown_left -= delta * maxf(b.efficiency, 0.05)
+		var rate := player_tower_rate if b.faction == "player" else 1.0
+		b.cooldown_left -= delta * maxf(b.efficiency, 0.05) * rate
 		if b.cooldown_left > 0.0:
 			continue
 		var target = nearest_enemy(b.global_position, b.faction, attack.range, attack.has("air"))
