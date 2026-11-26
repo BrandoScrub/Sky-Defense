@@ -6,6 +6,7 @@ extends RefCounted
 ## Fraction of the cost returned when a building is demolished.
 const REFUND_RATIO := 0.75
 
+## short: optional shorter name for the build menu button.
 ## power: positive supplies electricity, negative draws it.
 ## tiles: tile types the building may stand on.
 ## role: "ground", "flak" or "hangar" for defenses (see ROLES); none for
@@ -14,12 +15,12 @@ const REFUND_RATIO := 0.75
 const ROLES := {
 	"ground": "Ground defense: can't hit aircraft, strengthens your units nearby",
 	"flak": "Flak: shoots only aircraft and airships",
-	"hangar": "Hangar: launches defensive drones",
+	"hangar": "Hangar: launches defensive drones and builds patrol airships",
 }
 
 const BUILDINGS := {
 	"dynamo": {
-		"name": "Dynamo Generator", "cost": 40, "power": 10, "weight": 3,
+		"name": "Dynamo Generator", "short": "Dynamo", "cost": 40, "power": 10, "weight": 3,
 		"tiles": ["deck", "generator_socket"], "shape": "generator",
 		"color": Color(0.95, 0.78, 0.25),
 		# Generators on a generator socket produce more.
@@ -27,7 +28,7 @@ const BUILDINGS := {
 		"hp": 120.0,
 	},
 	"harvester": {
-		"name": "Cloud Harvester", "cost": 80, "power": 30, "weight": 2,
+		"name": "Cloud Harvester", "short": "Harvester", "cost": 80, "power": 30, "weight": 2,
 		"tiles": ["harvester_anchor"], "shape": "harvester",
 		"color": Color(0.35, 0.6, 1.0),
 		"hp": 80.0,
@@ -94,43 +95,34 @@ const BUILDINGS := {
 		# Slow, long-range harpoon gun for big airships.
 		"attack": {"damage": 0.0, "range": 16.0, "cooldown": 2.8, "air": 70.0, "air_only": true},
 	},
-	# --- Hangars: launch defensive drones that fly out to anything that comes
-	# within "leash" of the hangar, then return. Lost drones are rebuilt.
-	# --- Ships: engines that let you move a turbine island (IslandSteering).
+	# --- Industry: engines that let you move a turbine island (IslandSteering).
 	"turbine_engine": {
-		"name": "Turbine Engine", "cost": 60, "power": -3, "weight": 3,
+		"name": "Turbine Engine", "short": "Turbine", "cost": 60, "power": -3, "weight": 3,
 		"tiles": ["deck"], "shape": "engine",
 		"color": Color(0.72, 0.52, 0.26),
 		"hp": 140.0,
 		# Only fits on turbine islands; 4 of them let you steer the island.
 		"island_style": "turbine",
 	},
-	# Player airships: the hangar builds them, and they patrol a loop of
-	# Relay Stations and Refuel Points (AirPatrols).
+	# The Airship Hangar keeps a few defensive drones in the air ("hangar":
+	# they fly out to anything that comes within "leash", then return, and
+	# lost drones are rebuilt) and builds your patrol airships (AirPatrols),
+	# which fly a loop of Mooring Masts.
 	"airship_hangar": {
-		"name": "Airship Hangar", "cost": 120, "power": -6, "weight": 5,
-		"tiles": ["deck"], "shape": "airship_hangar",
+		"name": "Airship Hangar", "short": "Hangar", "cost": 100, "power": -6, "weight": 5,
+		"tiles": ["deck"], "shape": "airship_hangar", "role": "hangar",
 		"color": Color(0.5, 0.42, 0.33),
 		"hp": 220.0,
+		"hangar": {"drones": 2, "rebuild": 8.0, "leash": 13.0},
 	},
-	"relay_station": {
-		"name": "Relay Station", "cost": 40, "power": -2, "weight": 1,
-		"tiles": ["deck"], "shape": "relay",
+	# A patrol point: airships refuel and spot twice as far near it, and it
+	# sees far through the storm clouds. Ships only hunt within reach of a
+	# hangar or a mast, so where you put masts is where the sky is covered.
+	"mooring_mast": {
+		"name": "Mooring Mast", "cost": 45, "power": -2, "weight": 2,
+		"tiles": ["deck"], "shape": "mast",
 		"color": Color(0.7, 0.62, 0.4),
-		"hp": 90.0,
-	},
-	"refuel_point": {
-		"name": "Refuel Point", "cost": 45, "power": -1, "weight": 2,
-		"tiles": ["deck"], "shape": "refuel",
-		"color": Color(0.75, 0.35, 0.2),
 		"hp": 100.0,
-	},
-	"drone_hangar": {
-		"name": "Drone Hangar", "cost": 90, "power": -6, "weight": 4,
-		"tiles": ["deck"], "shape": "hangar", "role": "hangar",
-		"color": Color(0.55, 0.5, 0.42),
-		"hp": 170.0,
-		"hangar": {"drones": 3, "rebuild": 8.0, "leash": 13.0},
 	},
 }
 

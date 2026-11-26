@@ -18,7 +18,7 @@ const POWERS := {
 		"blurb": "Every tower you own fires 40% faster for 20 seconds.",
 	},
 	"emergency_lift": {
-		"name": "Emergency Lift", "crystals": 20, "seconds": 30.0, "cooldown": 60.0,
+		"name": "Emergency Lift", "short": "Lift Boost", "crystals": 20, "seconds": 30.0, "cooldown": 60.0,
 		"blurb": "For 30 seconds your platforms ignore overload: no sway, no slowdown, nothing breaks off.",
 	},
 }

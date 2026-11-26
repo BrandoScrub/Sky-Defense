@@ -1,5 +1,6 @@
 ## The bar along the top of the screen. On the left it shows your resources
-## (scrap, power, crystals and the weight on your platforms). On the right it
+## (scrap, power and crystals, plus a warning when one of your platforms is
+## overloaded; weight itself shows on the platforms while you build). On the right it
 ## has one card per rival corporation with a countdown to its next wave.
 ## Hover a rival's card to see what that wave will send: each unit type and
 ## how many. The contents come from WaveManager.wave_plan(), so new unit types
@@ -21,7 +22,8 @@ var economy: EconomySystem
 var _scrap: Label
 var _power: Label
 var _crystals: Label
-var _weight: Label
+## Shown only while one of your platforms is over its weight limit.
+var _overload: Label
 var _rivals: HBoxContainer
 ## corp -> {"card": PanelContainer, "status": Label}
 var _cards := {}
@@ -56,7 +58,9 @@ func _ready() -> void:
 	_scrap = _stat(res, "Scrap", "Scrap: the main currency. Spend it on buildings, walkways and troops. Kills pay scrap on the spot; scrap heaps on your platforms pay at the end of each wave (shown as +N).")
 	_power = _stat(res, "Power", "Power: used / made. Towers need power; if they use more than your generators and storms make, they brown out and slow down.")
 	_crystals = _stat(res, "Crystals", "Crystals: an advanced resource. Your Cloud Harvesters pay crystals at the end of each wave (shown as +N).")
-	_weight = _stat(res, "Weight", "Weight: load / capacity across all your platforms. Overloaded platforms sway, sag and drop buildings. Click a platform to see its own load.")
+	_overload = _stat(res, "Overload", "A platform is carrying more than it can lift. Overloaded platforms sway, sag and drop buildings. Demolish something, move units off, or add a Lift Engine (Industry, E).")
+	_overload.modulate = Color(1.0, 0.55, 0.45)
+	_overload.visible = false
 
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -96,15 +100,24 @@ func refresh() -> void:
 			_power.text += " (brownout: towers at %d%%)" % int(region.grid_efficiency() * 100)
 		_power.modulate = Color(1.0, 0.55, 0.45) if demand > supply else Color.WHITE
 		_crystals.text = "Crystals %d" % resources.crystals + _income_text(income.get("crystals", 0))
-		var load := 0
-		var capacity := 0
-		for platform_name in region.platforms:
-			if region.platform_owner(platform_name) == "player":
-				load += region.platform_load(platform_name)
-				capacity += region.platform_capacity(platform_name)
-		_weight.text = "Weight %d / %d" % [load, capacity]
+		var heavy := overloaded_platforms()
+		_overload.visible = not heavy.is_empty()
+		if not heavy.is_empty():
+			_overload.text = "Overloaded: " + ", ".join(heavy)
 	if waves:
 		_refresh_rivals()
+
+
+## Your platforms that are over their weight limit, as "Name (State)".
+func overloaded_platforms() -> PackedStringArray:
+	var out := PackedStringArray()
+	for platform_name in region.platforms:
+		if region.platform_owner(platform_name) != "player":
+			continue
+		var state: String = region.load_states.get(platform_name, LoadSystem.STABLE)
+		if state != LoadSystem.STABLE:
+			out.append("%s (%s)" % [platform_name, state])
+	return out
 
 
 ## " (+N)" for next round's income, or "" when there is none.
