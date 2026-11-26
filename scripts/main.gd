@@ -224,6 +224,7 @@ func _ready() -> void:
 	for r in all_raids.values():
 		r.bridges = bridges
 	bridges.combat = combat
+	waves.bridges = bridges
 	bridges.cutting_started.connect(func(c): show_notice("Your units are cutting %s's bridge: hold them there %d seconds" % [c, int(bridges.cut_seconds)]))
 	bridges.span_cut.connect(func(c, _n): show_notice("You cut %s's bridge! Its crew has to build that span again" % c))
 	bridges.reached_player.connect(func(c, p): show_notice("%s's bridge reached %s: expect walkers!" % [c, p]))
@@ -279,7 +280,9 @@ func _ready() -> void:
 	walkways.mode_changed.connect(_on_walkway_mode_changed)
 	capture.platform_claimed.connect(_on_platform_claimed)
 	for corp in all_raids:
-		all_raids[corp].raid_sent.connect(func(n): show_notice("Wave %d: %s sent %d raiders toward your Hub" % [waves.wave, corp, n]))
+		all_raids[corp].raid_sent.connect(func(n): show_notice(
+			("Wave %d: %s sent %d raiders toward your Hub" if waves.has_contact(corp)
+			else "Wave %d: %s sent %d raiders to wait at the end of its bridge") % [waves.wave, corp, n]))
 	combat.building_destroyed.connect(func(n, f): show_notice(("Your %s was destroyed" if f == "player" else "Destroyed a rival %s") % n))
 	waves.game_over.connect(_on_game_over)
 	waves.rival_defeated.connect(func(p): show_notice("%s has fallen! Its attacks stop" % p))

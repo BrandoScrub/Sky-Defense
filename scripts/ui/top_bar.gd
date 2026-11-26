@@ -140,6 +140,9 @@ func _refresh_rivals() -> void:
 func status_text(entry: Dictionary) -> String:
 	if entry.defeated:
 		return "Defeated"
+	# Until its bridge reaches you, a bridging rival's real clock is the bridge.
+	if not waves.has_contact(entry.corp):
+		return "Bridge: %d of %d spans" % bridge_progress(entry.corp)
 	match waves.phase:
 		WaveManager.BUILD:
 			if entry.units.is_empty():
@@ -149,6 +152,14 @@ func status_text(entry: Dictionary) -> String:
 			var left := waves.remaining_for(entry.corp)
 			return "Attacking: %d left" % left if left > 0 else "Waiting for next wave"
 	return ""
+
+
+## [spans built, spans in all] of a bridging rival's bridge toward you.
+func bridge_progress(corp: String) -> Array:
+	var b: RivalBridges = waves.bridges
+	if b == null or not b.crews.has(corp):
+		return [0, 0]
+	return [b.spans_built(corp), b.crews[corp].path.size() - 1]
 
 
 ## Hover text listing what a rival's wave sends.
@@ -162,9 +173,14 @@ func wave_tooltip(entry: Dictionary) -> String:
 		lines.append("  Nothing this wave")
 	for u in entry.units:
 		lines.append("  %d x %s" % [u[1], u[0]])
-	var bonus := waves.health_bonus()
+	var bonus := waves.health_bonus(-1, entry.corp)
 	if bonus > 0.005 and not entry.units.is_empty():
 		lines.append("Health +%d%%" % roundi(bonus * 100))
+	if not waves.has_contact(entry.corp):
+		var progress := bridge_progress(entry.corp)
+		lines.append("Bridge %d of %d spans built. Its walkers camp at the end" % progress)
+		lines.append("until it reaches you; its army grows only after that.")
+		lines.append("Cut a span to set it back.")
 	return "\n".join(lines)
 
 
