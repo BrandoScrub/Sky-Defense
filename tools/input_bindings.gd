@@ -70,6 +70,7 @@ static func bindings() -> Dictionary:
 		"demolish": [[KEY, KEY_DELETE, []]],
 		"build_menu_next_tab": [[KEY, KEY_TAB, []]],
 		"toggle_legend": [[KEY, KEY_L, []]],
+		"toggle_tips": [[KEY, KEY_SLASH, []]],
 
 		# Game flow
 		"start_wave_early": [[KEY, KEY_SPACE, []]],
