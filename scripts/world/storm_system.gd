@@ -44,9 +44,12 @@ func _ready() -> void:
 		label.name = "StormLabel_" + cloud.replace(" ", "")
 		label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		label.no_depth_test = true
-		label.font_size = 52
-		label.outline_size = 10
-		label.pixel_size = 0.02
+		label.fixed_size = true
+		label.font_size = 28
+		label.outline_size = 8
+		label.pixel_size = 0.0008
+		label.render_priority = 10
+		label.outline_render_priority = 9
 		label.position = region.hex_center(region.clouds[cloud].center) + Vector3.UP * (SkyRegion.CLOUD_HEIGHT + 3.0)
 		region.add_child(label)
 		_labels[cloud] = label
