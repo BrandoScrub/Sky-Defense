@@ -166,7 +166,7 @@ func _start_warning(b: Dictionary) -> void:
 
 func _update_warning(b: Dictionary, delta: float) -> void:
 	var endangered := endangered_units(b)
-	_set_cautions(b, endangered)
+	set_cautions(b, endangered)
 	# Flash the walkway amber.
 	var on := fmod(_flash, 0.5) < 0.25
 	for hex in b.walkway:
@@ -185,9 +185,9 @@ func _update_warning(b: Dictionary, delta: float) -> void:
 func _cast_off(b: Dictionary) -> void:
 	var platform_name := moored_to(b)
 	var fallen := endangered_units(b)
-	_set_cautions(b, [])
+	set_cautions(b, [])
 	for unit in fallen:
-		_fall(unit)
+		fall_unit(unit)
 	_drop_walkway(b)
 	b.state = DRIFTING
 	b.dir = 1 if b.index == 0 else -1
@@ -275,7 +275,7 @@ func _walkway_hexes(b: Dictionary) -> Array[Vector2i]:
 
 func _corridor(center: Vector2i, platform: Dictionary) -> Array[Vector2i]:
 	var from := _rim(center, RADIUS, platform.center)
-	var to := region._rim_toward(platform, center, true)
+	var to := region.rim_toward(platform, center, true)
 	var own := {}
 	for hex in region.shape_of(platform):
 		own[hex] = true
@@ -322,7 +322,7 @@ func _drop_walkway(b: Dictionary) -> void:
 	region.walkways_changed.emit()
 
 
-func _fall(unit: Unit) -> void:
+func fall_unit(unit: Unit) -> void:
 	unit.stop()
 	unit.riding = true  # Stops it walking and fighting on the way down.
 	var tween := unit.create_tween().set_parallel()
@@ -333,7 +333,7 @@ func _fall(unit: Unit) -> void:
 
 # --- Caution signs and sound ------------------------------------------------
 
-func _set_cautions(b: Dictionary, units: Array) -> void:
+func set_cautions(b: Dictionary, units: Array) -> void:
 	var keep := {}
 	for unit in units:
 		keep[unit] = true

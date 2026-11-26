@@ -70,7 +70,7 @@ func _initialize() -> void:
 	region.set_platform_owner("Foundry", "player")
 	var foundry: Dictionary = region.platforms["Foundry"]
 	var crystal: Dictionary = region.platforms["Crystal Spire"]
-	main.walkways.try_build(region._rim_toward(foundry, crystal.center, true), region._rim_toward(crystal, foundry.center, true))
+	main.walkways.try_build(region.rim_toward(foundry, crystal.center, true), region.rim_toward(crystal, foundry.center, true))
 	main.capture.set_process(false)
 	main.raids.set_process(false)
 	var party: Array[Unit] = main.raids.send_party(3)

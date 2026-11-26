@@ -18,7 +18,7 @@ Park units on a neutral platform to claim it (it's contested while both sides ha
 
 The game runs in waves. You get 45 seconds to build before wave 1 (25 seconds before later waves), then Ironbell sends a growing party of walkers; clear it to start the next build phase. Turrets, units and both headquarters shoot automatically, and each kill pays 15 scrap. You lose if your Hub headquarters falls and win once both rival headquarters are destroyed; press Enter on the end screen to play again. Use the Army tab to train more units at the Hub (see Ground units below). If your Commander falls, they return to the Hub after 15 seconds. A how-to-play panel is shown until the first wave starts.
 
-There are two rival corporations. Ironbell Consolidated walks: its crews bridge toward your Hub and its walkers come down that bridge. Vesper Aeronautics flies: from wave 3 its bomber airships leave the Vesper Aerodrome (far east), fly the red air lanes, and bomb your buildings or your Hub. Bombers ignore your units, and only anti-air weapons can hit them. Flak towers and hangar drones are built for this, and the Commander and headquarters guns can shoot them too. Ground defenses and Riveteers can't. Ironbell troop carriers join from wave 5 and Vesper gunships from wave 7. Reach the Aerodrome on foot by building walkways out to it. When one rival's headquarters falls, that rival stops attacking.
+There are two rival corporations. Ironbell Consolidated walks: its crews bridge toward your Hub and its walkers come down that bridge. Vesper Aeronautics flies: from wave 3 its bomber airships leave the Vesper Aerodrome (far east), fly the red air lanes, and bomb your buildings or your Hub. Bombers ignore your units, and only anti-air weapons can hit them. Flak towers and hangar drones are built for this, and the Commander and headquarters guns can shoot them too. Riflemen can take shots at them too. Ground defenses and other troops can't. Ironbell troop carriers join from wave 5 and Vesper gunships from wave 7. Reach the Aerodrome on foot by building walkways out to it. When one rival's headquarters falls, that rival stops attacking.
 
 Defenses come in three roles (`scripts/buildings/building_catalog.gd`, run by `scripts/combat/combat_system.gd` and `scripts/combat/defense_system.gd`):
 
@@ -44,7 +44,7 @@ Every faction fields the same base troops (stats live in `scripts/units/unit_cat
 | --- | --- | --- |
 | Riveteer | 30 | Cheap all-rounder. Claims platforms, fights at short range. |
 | Shieldbearer | 45 | Riot shield. Tough melee fighter. Its shield stops 75% of any shot aimed at it and catches enemy shots that try to fly past it toward allies behind. |
-| Rifleman | 40 | Bolt gun. Long range and hard-hitting, but fragile. |
+| Rifleman | 40 | Bolt gun. Long range and hard-hitting, and the only ground troop that can shoot at airships, but fragile. |
 | Sapper | 40 | Engineer. Repairs your damaged buildings nearby and does 4x damage to enemy buildings. |
 | Lancer | 60 | Anti-armor. Slow, heavy shots that do 2.5x damage to armored walkers and partly pierce shields. |
 | Medic | 40 | Doesn't fight. Heals the most wounded ally nearby. |
