@@ -9,11 +9,8 @@ extends PanelContainer
 
 const HEIGHT := 44.0
 
-## Colour swatch for each rival corp's card (matches the platform colours).
-const CORP_COLORS := {
-	"Ironbell": "rival",
-	"Vesper": "vesper",
-}
+## Colour swatch for each rival corp's card: its platform colour key from
+## RivalCatalog ("tile").
 
 var region: SkyRegion
 var resources: PlayerResources
@@ -167,7 +164,7 @@ func _add_card(corp: String) -> void:
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	card.add_child(row)
 	var swatch := ColorRect.new()
-	var c: Color = SkyRegion.COLORS.get(CORP_COLORS.get(corp, "rival"), Color.DARK_RED)
+	var c: Color = SkyRegion.COLORS.get(RivalCatalog.get_data(corp).get("tile", "rival"), Color.DARK_RED)
 	swatch.color = Color(c.r, c.g, c.b)
 	swatch.custom_minimum_size = Vector2(6, 0)
 	swatch.mouse_filter = Control.MOUSE_FILTER_IGNORE

@@ -40,10 +40,6 @@ const GLOWS := {
 	"crystal_seam": [Color(0.35, 0.95, 1.0), "Crystal glow"],
 	"generator_socket": [Color(1.0, 0.8, 0.3), "Electric hum"],
 }
-const CORP_GLOWS := {
-	"Ironbell": [Color(1.0, 0.35, 0.15), "Furnace glare"],
-	"Vesper": [Color(0.8, 0.4, 1.0), "Signal lamps"],
-}
 
 ## Cell -> true once it has been seen.
 var explored := {}
@@ -400,7 +396,7 @@ func _glow_for(p: Dictionary) -> Array:
 	for f in p.features:
 		types.append(f[0])
 	if types.has("rival_core"):
-		return CORP_GLOWS.get(p.get("corp", ""), GLOWS.rival_core)
+		return RivalCatalog.get_data(p.get("corp", "")).get("glow", GLOWS.rival_core)
 	for type in ["crystal_seam", "generator_socket"]:
 		if types.has(type):
 			return GLOWS[type]

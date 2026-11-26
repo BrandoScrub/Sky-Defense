@@ -208,14 +208,16 @@ func drop_target(corp: String) -> String:
 	return best
 
 
-## Lanes that start at the aerodrome, as [from, to] platform names.
-func lanes() -> Array:
-	return region.layout.air_lanes.filter(func(l): return l[0] == home)
+## Air lanes that start at a corporation's HQ (Vesper's aerodrome by
+## default), as [from, to] platform names.
+func lanes(corp := "") -> Array:
+	var from := home if corp == "" else hq_of(corp)
+	return region.layout.air_lanes.filter(func(l): return l[0] == from)
 
 
 ## Launches `size` bombers along the next air lane. Returns them.
-func send_flight(size: int) -> Array[Unit]:
-	var out := launch("bomber", size)
+func send_flight(size: int, corp := "") -> Array[Unit]:
+	var out := launch("bomber", size, corp)
 	if not out.is_empty():
 		flight_sent.emit(size)
 	return out
@@ -223,20 +225,23 @@ func send_flight(size: int) -> Array[Unit]:
 
 ## Launches `count` airships of a kind from their corporation's HQ. Bombers
 ## and gunships fly the next air lane; carriers head for drop_target.
-func launch(kind: String, count: int) -> Array[Unit]:
+## `corp` flies them (default: the kind's own corporation in AIRSHIPS).
+func launch(kind: String, count: int, corp := "") -> Array[Unit]:
 	var out: Array[Unit] = []
 	var spec: Dictionary = AIRSHIPS[kind]
-	var start_name := home if spec.corp == "Vesper" else hq_of(spec.corp)
+	if corp == "":
+		corp = spec.corp
+	var start_name := hq_of(corp)
 	if count <= 0 or start_name == "" or not region.platforms.has(start_name):
 		return out
 	var start := region.get_platform_position(start_name)
 	var route := PackedVector3Array()
 	var target_name := ""
 	if kind == "carrier":
-		target_name = drop_target(spec.corp)
+		target_name = drop_target(corp)
 		route = _ensure_nav().plan_attack(start, region.get_platform_position(target_name))
 	else:
-		var all := lanes()
+		var all := lanes(corp)
 		if all.is_empty():
 			return out
 		var lane: Array = all[_next_lane % all.size()]
@@ -250,7 +255,7 @@ func launch(kind: String, count: int) -> Array[Unit]:
 		_count += 1
 		var u := _make(kind)
 		u.name = "%s%d" % [String(spec.name).replace(" ", ""), _count]
-		u.set_meta("corp", spec.corp)
+		u.set_meta("corp", corp)
 		if kind == "carrier":
 			u.set_meta("carrier_target", target_name)
 			u.set_meta("carrier_state", "inbound")
@@ -262,7 +267,7 @@ func launch(kind: String, count: int) -> Array[Unit]:
 			mine.append(p + offsets[i])
 		u.set_route(mine if not mine.is_empty() else PackedVector3Array([end + offsets[i]]), kind != "carrier")
 		out.append(u)
-	airships_launched.emit(spec.corp, kind, count)
+	airships_launched.emit(corp, kind, count)
 	return out
 
 
