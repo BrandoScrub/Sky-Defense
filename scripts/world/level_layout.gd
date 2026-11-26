@@ -292,7 +292,7 @@ class _Builder:
 		for c in clouds:
 			if c.name == cloud_name:
 				cloud_name = "%s Storm" % corp
-		clouds.append({"name": cloud_name, "center": hex_of(center_world), "radius": 1})
+		clouds.append({"name": cloud_name, "center": hex_of(center_world), "radius": 1, "corp": corp})
 		feature(mid.name, ["harvester_anchor", cloud_name])
 		feature(nxt.name, ["harvester_anchor", cloud_name])
 		if hub_anchor:

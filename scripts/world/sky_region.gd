@@ -445,12 +445,36 @@ func _refresh_label(platform_name: String) -> void:
 		label.text += "\nLoad %d / %d" % [used, cap]
 	if state != "Stable":
 		label.text += "  (%s)" % state
+	if platform_owner(platform_name) != "player":
+		var holds := platform_contents(platform_name)
+		if holds != "":
+			label.text += "\n" + holds
 	var status: String = _label_status.get(platform_name, "")
 	if status != "":
 		label.text += "\n" + status
 	label.modulate = {
 		"Swaying": Color(1.0, 0.9, 0.4), "Sagging": Color(1.0, 0.6, 0.3), "Failing": Color(1.0, 0.35, 0.3),
 	}.get(state, Color.WHITE)
+
+
+## What an island holds worth claiming, for its label, e.g. "2 scrap heaps,
+## generator socket". "" for nothing.
+func platform_contents(platform_name: String) -> String:
+	var p: Dictionary = platforms.get(platform_name, {})
+	if p.get("kind", "") in ["hub", "rival"]:
+		return ""
+	var counts := {}
+	for f in p.get("features", []):
+		counts[f[0]] = counts.get(f[0], 0) + 1
+	var parts := PackedStringArray()
+	for type in ["scrap_heap", "generator_socket", "crystal_seam", "harvester_anchor"]:
+		var n: int = counts.get(type, 0)
+		if n == 0:
+			continue
+		var word: String = {"scrap_heap": "scrap heap", "generator_socket": "generator socket",
+				"crystal_seam": "crystal seam", "harvester_anchor": "storm anchor"}[type]
+		parts.append(word if n == 1 else "%d %ss" % [n, word])
+	return ", ".join(parts)
 
 
 # --- Ownership --------------------------------------------------------------
@@ -1153,6 +1177,7 @@ func _add_label(p: Dictionary) -> void:
 	label.position = hex_center(p.center) + Vector3.UP * (6.0 + p.radius)
 	add_child(label)
 	_labels[p.name] = label
+	_refresh_label(p.name)
 
 
 func _draw_cloud(c: Dictionary) -> void:

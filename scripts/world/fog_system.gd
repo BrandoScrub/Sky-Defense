@@ -132,6 +132,7 @@ func update_visibility() -> void:
 		if region.platform_owner(p.name) == "player":
 			var reach: float = region.tile_size * HexGrid.SQRT3 * (p.radius + 0.5) + platform_sight
 			_see(region.get_platform_position(p.name), reach)
+	_show_neighbours()
 	for node in get_tree().get_nodes_in_group(Unit.GROUP):
 		var unit := node as Unit
 		if unit and unit.is_alive():
@@ -148,6 +149,44 @@ func update_visibility() -> void:
 
 
 # --- Visibility -------------------------------------------------------------
+
+## Islands one walkway (or ferry hop) away from land you own are always on
+## the map, so the next expansion is a choice you can read off the screen.
+## They are only uncovered, not watched: rival units on them stay hidden.
+func _show_neighbours() -> void:
+	for name in neighbour_platforms():
+		if _revealed_platforms.has(name):
+			continue
+		var p: Dictionary = region.platforms[name]
+		# A cell's width past the rim, so the puffs around its edge clear too.
+		var reach: float = region.tile_size * HexGrid.SQRT3 * (p.radius + 0.5) + cell_size
+		_uncover(region.get_platform_position(name), reach)
+
+
+## Platforms joined to one you own by a planned walkway or a ferry route.
+func neighbour_platforms() -> Array:
+	var out: Array = []
+	var links: Array = region.layout.get("walkways", []) + region.layout.get("ferry_routes", [])
+	for link in links:
+		for k in 2:
+			var mine: String = link[k]
+			var other: String = link[1 - k]
+			if region.platform_owner(mine) == "player" and region.platform_owner(other) != "player" and not out.has(other):
+				out.append(other)
+	return out
+
+
+## Explores the cells within `radius` of a point without making them visible
+## right now.
+func _uncover(point: Vector3, radius: float) -> void:
+	var c := _cell_of(point)
+	var reach := ceili(radius / cell_size)
+	for x in range(c.x - reach, c.x + reach + 1):
+		for y in range(c.y - reach, c.y + reach + 1):
+			var cell := Vector2i(x, y)
+			var d := _cell_center(cell) - point
+			if Vector2(d.x, d.z).length() <= radius + cell_size * 0.5:
+				_explore(cell)
 
 func _cell_of(point: Vector3) -> Vector2i:
 	return Vector2i(floori(point.x / cell_size), floori(point.z / cell_size))

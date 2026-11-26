@@ -82,7 +82,10 @@ func step(delta: float) -> void:
 			if unit.heal_power > 0.0:
 				_tend(unit, faction, delta)
 				continue
-			var target = nearest_enemy(unit.global_position, faction, unit.get_attack_range(), unit.hits_air, unit.targets_units, unit.air_only)
+			var target = _pick_target(unit, faction)
+			if target is bool:
+				# A hunter (Vesper gunship) with prey in sight keeps flying to it.
+				continue
 			if target != null:
 				if not unit.is_moving() or unit.attack_move:
 					unit.stop()
@@ -164,6 +167,37 @@ func nearest_enemy(from: Vector3, faction: String, max_range: float, hits_air :=
 			if d <= best_d:
 				best_d = d
 				best = hq
+	return best
+
+
+## What a unit shoots this tick. Units with a "hunt_range" meta (Vesper
+## gunships) go after enemy units and drones first: they shoot one in range,
+## and while one is within hunt range they ignore buildings and return true
+## (keep flying). Only with no prey around do they fall back to buildings.
+func _pick_target(unit: Unit, faction: String):
+	var reach := unit.get_attack_range()
+	if unit.has_meta("hunt_range"):
+		var prey = nearest_enemy_unit(unit.global_position, faction, reach, unit.hits_air)
+		if prey != null:
+			return prey
+		if nearest_enemy_unit(unit.global_position, faction, unit.get_meta("hunt_range"), unit.hits_air) != null:
+			return true
+	return nearest_enemy(unit.global_position, faction, reach, unit.hits_air, unit.targets_units, unit.air_only)
+
+
+## The closest living enemy unit or drone (no buildings or headquarters)
+## within `max_range`, or null.
+func nearest_enemy_unit(from: Vector3, faction: String, max_range: float, hits_air := false):
+	var best = null
+	var best_d := max_range
+	var other := "rival" if faction == "player" else "player"
+	for unit in _units(other):
+		if (unit.flying and not hits_air) or not unit.is_alive() or unit.riding:
+			continue
+		var d := _flat_distance(from, unit.global_position)
+		if d <= best_d:
+			best_d = d
+			best = unit
 	return best
 
 

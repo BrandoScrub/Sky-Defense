@@ -144,7 +144,7 @@ func _label(cloud: String, now: String, count: Dictionary) -> void:
 			label.text = "%s\nYours: +%d power" % [cloud, power_per_storm]
 			label.modulate = Color(0.55, 0.85, 1.0)
 		"rival":
-			label.text = "%s\nIronbell's: lightning!" % cloud
+			label.text = "%s\n%s's: lightning!" % [cloud, region.clouds[cloud].get("corp", "Rival")]
 			label.modulate = Color(1.0, 0.45, 0.35)
 		_:
 			label.text = "%s\nHarvesters %d v %d" % [cloud, count.player, count.rival]

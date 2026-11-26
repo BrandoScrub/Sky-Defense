@@ -17,7 +17,7 @@ const TIPS := [
 	"Build from the grid at the bottom left (Tab switches tabs). Rivet Turrets (Defense, Q) guard where the bridge lands. Towers need power: keep the Power number positive with Dynamos (Industry, Q). A tower marked NO POWER barely fires.",
 	"From wave 3 Vesper bombers fly the red air lanes: Flak Batteries (Defense, A) shred them, ground towers can't. Troop carriers come from wave 5, gunships from wave 7. The wind turns every 3 waves.",
 	"Put Cloud Harvesters (Industry, R) on storm anchors. Hold more harvesters on a storm than Ironbell to get its power, or its lightning strikes you. Crystals buy Hum powers (Hum, Q and W).",
-	"Keep platforms under their weight limit or they sag and shed buildings. A Lift Engine (Industry, E) carries 10 more. Each island you hold pays 10 scrap a wave. Right click the Crystal Spire to ferry units there.",
+	"Keep platforms under their weight limit or they sag and shed buildings. A Lift Engine (Industry, E) carries 10 more. Each island you hold pays %d scrap a wave. Right click the Crystal Spire to ferry units there.",
 	"Dark storm clouds hide the sky you haven't scouted. Glowing islands hint at what's inside. Click anything to see what it is and what it does.",
 ]
 ## Width of the tips card, in pixels.
@@ -79,7 +79,12 @@ func _ready() -> void:
 	backdrop.name = "SkyBackdrop"
 	backdrop.area = region.get_bounds().grow(140.0)
 	add_child(backdrop)
-	camera.position = region.get_platform_position("Hub")
+	# Start looking a little past the Hub toward the Foundry, the first
+	# island worth claiming, so it isn't hidden under the command grid.
+	var hub_at := region.get_platform_position("Hub")
+	camera.position = hub_at
+	if region.platforms.has("Foundry"):
+		camera.position = hub_at.lerp(region.get_platform_position("Foundry"), 0.55)
 	# Balloon platforms join the map before the other systems look at it.
 	drift = DriftSystem.new()
 	drift.name = "DriftSystem"
@@ -507,7 +512,11 @@ func _build_tips(layer: CanvasLayer) -> void:
 func show_tip(i: int, relative := false) -> void:
 	_tip = posmod(_tip + i if relative else i, TIPS.size())
 	_help_page.text = "How to play  %d / %d" % [_tip + 1, TIPS.size()]
-	_help_text.text = TIPS[_tip]
+	var text: String = TIPS[_tip]
+	# Tips quote live numbers so they can't go stale.
+	if text.contains("%d"):
+		text = text % (economy.scrap_per_island_per_round if economy else 15)
+	_help_text.text = text
 	# Shrink to fit the new text.
 	_help.size = Vector2.ZERO
 
@@ -707,9 +716,8 @@ func _build_legend() -> Control:
 	_legend_entries = box
 	_legend_toggle = toggle
 	toggle.pressed.connect(func(): set_legend_open(not box.visible))
-	# On short screens the legend starts folded so it can't run into the
-	# info card at the bottom right.
-	set_legend_open(get_viewport().get_visible_rect().size.y >= 1000)
+	# The legend starts folded so it never covers map labels; L opens it.
+	set_legend_open(false)
 	return panel
 
 
