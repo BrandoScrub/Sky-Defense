@@ -317,11 +317,12 @@ func _update_button(entry: String) -> void:
 		var spec: Dictionary = CompanyPowers.POWERS[id]
 		var running := powers != null and powers.is_running(id)
 		var wait := powers.cooldown_left(id) if powers else 0.0
-		button.text = "\n%s\n%d crystals" % [spec.name, spec.crystals]
+		var label: String = spec.get("short", spec.name)
+		button.text = "\n%s\n%d crystals" % [label, spec.crystals]
 		if running:
-			button.text = "\n%s\nrunning" % spec.name
+			button.text = "\n%s\nrunning" % label
 		elif wait > 0.0:
-			button.text = "\n%s\nready in %ds" % [spec.name, ceili(wait)]
+			button.text = "\n%s\nready in %ds" % [label, ceili(wait)]
 		button.tooltip_text = "%s  [%s]\nCompany power: %d crystals, lasts %ds, then %ds to recharge.\n%s\nCloud Harvesters pay crystals at the end of each wave." % [spec.name, _hotkey(entry), spec.crystals, int(spec.seconds), int(spec.cooldown), spec.blurb]
 		button.set_pressed_no_signal(running)
 		var can_use: bool = (resources == null or resources.crystals >= spec.crystals) and wait <= 0.0
@@ -330,9 +331,11 @@ func _update_button(entry: String) -> void:
 	if entry.begins_with("ship:"):
 		var kind := entry.trim_prefix("ship:")
 		var spec: Dictionary = AirPatrols.SHIPS[kind]
-		title = patrols.ship_name(kind) if patrols else spec.name
+		# Short names so the button text fits; the tooltip has the full name.
+		var full_name: String = patrols.ship_name(kind) if patrols else spec.name
+		title = {"interceptor": "Interceptor", "gunboat": "Gunboat"}.get(kind, full_name)
 		cost = spec.cost
-		details = "%s airship, built at an Airship Hangar (%ds). Patrols your Mooring Masts and only hunts within reach of a hangar or mast.\nHealth %d" % [spec.role, int(spec.build_seconds), int(spec.hp)]
+		details = full_name + ": %s airship, built at an Airship Hangar (%ds). Patrols your Mooring Masts and only hunts within reach of a hangar or mast.\nHealth %d" % [spec.role, int(spec.build_seconds), int(spec.hp)]
 		if kind == "utility":
 			details += "\nJob (V to change): repair mends buildings it flies over, scout sees far through the fog, troops drops Riveteers where enemies land."
 		if patrols and patrols.ship_count(kind) > 0:
@@ -371,9 +374,9 @@ func _update_button(entry: String) -> void:
 				active = steering != null and steering.active
 			_:
 				var data := BuildingCatalog.get_data(entry)
-				title = data.name
+				title = data.get("short", data.name)
 				cost = data.cost
-				details = _building_details(data)
+				details = (data.name + "\n" if data.has("short") else "") + _building_details(data)
 				active = building != null and building.placing == entry
 	var per_tile := " / tile" if entry == "walkway" else ""
 	button.text = "\n%s\n%d scrap%s" % [title, cost, per_tile]

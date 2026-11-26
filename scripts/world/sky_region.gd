@@ -112,7 +112,7 @@ var buildings := {}
 
 ## platform name -> overload state written by LoadSystem ("Stable" etc.)
 var load_states := {}
-## True while the player is building: every platform label shows its load.
+## True while the player is building: your platform labels show their load.
 var show_loads := false
 var _labels := {}
 ## platform name -> extra status line for its label (claim progress etc.)
@@ -441,7 +441,7 @@ func _refresh_label(platform_name: String) -> void:
 	var cap := platform_capacity(platform_name)
 	var state: String = load_states.get(platform_name, "Stable")
 	label.text = platform_name
-	if show_loads or state != "Stable":
+	if (show_loads and platform_owner(platform_name) == "player") or state != "Stable":
 		label.text += "\nLoad %d / %d" % [used, cap]
 	if state != "Stable":
 		label.text += "  (%s)" % state

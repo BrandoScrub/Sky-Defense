@@ -6,6 +6,7 @@ extends RefCounted
 ## Fraction of the cost returned when a building is demolished.
 const REFUND_RATIO := 0.75
 
+## short: optional shorter name for the build menu button.
 ## power: positive supplies electricity, negative draws it.
 ## tiles: tile types the building may stand on.
 ## role: "ground", "flak" or "hangar" for defenses (see ROLES); none for
@@ -19,7 +20,7 @@ const ROLES := {
 
 const BUILDINGS := {
 	"dynamo": {
-		"name": "Dynamo Generator", "cost": 40, "power": 10, "weight": 3,
+		"name": "Dynamo Generator", "short": "Dynamo", "cost": 40, "power": 10, "weight": 3,
 		"tiles": ["deck", "generator_socket"], "shape": "generator",
 		"color": Color(0.95, 0.78, 0.25),
 		# Generators on a generator socket produce more.
@@ -27,7 +28,7 @@ const BUILDINGS := {
 		"hp": 120.0,
 	},
 	"harvester": {
-		"name": "Cloud Harvester", "cost": 80, "power": 30, "weight": 2,
+		"name": "Cloud Harvester", "short": "Harvester", "cost": 80, "power": 30, "weight": 2,
 		"tiles": ["harvester_anchor"], "shape": "harvester",
 		"color": Color(0.35, 0.6, 1.0),
 		"hp": 80.0,
@@ -96,7 +97,7 @@ const BUILDINGS := {
 	},
 	# --- Industry: engines that let you move a turbine island (IslandSteering).
 	"turbine_engine": {
-		"name": "Turbine Engine", "cost": 60, "power": -3, "weight": 3,
+		"name": "Turbine Engine", "short": "Turbine", "cost": 60, "power": -3, "weight": 3,
 		"tiles": ["deck"], "shape": "engine",
 		"color": Color(0.72, 0.52, 0.26),
 		"hp": 140.0,
@@ -108,7 +109,7 @@ const BUILDINGS := {
 	# lost drones are rebuilt) and builds your patrol airships (AirPatrols),
 	# which fly a loop of Mooring Masts.
 	"airship_hangar": {
-		"name": "Airship Hangar", "cost": 100, "power": -6, "weight": 5,
+		"name": "Airship Hangar", "short": "Hangar", "cost": 100, "power": -6, "weight": 5,
 		"tiles": ["deck"], "shape": "airship_hangar", "role": "hangar",
 		"color": Color(0.5, 0.42, 0.33),
 		"hp": 220.0,
