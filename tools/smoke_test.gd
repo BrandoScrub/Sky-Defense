@@ -543,8 +543,10 @@ func _check_build_menu(main: Node) -> void:
 		var filled: int = BuildMenu.TABS[tab_name].filter(func(e): return e != "").size()
 		_expect(menu._entry_buttons.size() == filled, "%s tab should show its buttons" % tab_name)
 	# Every building in the catalog is somewhere in the menu.
+	# (Turbine Engines are parked off the menu until moving islands return.)
 	for type_id in BuildingCatalog.BUILDINGS:
-		_expect(BuildMenu.tab_of(type_id) != "", "%s is missing from the build menu" % type_id)
+		if type_id != "turbine_engine":
+			_expect(BuildMenu.tab_of(type_id) != "", "%s is missing from the build menu" % type_id)
 	# Clicking a button starts placing, and a hotkey jumps to the right tab.
 	menu.show_tab("Defense")
 	menu._entry_buttons["flak_battery"].emit_signal("pressed")
@@ -913,6 +915,28 @@ func _check_weight_power_income(main: Node) -> void:
 	scrap_before = res.scrap
 	economy.pay_round(2)
 	_expect(res.scrap == scrap_before + economy.islands_held() * economy.scrap_per_island_per_round, "unowned scrap heaps give nothing")
+	# Crystal seams pay crystals while you hold their island.
+	var spire_owner := region.platform_owner("Crystal Spire")
+	region.set_platform_owner("Crystal Spire", "player")
+	var seams := 0
+	for hex in region.tiles_of_platform("Crystal Spire"):
+		if region.get_tile(hex).type == "crystal_seam":
+			seams += 1
+	_expect(seams > 0, "the Crystal Spire has crystal seams")
+	crystals_before = res.crystals
+	economy.pay_round(3)
+	_expect(res.crystals == crystals_before + economy.crystals_per_harvester_per_round + seams * economy.crystals_per_seam_per_round,
+		"held crystal seams should pay %d crystals each" % economy.crystals_per_seam_per_round)
+	region.set_platform_owner("Crystal Spire", spire_owner)
+	# One Lift Engine per island.
+	var deck := []
+	for hex in region.tiles_of_platform("Hub"):
+		if region.get_tile(hex).type == "deck" and not region.buildings.has(hex):
+			deck.append(hex)
+	res.add_scrap(500)
+	_expect(build.try_place("lift_engine", deck[0]) == "", "place a Lift Engine")
+	_expect(build.try_place("lift_engine", deck[1]) == "One Lift Engine per island", "a second Lift Engine on the same island is refused")
+	build.demolish(deck[0])
 
 
 func _check_ferry(main: Node) -> void:
@@ -1230,16 +1254,15 @@ func _check_defense_roles(main: Node) -> void:
 	build.demolish(hub + Vector2i(2, -2))
 	walker.free()
 
-	# Ground support: a Rally Horn and a Mending Post buff a Riveteer.
+	# Ground support: a Rally Horn and a Rivet Turret buff a Riveteer.
 	var riveteer: Unit = units[1]
 	riveteer.position = region.hex_center(hub + Vector2i(0, 2))
 	_expect(build.try_place("rally_horn", hub + Vector2i(-1, 2)) == "", "place a Rally Horn")
-	_expect(build.try_place("mending_post", hub + Vector2i(1, 1)) == "", "place a Mending Post")
-	riveteer.hp = riveteer.max_hp * 0.5
+	_expect(build.try_place("rivet_turret", hub + Vector2i(1, 1)) == "", "place a Rivet Turret")
 	defenses.step(1.0)
 	_expect(riveteer.damage_mult > 1.0 and riveteer.cooldown_mult < 1.0, "a Rally Horn should boost nearby units")
-	_expect(riveteer.armor > 0.0, "a Mending Post should give nearby units armor")
-	_expect(riveteer.hp > riveteer.max_hp * 0.5, "a Mending Post should heal nearby units")
+	_expect(riveteer.armor > 0.0, "a Rivet Turret should give nearby units armor")
+	_expect(not BuildingCatalog.BUILDINGS.has("mending_post"), "the Mending Post is cut (Medics heal)")
 	var far: Unit = units[2]
 	_expect(far.damage_mult == 1.0 and far.armor == 0.0, "units far away get no bonus")
 	var before := riveteer.hp
@@ -1327,7 +1350,7 @@ func _check_combat_and_waves(main: Node) -> void:
 		if not is_instance_valid(walker) or walker.hp <= 0.0:
 			break
 	_expect(not is_instance_valid(walker) or walker.hp <= 0.0, "the turret should destroy the walker")
-	_expect(res.scrap == scrap_before + 15, "a walker kill should pay 15 scrap, got %d" % (res.scrap - scrap_before))
+	_expect(res.scrap == scrap_before + 8, "a walker kill should pay half its 15 bounty (8 scrap), got %d" % (res.scrap - scrap_before))
 	await process_frame
 
 	# Brownout halves a tower's damage over time.

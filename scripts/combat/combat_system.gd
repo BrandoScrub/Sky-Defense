@@ -24,6 +24,10 @@ signal unit_killed(unit: Unit)
 ## Fire-rate multiplier for the player's towers (Overcharge sets it).
 var player_tower_rate := 1.0
 
+## Share of a rival's bounty paid for killing it. Half, so most scrap comes
+## from the islands you hold rather than from kills.
+const BOUNTY_SHARE := 0.5
+
 ## Chance to miss for towers on a platform in each overload state.
 const MISS_CHANCE := {"Stable": 0.0, "Swaying": 0.15, "Sagging": 0.3, "Failing": 0.45}
 ## How far an Arc Coil's lightning can jump between targets.
@@ -251,7 +255,7 @@ func deal_hit(attacker: Node3D, target: Node3D, amount: float, color: Color, pro
 		u.take_damage(amount)
 		if was_alive and u.hp <= 0.0:
 			if u.faction == "rival" and resources:
-				resources.add_scrap(u.bounty)
+				resources.add_scrap(int(round(u.bounty * BOUNTY_SHARE)))
 			unit_killed.emit(u)
 	else:
 		target.take_damage(amount)

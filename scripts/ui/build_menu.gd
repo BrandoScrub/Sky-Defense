@@ -33,15 +33,14 @@ const TABS := {
 		"ship:interceptor", "ship:gunboat", "ship:utility", "utility_job",
 	],
 	"Defense": [
-		"rivet_turret", "arc_coil", "rally_horn", "mending_post",
+		"rivet_turret", "arc_coil", "rally_horn", "",
 		"flak_battery", "skyhook_cannon", "", "",
 		"airship_hangar", "mooring_mast", "patrol_route",
 	],
-	# Row 1 power, expansion and capacity, row 2 turbine islands (4 Turbine
-	# Engines let you steer one).
+	# Power, expansion and capacity. Turbine Engines and Steer Island are
+	# parked (still in the code) until moving islands are designed in.
 	"Industry": [
 		"dynamo", "walkway", "lift_engine", "harvester",
-		"turbine_engine", "steer",
 	],
 	# Everything bought with crystals (Humglass).
 	"Hum": ["power:overcharge", "power:emergency_lift"],
