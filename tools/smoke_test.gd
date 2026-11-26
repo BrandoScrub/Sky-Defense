@@ -114,6 +114,16 @@ func _check_open_map() -> void:
 	main.raids._process(0.05)
 	for u in party:
 		_expect(u.is_moving(), "a raider should walk to the end of Ironbell's bridge")
+	# Once there, they camp: they don't hold the wave open.
+	var front: String = main.bridges.frontier("Ironbell")
+	for u in party:
+		u.position = region.snap_to_walkable(region.get_platform_position(front))
+		u.set_route(PackedVector3Array(), true)
+	_expect(main.bridges.is_waiting_at_frontier("Ironbell", party[0]), "a raider at the end of the bridge is camped")
+	_expect(main.waves._alive(party) == 0, "camped raiders don't count toward ending the wave")
+	_expect(main.waves.camped() == 2, "both raiders are camped, got %d" % main.waves.camped())
+	for u in party:
+		u.free()
 
 	var reached := []
 	main.bridges.reached_player.connect(func(_c, p): reached.append(p))
@@ -124,6 +134,31 @@ func _check_open_map() -> void:
 	_expect(main.bridges.is_done("Ironbell"), "Ironbell's bridge should finish")
 	_expect(region.platforms_linked("Ironbell HQ", "Hub"), "the finished bridge should reach the Hub")
 	_expect(reached.has("Hub"), "the bridge reaching the Hub should be announced")
+
+	# Cutting the bridge: the Commander parks beside where it lands on the Hub.
+	var landing := Vector2i(999999, 0)
+	for hex in region.tiles_of_platform("Hub"):
+		for d in HexGrid.DIRECTIONS:
+			if main.bridges._is_rival_walkway(hex + d) and region.is_hex_walkable(hex):
+				landing = hex
+	_expect(landing.x != 999999, "Ironbell's bridge should land beside a Hub tile")
+	var hero: Unit = main.selection.find_hero()
+	for u in main.selection.all_units():
+		if u != hero:
+			u.position = region.get_platform_position("Hub")
+	hero.position = region.hex_center(landing)
+	hero.set_route(PackedVector3Array(), true)
+	var cut := []
+	main.bridges.span_cut.connect(func(_c, n): cut.append(n))
+	main.bridges.step_cutting(main.bridges.cut_seconds * 0.5)
+	_expect(cut.is_empty() and main.bridges.cut_progress() > 0.0, "cutting takes a while")
+	main.bridges.step_cutting(main.bridges.cut_seconds * 0.5 + 0.1)
+	_expect(cut.size() == 1 and cut[0] > 0, "after cut_seconds the span falls")
+	_expect(not region.platforms_linked("Ironbell HQ", "Hub"), "the cut bridge no longer reaches the Hub")
+	_expect(not main.bridges.is_done("Ironbell"), "Ironbell's crew has a span to rebuild")
+	_expect(main.bridges.build_next_span("Ironbell"), "the crew starts rebuilding the cut span")
+	region.crew.finish_all()
+	_expect(main.bridges.is_done("Ironbell") and region.platforms_linked("Ironbell HQ", "Hub"), "rebuilt, the bridge reaches the Hub again")
 	main.queue_free()
 	await process_frame
 	await process_frame

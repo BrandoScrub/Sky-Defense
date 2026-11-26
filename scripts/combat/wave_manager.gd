@@ -147,6 +147,14 @@ func start_wave() -> void:
 	phase = WAVE
 	_wave_units = []
 	_wave_units_by_corp = {}
+	# Raiders still camped at the end of Ironbell's bridge from earlier waves
+	# join this one, and Ironbell only tops the camp up to this wave's size
+	# (so a late bridge doesn't bring every wave at once).
+	var leftovers := []
+	if raids:
+		for node in get_tree().get_nodes_in_group(Unit.ENEMY_GROUP):
+			if not node.flying and node.hp > 0.0:
+				leftovers.append(node)
 	var ground := 0
 	for entry in composition_for(wave):
 		var sent: Array[Unit] = []
@@ -157,10 +165,13 @@ func start_wave() -> void:
 		else:
 			sent = fleet.launch(entry.unit, entry.count)
 		_track(entry.corp, sent)
+	ground -= leftovers.size()
 	if ground > 0:
 		_track(raids.corp, raids.send_party(ground))
 	for u in _wave_units:
 		_toughen(u)
+	# Already toughened in the wave they came with.
+	_track(raids.corp if raids else "", leftovers)
 	phase_changed.emit(phase, wave)
 
 
@@ -193,10 +204,26 @@ func remaining_for(corp: String) -> int:
 	return _alive(_wave_units_by_corp.get(corp, []))
 
 
+## Raiders waiting at the end of an unfinished Ironbell bridge don't hold
+## the wave open: they camp there and join the next wave.
 func _alive(units: Array) -> int:
 	var n := 0
+	var bridges: RivalBridges = raids.bridges if raids else null
 	for u in units:
 		if is_instance_valid(u) and u.hp > 0.0:
+			if bridges and not u.flying and bridges.is_waiting_at_frontier(raids.corp, u):
+				continue
+			n += 1
+	return n
+
+
+## Raiders camped at the end of an unfinished bridge, waiting for it.
+func camped() -> int:
+	var n := 0
+	if raids == null or raids.bridges == null:
+		return 0
+	for node in get_tree().get_nodes_in_group(Unit.ENEMY_GROUP):
+		if not node.flying and node.hp > 0.0 and raids.bridges.is_waiting_at_frontier(raids.corp, node):
 			n += 1
 	return n
 
