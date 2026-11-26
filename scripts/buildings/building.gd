@@ -185,6 +185,15 @@ func _build_shape() -> void:
 				blade.size = Vector3(0.18, 1.6, 0.06)
 				var part := _add(blade, Vector3(0, 1.1, 0.85), Color(0.2, 0.19, 0.18))
 				part.rotation.z = k * TAU / 3.0
+		"lift":
+			# A squat housing with a flat rotor on top, pushing the deck up.
+			_add(_cylinder(0.6, 0.8, 0.9, 10), Vector3(0, 0.45, 0), color.darkened(0.3))
+			_add(_cylinder(0.12, 0.12, 0.6, 6), Vector3(0, 1.2, 0), Color(0.25, 0.23, 0.22))
+			for k in 4:
+				var blade := BoxMesh.new()
+				blade.size = Vector3(1.8, 0.05, 0.22)
+				var part := _add(blade, Vector3(0, 1.5, 0), color)
+				part.rotation.y = k * PI / 4.0
 		"airship_hangar":
 			# A long barrel-roofed shed with a mooring mast.
 			var hull := BoxMesh.new()

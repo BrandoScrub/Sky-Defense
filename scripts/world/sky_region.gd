@@ -334,9 +334,12 @@ func remove_building(hex: Vector2i) -> Building:
 
 ## Total weight of everything built on a platform.
 ## Total weight on a platform: its buildings, plus units standing on it
-## unless `include_units` is false.
+## unless `include_units` is false. Units count for half their weight
+## (rounded down), so a squad can stand on a small island without
+## overloading it.
 func platform_load(platform_name: String, include_units := true) -> int:
 	var total := 0
+	var unit_weight := 0
 	for hex in buildings:
 		var b: Building = buildings[hex]
 		if b.platform == platform_name:
@@ -345,8 +348,8 @@ func platform_load(platform_name: String, include_units := true) -> int:
 		for group in [Unit.GROUP, Unit.ENEMY_GROUP]:
 			for node in get_tree().get_nodes_in_group(group):
 				if not node.flying and platform_at((node as Node3D).global_position) == platform_name:
-					total += (node as Unit).weight
-	return total
+					unit_weight += (node as Unit).weight
+	return total + unit_weight / 2
 
 
 ## Buildings on a platform, oldest first.
@@ -358,8 +361,13 @@ func buildings_on(platform_name: String) -> Array[Building]:
 	return out
 
 
+## Weight a platform can carry: its own, plus what its Lift Engines add.
 func platform_capacity(platform_name: String) -> int:
-	return platforms[platform_name].capacity
+	var cap: int = platforms[platform_name].capacity
+	for b in buildings.values():
+		if b.platform == platform_name and b.hp > 0.0:
+			cap += b.get_data().get("capacity", 0)
+	return cap
 
 
 ## Extra power from storm clouds the player controls (set by StormSystem).

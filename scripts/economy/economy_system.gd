@@ -5,6 +5,8 @@
 ## spot by CombatSystem):
 ## - Each scrap heap on a platform you own pays scrap.
 ## - Each Cloud Harvester you own pays energized crystals.
+## - Every platform you hold besides the Hub pays a little scrap, so
+##   claiming islands is worth it even without a scrap heap.
 ## Power isn't banked: it's a live budget. When demand outstrips supply, the
 ## grid browns out and every power-hungry building runs at supply / demand
 ## efficiency.
@@ -17,6 +19,7 @@ signal paid_out(income: Dictionary)
 
 @export var scrap_per_heap_per_round := 50
 @export var crystals_per_harvester_per_round := 6
+@export var scrap_per_island_per_round := 10
 
 @export var region: SkyRegion
 @export var resources: PlayerResources
@@ -53,12 +56,25 @@ func round_income() -> Dictionary:
 	for b in region.buildings.values():
 		if b.type_id == "harvester" and b.faction == "player" and region.platform_owner(b.platform) == "player":
 			harvesters += 1
-	var income := {"scrap": heaps * scrap_per_heap_per_round, "crystals": harvesters * crystals_per_harvester_per_round, "sources": []}
+	var islands := islands_held()
+	var income := {"scrap": heaps * scrap_per_heap_per_round + islands * scrap_per_island_per_round,
+		"crystals": harvesters * crystals_per_harvester_per_round, "sources": []}
+	if islands > 0:
+		income.sources.append(["%d island%s held" % [islands, "" if islands == 1 else "s"], "+%d scrap" % (islands * scrap_per_island_per_round)])
 	if heaps > 0:
-		income.sources.append(["%d scrap heap%s" % [heaps, "" if heaps == 1 else "s"], "+%d scrap" % income.scrap])
+		income.sources.append(["%d scrap heap%s" % [heaps, "" if heaps == 1 else "s"], "+%d scrap" % (heaps * scrap_per_heap_per_round)])
 	if harvesters > 0:
 		income.sources.append(["%d Cloud Harvester%s" % [harvesters, "" if harvesters == 1 else "s"], "+%d crystals" % income.crystals])
 	return income
+
+
+## Platforms you own besides the Hub.
+func islands_held() -> int:
+	var n := 0
+	for platform_name in region.platforms:
+		if platform_name != "Hub" and region.platform_owner(platform_name) == "player":
+			n += 1
+	return n
 
 
 ## Pays this round's income. Returns what was paid (also in last_income).

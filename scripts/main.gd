@@ -31,6 +31,9 @@ Ironbell bridges its way to you and walks; Vesper flies bombers.
    than Ironbell to get its power; if Ironbell holds it, lightning strikes.
 6. Right click the Crystal Spire to send units there by airship ferry.
 7. Keep platforms under their weight limit or they sag and shed buildings.
+   A Lift Engine (Economy, E) lets a platform carry 10 more. Every island
+   you hold pays 10 scrap a wave; scrap heaps pay 50.
+   Crystals from harvesters buy company powers (Storm, A and S).
 8. Dark storm clouds hide the sky you haven't scouted. Glowing islands hint
    at what's inside: crystal, generators, or a rival's HQ.
 
@@ -59,6 +62,7 @@ var fog: FogSystem
 var wind: WindSystem
 var steering: IslandSteering
 var patrols: AirPatrols
+var powers: CompanyPowers
 var _phase_label: Label
 var _banner: Label
 var resources: PlayerResources
@@ -166,6 +170,14 @@ func _ready() -> void:
 	patrols.camera = camera
 	add_child(patrols)
 
+	# Company powers, bought with crystals (Storm tab).
+	powers = CompanyPowers.new()
+	powers.name = "CompanyPowers"
+	powers.resources = resources
+	powers.combat = combat
+	powers.loads = loads
+	add_child(powers)
+
 	defenses = DefenseSystem.new()
 	defenses.name = "DefenseSystem"
 	defenses.region = region
@@ -242,6 +254,8 @@ func _ready() -> void:
 	walkways.notice.connect(show_notice)
 	steering.notice.connect(show_notice)
 	patrols.notice.connect(show_notice)
+	powers.notice.connect(show_notice)
+	powers.changed.connect(build_menu.refresh)
 	patrols.mode_changed.connect(func(on): build_menu.set_hint("Patrol Route: click an Airship Hangar, then Relay Stations and Refuel Points in order. Right click: finish. Esc: cancel." if on else ""))
 	patrols.ship_launched.connect(func(s): show_notice("Your %s took off from the hangar" % s.display_name))
 	region.buildings_changed.connect(patrols.mark_routes_dirty)
@@ -475,6 +489,7 @@ func _build_hud() -> void:
 	build_menu.patrols = patrols
 	build_menu.recruiter = recruiter
 	build_menu.resources = resources
+	build_menu.powers = powers
 	layer.add_child(build_menu)
 
 	info_panel = InfoPanel.new()

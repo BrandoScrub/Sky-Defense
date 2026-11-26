@@ -21,7 +21,8 @@ const SLOT_KEYS := ["Q", "W", "E", "R", "A", "S", "D", "F", "Z", "X", "C", "V", 
 
 ## Tab name -> what is in each slot, in slot order ("" leaves a slot empty).
 ## An entry is a building type id from BuildingCatalog, the special action
-## "walkway", or "unit:<id>" to train a unit from UnitCatalog.
+## "walkway", "unit:<id>" to train a unit from UnitCatalog, or "power:<id>"
+## to use a company power from CompanyPowers (paid in crystals).
 const TABS := {
 	"Army": ["unit:riveteer", "unit:shieldbearer", "unit:rifleman", "unit:sapper", "unit:lancer", "unit:medic"],
 	"Defense": [
@@ -29,8 +30,12 @@ const TABS := {
 		"flak_battery", "skyhook_cannon", "", "",
 		"drone_hangar",
 	],
-	"Economy": ["dynamo", "walkway"],
-	"Storm": ["harvester"],
+	"Economy": ["dynamo", "walkway", "lift_engine"],
+	# Row 1 storm buildings, row 2 company powers bought with crystals.
+	"Storm": [
+		"harvester", "", "", "",
+		"power:overcharge", "power:emergency_lift",
+	],
 	# Turbine Engines, and the order to steer a turbine island with 4 of them.
 	# Row 1 islands, row 2 the patrol network, row 3 the ships (V picks the
 	# utility ship's job).
@@ -49,6 +54,7 @@ var steering: IslandSteering
 var patrols: AirPatrols
 var recruiter: Recruiter
 var resources: PlayerResources
+var powers: CompanyPowers
 
 ## Name of the tab being shown.
 var current_tab := ""
@@ -210,6 +216,12 @@ func activate(entry: String) -> void:
 		recruiter.notice.emit(problem if problem != "" else "%s queued (%d in training)" % [unit_name, recruiter.queued])
 		refresh()
 		return
+	if entry.begins_with("power:"):
+		var problem := powers.use(entry.trim_prefix("power:")) if powers else "No company powers"
+		if problem != "" and powers:
+			powers.notice.emit(problem)
+		refresh()
+		return
 	if entry.begins_with("ship:"):
 		var problem := patrols.queue_ship(entry.trim_prefix("ship:")) if patrols else "No hangar"
 		var kind := entry.trim_prefix("ship:")
@@ -299,6 +311,21 @@ func _update_button(entry: String) -> void:
 	var cost := 0
 	var details := ""
 	var active := false
+	if entry.begins_with("power:"):
+		var id := entry.trim_prefix("power:")
+		var spec: Dictionary = CompanyPowers.POWERS[id]
+		var running := powers != null and powers.is_running(id)
+		var wait := powers.cooldown_left(id) if powers else 0.0
+		button.text = "\n%s\n%d crystals" % [spec.name, spec.crystals]
+		if running:
+			button.text = "\n%s\nrunning" % spec.name
+		elif wait > 0.0:
+			button.text = "\n%s\nready in %ds" % [spec.name, ceili(wait)]
+		button.tooltip_text = "%s  [%s]\nCompany power: %d crystals, lasts %ds, then %ds to recharge.\n%s\nCloud Harvesters pay crystals at the end of each wave." % [spec.name, _hotkey(entry), spec.crystals, int(spec.seconds), int(spec.cooldown), spec.blurb]
+		button.set_pressed_no_signal(running)
+		var can_use: bool = (resources == null or resources.crystals >= spec.crystals) and wait <= 0.0
+		button.modulate = Color(0.6, 0.85, 1.0) if running else (Color.WHITE if can_use else Color(1.0, 0.6, 0.6, 0.8))
+		return
 	if entry.begins_with("ship:"):
 		var kind := entry.trim_prefix("ship:")
 		var spec: Dictionary = AirPatrols.SHIPS[kind]
