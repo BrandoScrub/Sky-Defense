@@ -481,6 +481,10 @@ static func defense_lines(data: Dictionary) -> PackedStringArray:
 			lines.append("Anti-air damage %d, range %d" % [int(attack.air), int(attack.range)])
 		else:
 			lines.append("Damage %d, range %d" % [int(attack.damage), int(attack.range)])
+		if attack.has("chain"):
+			lines.append("Chains to %d enemies" % int(attack.chain))
+		if attack.has("hook"):
+			lines.append("Hooked ships slowed %d%% for %ds" % [roundi((1.0 - attack.hook.slow) * 100), int(attack.hook.seconds)])
 	if data.has("aura"):
 		var aura: Dictionary = data.aura
 		var parts := PackedStringArray()

@@ -56,6 +56,15 @@ const KNOCKBACK := 0.8
 const STAGGER_SECONDS := 0.45
 ## Shell speed for towers and headquarters guns, units per second.
 const TOWER_SHELL_SPEED := 60.0
+## How each tower's fire looks, by its attack "shot": shell colour and size,
+## shell speed, and the muzzle's height above the deck (models differ).
+const TOWER_SHOTS := {
+	"rivet": {"color": Color(1.0, 0.8, 0.4), "size": 0.16, "speed": 70.0, "muzzle": 1.1},
+	"bolt": {"color": Color(0.6, 0.7, 1.0), "size": 0.0, "speed": 0.0, "muzzle": 3.9},
+	"flak": {"color": Color(1.0, 0.6, 0.3), "size": 0.2, "speed": 60.0, "muzzle": 2.3},
+	"harpoon": {"color": Color(0.8, 0.72, 0.55), "size": 0.3, "speed": 34.0, "muzzle": 3.0},
+	"shell": {"color": Color(1.0, 0.85, 0.4), "size": 0.24, "speed": 60.0, "muzzle": 1.2},
+}
 ## Flak bursts: aircraft near the one hit take this share of the damage.
 const BURST_SHARE := 0.5
 ## Bombs: seconds to fall, blast radius.
@@ -78,6 +87,8 @@ var _chase_timer := 0.0
 var _shots: Array = []
 ## Bombs and wrecks falling: {at, left, amount, radius, hit, sides, big}.
 var _blasts: Array = []
+## Skyhook cables still drawn: {"mesh", "from", "target", "left"}.
+var _cables: Array = []
 
 
 func _ready() -> void:
@@ -113,6 +124,7 @@ func step(delta: float) -> void:
 		_chase_timer = 0.5
 	_fly_shells(delta)
 	_land_blasts(delta)
+	_reel_cables(delta)
 
 	for faction in ["player", "rival"]:
 		for unit in _units(faction):
@@ -163,11 +175,14 @@ func step(delta: float) -> void:
 			continue
 		var amount: float = attack.air if target is Unit and target.flying else attack.damage
 		b.cooldown_left = attack.cooldown
+		b.aim_at(target.global_position)
+		var look: Dictionary = TOWER_SHOTS.get(attack.get("shot", "shell"), TOWER_SHOTS.shell)
 		if attack.has("chain"):
-			deal_hit(b, target, amount, Color(0.6, 0.7, 1.0), false)
+			CombatFx.bolt(region, _muzzle(b), _aim_point(target), look.color)
+			deal_hit(b, target, amount, look.color, false, "none")
 			_chain(target, b.faction, amount * 0.7, int(attack.chain) - 1)
 		else:
-			fire(b, target, amount, Color(1.0, 0.85, 0.4), true)
+			fire(b, target, amount, look.color, true)
 
 	for hq in get_tree().get_nodes_in_group(Headquarters.GROUP):
 		if not hq.is_alive():
@@ -274,10 +289,12 @@ func _intruder_on_platform(unit: Unit):
 ## Deals damage from an attacker to a target right now. With `projectile`
 ## true (the default for ranged units), a shield in the way catches the shot.
 ## Use fire() for shots that should fly to their target first.
-func deal_hit(attacker: Node3D, target: Node3D, amount: float, color: Color, projectile = null) -> void:
+func deal_hit(attacker: Node3D, target: Node3D, amount: float, color: Color, projectile = null, style := "") -> void:
 	var hit := _snapshot(attacker, projectile)
 	if not hit.projectile and attacker is Unit and hit.unit:
 		hit.style = "spark"
+	if style != "":
+		hit.style = style
 	_resolve(hit, target, amount, color)
 
 
@@ -292,11 +309,27 @@ func fire(attacker: Node3D, target: Node3D, amount: float, color: Color, project
 		return
 	var from := attacker.global_position + Vector3.UP * 1.2
 	var speed: float = attacker.shell_speed if attacker is Unit else TOWER_SHELL_SPEED
+	var size := 0.4 if hit.heavy else 0.24
+	var look: Dictionary = {}
+	if attacker is Building:
+		look = TOWER_SHOTS.get(attacker.get_attack().get("shot", "shell"), TOWER_SHOTS.shell)
+		from = _muzzle(attacker)
+		speed = look.speed
+		size = look.size
 	var time := from.distance_to(_aim_point(target)) / maxf(speed, 1.0)
 	hit.style = "spark"
-	CombatFx.flash(region, from, color, 0.18, 0.08)
-	_shots.append({"hit": hit, "target": target, "amount": amount, "color": color, "left": time, "total": time,
-		"from": from, "last_aim": _aim_point(target), "air": target is Unit and (target as Unit).flying, "fx": CombatFx.shell(region, from, color, 0.4 if hit.heavy else 0.24)})
+	CombatFx.flash(region, from, color, 0.18 if size < 0.25 else 0.32, 0.08)
+	var shot := {"hit": hit, "target": target, "amount": amount, "color": color, "left": time, "total": time,
+		"from": from, "last_aim": _aim_point(target), "air": target is Unit and (target as Unit).flying, "fx": CombatFx.shell(region, from, color, size)}
+	if not hit.hook.is_empty():
+		shot.cable = CombatFx.cable(region, from, from)
+	_shots.append(shot)
+
+
+## Where a tower's shots leave its model: the gun's height for its kind.
+func _muzzle(b: Building) -> Vector3:
+	var look: Dictionary = TOWER_SHOTS.get(b.get_attack().get("shot", "shell"), TOWER_SHOTS.shell)
+	return b.global_position + Vector3.UP * float(look.muzzle)
 
 
 ## Moves shells along and lands the ones that arrive.
@@ -317,10 +350,18 @@ func _fly_shells(delta: float) -> void:
 				shot.fx.global_position = (shot.from as Vector3).lerp(aim, k)
 				if shot.fx.global_position.distance_to(aim) > 0.05:
 					shot.fx.look_at(aim, Vector3.UP if absf((aim - shot.fx.global_position).normalized().y) < 0.99 else Vector3.RIGHT)
+				if shot.get("cable"):
+					CombatFx.stretch(shot.cable, shot.from, shot.fx.global_position)
 			still.append(shot)
 			continue
 		if shot.fx and is_instance_valid(shot.fx):
 			shot.fx.queue_free()
+		if shot.get("cable") and is_instance_valid(shot.cable):
+			# The harpoon bites: the cable stays on its ship while it's hooked.
+			if alive:
+				_cables.append({"mesh": shot.cable, "from": shot.from, "target": target, "left": float(shot.hit.hook.seconds)})
+			else:
+				shot.cable.queue_free()
 		if not alive and shot.left <= 0.0:
 			# Its target fell first: the shell hits whoever stands where it lands.
 			target = _unit_near(shot.last_aim, shot.hit.faction, SHELL_STRAY, shot.air)
@@ -357,12 +398,13 @@ func _snapshot(attacker: Node3D, projectile) -> Dictionary:
 	var hit := {"from": attacker.global_position, "unit": attacker is Unit,
 		"faction": attacker.faction if "faction" in attacker else "", "vs_armor": 1.0,
 		"vs_buildings": 1.0, "heavy": false, "ranged": true, "style": "tracer",
-		"vs_light": 1.0, "vs_heavy": 1.0, "splash": 0.0}
+		"vs_light": 1.0, "vs_heavy": 1.0, "splash": 0.0, "hook": {}}
 	if attacker.has_method("get_attack"):
 		var attack: Dictionary = attacker.get_attack()
 		hit.vs_light = attack.get("vs_light", 1.0)
 		hit.vs_heavy = attack.get("vs_heavy", 1.0)
 		hit.splash = attack.get("splash", 0.0)
+		hit.hook = attack.get("hook", {})
 	if attacker is Unit:
 		var a := attacker as Unit
 		hit.vs_armor = a.vs_armor
@@ -402,7 +444,8 @@ func _resolve(hit: Dictionary, target: Node3D, amount: float, color: Color) -> v
 	if hit.style == "tracer":
 		_tracer(hit.from + Vector3.UP * 1.2, at, color)
 	elif hit.style == "burst":
-		CombatFx.flash(region, at, Color(0.95, 0.75, 0.45, 0.8), hit.splash * 0.45, 0.25)
+		# A flak shell bursting: a black smoke puff with a flash inside.
+		CombatFx.puff(region, at, hit.splash * 0.3, 0.7)
 	elif hit.style != "none":
 		CombatFx.flash(region, at, color, 0.22 if not hit.heavy else 0.4, 0.12 if not blocked else 0.18)
 	if target is Building:
@@ -416,6 +459,8 @@ func _resolve(hit: Dictionary, target: Node3D, amount: float, color: Color) -> v
 		var u := target as Unit
 		var was_alive := u.hp > 0.0
 		u.take_damage(amount)
+		if not hit.get("hook", {}).is_empty() and u.flying:
+			u.add_buff("hooked", {"speed": float(hit.hook.slow)}, float(hit.hook.seconds))
 		if was_alive and u.hp <= 0.0:
 			if u.faction == "rival" and resources:
 				resources.add_scrap(int(round(u.bounty * BOUNTY_SHARE)))
@@ -624,6 +669,24 @@ func _repair(engineer: Unit, faction: String, delta: float) -> bool:
 	return true
 
 
+## Keeps each Skyhook cable stretched from its gun to its hooked ship, and
+## drops it when the hook comes loose or the ship goes down.
+func _reel_cables(delta: float) -> void:
+	if _cables.is_empty():
+		return
+	var still: Array = []
+	for c in _cables:
+		c.left -= delta
+		var ok: bool = c.left > 0.0 and is_instance_valid(c.target) and c.target.is_alive() and is_instance_valid(c.mesh)
+		if not ok:
+			if is_instance_valid(c.mesh):
+				c.mesh.queue_free()
+			continue
+		CombatFx.stretch(c.mesh, c.from, _aim_point(c.target))
+		still.append(c)
+	_cables = still
+
+
 func _chain(first: Node3D, faction: String, amount: float, jumps: int) -> void:
 	var hit := [first]
 	var from := first
@@ -638,7 +701,8 @@ func _chain(first: Node3D, faction: String, amount: float, jumps: int) -> void:
 					next = unit
 		if next == null:
 			return
-		deal_hit(from, next, amount, Color(0.6, 0.7, 1.0))
+		CombatFx.bolt(region, _aim_point(from), _aim_point(next), Color(0.6, 0.7, 1.0))
+		deal_hit(from, next, amount, Color(0.6, 0.7, 1.0), null, "none")
 		hit.append(next)
 		from = next
 

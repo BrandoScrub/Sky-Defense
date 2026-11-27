@@ -1239,25 +1239,46 @@ func _check_defense_roles(main: Node) -> void:
 	build.demolish(hub + Vector2i(2, -2))
 	walker.free()
 
-	# Ground support: a Rally Horn and a Rivet Turret buff a Riveteer.
+	# Ground support: the Rally Horn is the only aura tower; a Rivet Turret
+	# next to it is just a gun.
 	var riveteer: Unit = units[1]
 	riveteer.position = region.hex_center(hub + Vector2i(0, 2))
 	_expect(build.try_place("rally_horn", hub + Vector2i(-1, 2)) == "", "place a Rally Horn")
 	_expect(build.try_place("rivet_turret", hub + Vector2i(1, 1)) == "", "place a Rivet Turret")
 	defenses.step(1.0)
 	_expect(riveteer.damage_mult > 1.0 and riveteer.cooldown_mult < 1.0, "a Rally Horn should boost nearby units")
-	_expect(riveteer.armor > 0.0, "a Rivet Turret should give nearby units armor")
+	_expect(riveteer.armor == 0.0, "a Rivet Turret gives no armor aura")
+	var auras := BuildingCatalog.BUILDINGS.keys().filter(func(id): return BuildingCatalog.BUILDINGS[id].has("aura"))
+	_expect(auras == ["rally_horn"], "the Rally Horn is the only aura tower, got %s" % [auras])
+	_expect(not BuildingCatalog.BUILDINGS.rally_horn.has("attack"), "the Rally Horn has no gun")
 	_expect(not BuildingCatalog.BUILDINGS.has("mending_post"), "the Mending Post is cut (Engineers heal)")
 	var far: Unit = units[2]
-	_expect(far.damage_mult == 1.0 and far.armor == 0.0, "units far away get no bonus")
-	var before := riveteer.hp
-	riveteer.take_damage(10.0)
-	_expect(before - riveteer.hp < 10.0, "armor should block part of the damage")
-	riveteer.hp = riveteer.max_hp
+	_expect(far.damage_mult == 1.0, "units far away get no bonus")
 	build.demolish(hub + Vector2i(-1, 2))
 	build.demolish(hub + Vector2i(1, 1))
 	defenses.step(0.1)
-	_expect(riveteer.damage_mult == 1.0 and riveteer.armor == 0.0, "bonuses end when the building is gone")
+	_expect(riveteer.damage_mult == 1.0, "bonuses end when the building is gone")
+
+	# Every gun tower fires its own kind of shot.
+	var shots := {}
+	for id in BuildingCatalog.BUILDINGS:
+		var attack: Dictionary = BuildingCatalog.BUILDINGS[id].get("attack", {})
+		if not attack.is_empty():
+			_expect(CombatSystem.TOWER_SHOTS.has(attack.get("shot", "")), "%s needs a shot look" % id)
+			_expect(not shots.has(attack.get("shot", "")), "%s shares its shot look with %s" % [id, shots.get(attack.get("shot", ""), "")])
+			shots[attack.get("shot", "")] = id
+
+	# The Skyhook's harpoon slows the ship it hooks.
+	var hook_ship: Unit = main.fleet.launch("bomber", 1, "Vesper")[0]
+	var hook_tower := Building.new().setup("skyhook_cannon")
+	region.add_child(hook_tower)
+	hook_tower.global_position = hook_ship.global_position + Vector3(4, -VesperFleet.ALTITUDE, 0)
+	combat.deal_hit(hook_tower, hook_ship, 1.0, Color.WHITE, false)
+	_expect(hook_ship.has_buff("hooked") and hook_ship.buff_multiplier("speed") < 1.0, "a Skyhook hit slows the ship")
+	hook_ship.tick_buffs(BuildingCatalog.BUILDINGS.skyhook_cannon.attack.hook.seconds + 0.1)
+	_expect(not hook_ship.has_buff("hooked"), "the hook comes loose after a few seconds")
+	hook_tower.free()
+	hook_ship.free()
 	riveteer.position = region.get_platform_position("Outpost")
 
 	# Hangar: launches drones, they shoot down a bomber, and die with the hangar.
