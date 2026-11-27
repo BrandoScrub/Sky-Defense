@@ -47,7 +47,7 @@ func _shoot(out_dir: String, tag: String, size: Vector2i, scene: String) -> void
 		# Your line in front of the HQ, a rival column coming at it from the east.
 		var line := [["shieldbearer", Vector3(3.0, 0, -1.2)], ["shieldbearer", Vector3(3.0, 0, 1.2)],
 			["rifleman", Vector3(1.0, 0, -2.0)], ["rifleman", Vector3(1.0, 0, 0.0)], ["rifleman", Vector3(1.0, 0, 2.0)],
-			["lancer", Vector3(0.0, 0, 3.4)], ["riveteer", Vector3(2.0, 0, -4.0)], ["medic", Vector3(-0.5, 0, -1.0)]]
+			["lancer", Vector3(0.0, 0, 3.4)], ["riveteer", Vector3(2.0, 0, -4.0)], ["engineer", Vector3(-0.5, 0, -1.0)]]
 		for spec in line:
 			var u := UnitCatalog.make(spec[0], "player")
 			u.position = region.snap_to_walkable(hub + spec[1])

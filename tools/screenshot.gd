@@ -66,11 +66,8 @@ func _initialize() -> void:
 	_save(out_dir + "/hub.png")
 	main.building.cancel_placing()
 
-	# Sky network: a claimed Foundry, a new walkway, and a raid on Midway.
+	# Sky network: a claimed Foundry and a raid on Midway.
 	region.set_platform_owner("Foundry", "player")
-	var foundry: Dictionary = region.platforms["Foundry"]
-	var crystal: Dictionary = region.platforms["Crystal Spire"]
-	main.walkways.try_build(region.rim_toward(foundry, crystal.center, true), region.rim_toward(crystal, foundry.center, true))
 	main.capture.set_process(false)
 	main.raids.set_process(false)
 	var party: Array[Unit] = main.raids.send_party(3)
@@ -88,7 +85,7 @@ func _initialize() -> void:
 	await _settle()
 	_save(out_dir + "/network.png")
 
-	# Weight and power: an overloaded Generator Rig and a browned-out grid.
+	# Weight and power: a full Generator Rig with its load showing.
 	region.set_platform_owner("Generator Rig", "player")
 	var rig: Vector2i = region.platforms["Generator Rig"].center
 	main.resources.add_scrap(400)
@@ -101,7 +98,7 @@ func _initialize() -> void:
 	var units: Array[Unit] = main.selection.all_units()
 	for i in units.size():
 		units[i].position = region.hex_center(rig + [Vector2i(-1, 1), Vector2i(0, 1), Vector2i(0, 1), Vector2i(-1, 1), Vector2i(-1, 1)][i]) + Vector3(i * 0.4 - 0.8, 0, 0)
-	main.loads.step(0.5)
+	region.set_show_loads(true)
 	main.economy.step(0.1)
 	main._refresh_resources()
 	cam.position = region.get_platform_position("Generator Rig") + Vector3(-4, 0, -2)
@@ -110,6 +107,7 @@ func _initialize() -> void:
 	cam._apply_zoom()
 	await _settle()
 	_save(out_dir + "/systems.png")
+	region.set_show_loads(false)
 
 	# Combat: a wave of Ironbell walkers hits the Hub's turret line.
 	var hubc: Vector2i = region.platforms["Hub"].center
@@ -140,10 +138,9 @@ func _initialize() -> void:
 		await process_frame
 	_save(out_dir + "/combat.png")
 
-	# Ferry and storms: the Commander rides to the Crystal Spire while the
-	# North Storm feeds your grid.
+	# Storms: the Hub harvester taps the North Storm while Ironbell holds
+	# the other.
 	main.storms.set_process(false)
-	main.ferry.set_process(false)
 	for e in main.get_tree().get_nodes_in_group(Unit.ENEMY_GROUP):
 		e.free()
 	var anchor_hex := Vector2i.ZERO
@@ -157,23 +154,12 @@ func _initialize() -> void:
 	while main.storms.rival_build() != "":
 		pass
 	main.storms.refresh()
-	var hero: Unit = main.selection.find_hero()
-	main.selection.select_units([hero])
-	var f: Dictionary = main.ferry.ferries[0]
-	# (The network shot built a walkway to the Spire, so board directly.)
-	hero.position = main.ferry.dock_point(f, 0)
-	main.ferry.send(hero, region.get_platform_position("Crystal Spire") + Vector3(1, 0, 0))
-	for i in 2000:
-		hero._process(0.05)
-		main.ferry.step(0.05)
-		if hero.riding and f.flying and f.timer < main.ferry.trip_seconds * 0.45:
-			break
 	cam.position = (region.get_platform_position("Hub") + region.get_platform_position("Crystal Spire")) / 2.0 + Vector3(0, 0, -2)
 	cam.zoom = 0.45
 	cam._target_zoom = 0.45
 	cam._apply_zoom()
 	await _settle()
-	_save(out_dir + "/ferry-and-storms.png")
+	_save(out_dir + "/storms.png")
 
 	# Vesper Aeronautics: a bomber flight comes in over the Generator Rig.
 	main.fleet.set_process(false)

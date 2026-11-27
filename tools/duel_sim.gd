@@ -70,7 +70,6 @@ func _initialize() -> void:
 					break
 		if not placed:
 			break
-	main.loads.set_process(false)
 	# Ships from a hangar on the Hub (list airship_hangar in towers).
 	var ship_wait := 0.0
 	for pair in _parse(args.ships):

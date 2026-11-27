@@ -4,7 +4,7 @@
 ##
 ## - Player control: the storm feeds the grid (+`power_per_storm`).
 ## - Ironbell control: lightning strikes your buildings and units near the
-##   cloud, and Ironbell's walkers come out tougher.
+##   cloud.
 ##
 ## Ironbell also builds its own harvesters on free anchors of platforms it
 ## owns, so leaving Midway to them hands them both storms.
@@ -16,13 +16,11 @@ signal rival_harvester_built(platform_name: String)
 
 @export var region: SkyRegion
 @export var combat: CombatSystem
-@export var waves: WaveManager
 
 @export var power_per_storm := 15
 @export var strike_interval := 7.0
 @export var strike_damage := 35.0
 @export var strike_range := 18.0
-@export var wave_hp_per_storm := 0.15
 ## Ironbell waits this long before building its first harvester, then checks
 ## again on this interval.
 @export var rival_first_build := 50.0
@@ -87,7 +85,6 @@ func harvesters_on(cloud: String) -> Dictionary:
 ## Recounts control of every cloud and applies its effects.
 func refresh() -> void:
 	var player_storms := 0
-	var rival_storms := 0
 	for cloud in control:
 		var count := harvesters_on(cloud)
 		var now := ""
@@ -97,15 +94,11 @@ func refresh() -> void:
 			now = "rival"
 		if now == "player":
 			player_storms += 1
-		elif now == "rival":
-			rival_storms += 1
 		if now != control[cloud]:
 			control[cloud] = now
 			control_changed.emit(cloud, now)
 		_label(cloud, now, count)
 	region.storm_bonus = player_storms * power_per_storm
-	if waves:
-		waves.hp_bonus = rival_storms * wave_hp_per_storm
 
 
 ## Lightning from an Ironbell-held cloud hits the nearest player building or

@@ -39,7 +39,7 @@ func is_alive() -> bool:
 	return hp > 0.0 and is_inside_tree()
 
 
-## Mends the headquarters (Sappers), up to full health.
+## Mends the headquarters (Engineers), up to full health.
 func repair(amount: float) -> void:
 	if hp <= 0.0:
 		return

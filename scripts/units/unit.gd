@@ -34,16 +34,14 @@ const BUFF_STATS := {
 const DRONE_GROUP := "drones"
 
 @export var display_name := "Riveteer"
-## UnitCatalog id: riveteer, shieldbearer, rifleman, sapper, lancer, medic, walker.
+## UnitCatalog id: riveteer, shieldbearer, rifleman, lancer, engineer, walker.
 @export var unit_type := "riveteer"
 @export var is_hero := false
 ## "player" or "rival". Rival units aren't selectable.
 @export var faction := "player"
 @export var move_speed := 6.0
-## Weight this unit adds to the platform it stands on.
+## How heavy the unit is: heavy units get shoved less by big hits.
 @export var weight := 1
-## Set by LoadSystem: below 1 on an overloaded platform.
-var speed_multiplier := 1.0
 ## Airships: faster with a tailwind, slower into a headwind (VesperFleet).
 var wind_multiplier := 1.0
 @export var body_color := Color(0.42, 0.5, 0.6)
@@ -76,9 +74,9 @@ var wind_multiplier := 1.0
 @export var vs_armor := 1.0
 ## Damage multiplier against buildings and headquarters.
 @export var vs_buildings := 1.0
-## Hit points per second healed on one wounded ally in range (medics).
+## Hit points per second healed on one wounded ally in range (engineers).
 @export var heal_power := 0.0
-## Hit points per second repaired on one damaged friendly building (sappers).
+## Hit points per second repaired on one damaged friendly building (engineers).
 @export var repair_power := 0.0
 ## Launched from an Airship Hangar; DefenseSystem flies it.
 @export var is_drone := false
@@ -115,8 +113,8 @@ var selected := false:
 			_ring.visible = value
 ## True when the current order was an attack-move (used once enemies exist).
 var attack_move := false
-## True while aboard an airship ferry: FerrySystem moves the unit and it
-## neither walks nor fights.
+## True while something else carries the unit (falling off a broken
+## walkway): it neither walks nor fights.
 var riding := false
 
 var _route := PackedVector3Array()
@@ -323,7 +321,7 @@ func _process(delta: float) -> void:
 	var target := _route[0]
 	var to_target := target - position
 	to_target.y = 0.0
-	var step := move_speed * speed_multiplier * wind_multiplier * buff_multiplier("speed") * delta
+	var step := move_speed * wind_multiplier * buff_multiplier("speed") * delta
 	if to_target.length() <= step:
 		position = Vector3(target.x, position.y, target.z)
 		_route.remove_at(0)

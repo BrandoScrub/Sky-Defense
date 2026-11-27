@@ -9,7 +9,6 @@ const Layout = preload("res://scripts/world/level_layout.gd")
 const DECK_HEIGHT := 1.0
 const WALKWAY_HEIGHT := 0.35
 const CLOUD_HEIGHT := 4.0
-const FERRY_HEIGHT := 3.0
 const AIR_LANE_HEIGHT := 9.0
 ## Tiles are drawn slightly smaller than the grid so their edges show.
 const TILE_GAP := 0.94
@@ -17,7 +16,7 @@ const TILE_GAP := 0.94
 ## Tile types that units can stand on.
 const WALKABLE := {
 	"deck": true, "walkway": true, "generator_socket": true, "harvester_anchor": true,
-	"scrap_heap": true, "crystal_seam": true, "dock": true, "spawn": true,
+	"scrap_heap": true, "crystal_seam": true, "spawn": true,
 }
 
 const COLORS := {
@@ -35,10 +34,8 @@ const COLORS := {
 	"harvester_anchor": Color(0.3, 0.6, 1.0),
 	"scrap_heap": Color(0.55, 0.33, 0.18),
 	"crystal_seam": Color(0.3, 0.95, 0.9),
-	"dock": Color(0.2, 0.65, 0.6),
 	"spawn": Color(1.0, 0.5, 0.1),
 	"cloud": Color(0.4, 0.55, 1.0, 0.35),
-	"ferry": Color(0.2, 0.75, 0.7, 0.8),
 	"air_lane": Color(1.0, 0.3, 0.25, 0.35),
 	"underside": Color(0.4, 0.37, 0.36),
 }
@@ -49,8 +46,8 @@ const LEGEND := [
 	["rival", "Ironbell island"], ["vesper", "Vesper island"], ["rival_core", "Rival headquarters"],
 	["walkway", "Walkway"], ["rival_walkway", "Ironbell bridge"], ["generator_socket", "Generator socket"],
 	["harvester_anchor", "Storm anchor"], ["scrap_heap", "Scrap heap"],
-	["crystal_seam", "Crystal seam"], ["dock", "Ferry dock"], ["spawn", "Rival muster point"],
-	["cloud", "Storm cloud"], ["ferry", "Ferry route"], ["air_lane", "Rival air lane"],
+	["crystal_seam", "Crystal seam"], ["spawn", "Rival muster point"],
+	["cloud", "Storm cloud"], ["air_lane", "Rival air lane"],
 ]
 
 var tile_size := Layout.TILE_SIZE
@@ -110,8 +107,6 @@ var owners := {}
 ## hex -> Building standing on it.
 var buildings := {}
 
-## platform name -> overload state written by LoadSystem ("Stable" etc.)
-var load_states := {}
 ## True while the player is building: your platform labels show their load.
 var show_loads := false
 var _labels := {}
@@ -143,8 +138,6 @@ func _ready() -> void:
 		plan_walkway_span(w[0], w[1])
 		if prebuilt_walkways:
 			_lay_walkway(w[0], w[1])
-	for f in layout.ferry_routes:
-		_draw_ferry_route(f[0], f[1])
 	for c in layout.clouds:
 		_draw_cloud(c)
 
@@ -303,6 +296,10 @@ func build_problem(type_id: String, hex: Vector2i) -> String:
 		if type_id == "harvester":
 			return "Cloud Harvesters go on a storm harvester anchor"
 		return "Can't build on a %s" % tile.type.replace("_", " ")
+	var weight: int = BuildingCatalog.get_data(type_id).weight
+	if weight > 0 and platform_load(tile.platform) + weight > platform_capacity(tile.platform):
+		return "%s can't lift that (load %d / %d). Add a Lift Engine (Industry, E)" % [
+			tile.platform, platform_load(tile.platform), platform_capacity(tile.platform)]
 	return ""
 
 
@@ -337,24 +334,15 @@ func remove_building(hex: Vector2i) -> Building:
 	return building
 
 
-## Total weight of everything built on a platform.
-## Total weight on a platform: its buildings, plus units standing on it
-## unless `include_units` is false. Units count for half their weight
-## (rounded down), so a squad can stand on a small island without
-## overloading it.
-func platform_load(platform_name: String, include_units := true) -> int:
+## Total weight of the buildings on a platform. Units don't count: weight is
+## a building limit, checked when you place something.
+func platform_load(platform_name: String) -> int:
 	var total := 0
-	var unit_weight := 0
 	for hex in buildings:
 		var b: Building = buildings[hex]
 		if b.platform == platform_name:
 			total += b.get_data().weight
-	if include_units and is_inside_tree():
-		for group in [Unit.GROUP, Unit.ENEMY_GROUP]:
-			for node in get_tree().get_nodes_in_group(group):
-				if not node.flying and platform_at((node as Node3D).global_position) == platform_name:
-					unit_weight += (node as Unit).weight
-	return total + unit_weight / 2
+	return total
 
 
 ## Buildings on a platform, oldest first.
@@ -386,6 +374,13 @@ func power_supply() -> int:
 		if b.power > 0 and owners.get(b.platform) == "player":
 			total += b.power
 	return total
+
+
+## Power left over after every building's draw. A tower needs this much
+## spare to be built (BuildController), so you can't build into a brownout;
+## a brownout only comes from losing a generator or a storm.
+func spare_power() -> int:
+	return power_supply() - power_demand()
 
 
 ## Share of demand the grid can meet: 1.0 when supply covers demand.
@@ -422,9 +417,8 @@ func refresh_label(platform_name: String) -> void:
 	_refresh_label(platform_name)
 
 
-## Platform labels show their load only while you build (or when a platform
-## is overloaded), so weight is in front of you when it matters and out of
-## the way the rest of the time. Click a platform to see its load any time.
+## Platform labels show their load only while you build, so weight is in
+## front of you when it matters and out of the way the rest of the time. Click a platform to see its load any time.
 func set_show_loads(on: bool) -> void:
 	if show_loads == on:
 		return
@@ -439,13 +433,12 @@ func _refresh_label(platform_name: String) -> void:
 		return
 	var used := platform_load(platform_name)
 	var cap := platform_capacity(platform_name)
-	var state: String = load_states.get(platform_name, "Stable")
 	label.text = platform_name
 	# Everything under the name goes on a smaller second label, so the name
 	# reads first and the details don't crowd the map.
 	var lines := PackedStringArray()
-	if (show_loads and platform_owner(platform_name) == "player") or state != "Stable":
-		lines.append("Load %d / %d" % [used, cap] + ("  (%s)" % state if state != "Stable" else ""))
+	if show_loads and platform_owner(platform_name) == "player":
+		lines.append("Load %d / %d" % [used, cap] + ("  (full)" if used >= cap else ""))
 	if platform_owner(platform_name) != "player":
 		var holds := platform_contents(platform_name)
 		if holds != "":
@@ -455,9 +448,7 @@ func _refresh_label(platform_name: String) -> void:
 		lines.append(status)
 	var detail: Label3D = label.get_node("Detail")
 	detail.text = "\n".join(lines)
-	label.modulate = {
-		"Swaying": Color(1.0, 0.9, 0.4), "Sagging": Color(1.0, 0.6, 0.3), "Failing": Color(1.0, 0.35, 0.3),
-	}.get(state, HudTheme.PARCHMENT)
+	label.modulate = HudTheme.PARCHMENT
 	detail.modulate = label.modulate
 
 
@@ -512,7 +503,7 @@ func set_platform_status(platform_name: String, status: String) -> void:
 func units_on_platform(platform_name: String, group: String) -> Array[Node3D]:
 	var out: Array[Node3D] = []
 	for node in get_tree().get_nodes_in_group(group):
-		# Aircraft overhead and ferry passengers aren't standing on it.
+		# Aircraft overhead and falling units aren't standing on it.
 		if node.flying or node.riding:
 			continue
 		if platform_at((node as Node3D).global_position) == platform_name:
@@ -853,11 +844,6 @@ func _add_prop(tile: Node3D, type: String, tile_height: float, corp := "") -> vo
 			shard.radial_segments = 4
 			prop.mesh = shard
 			prop.position.y = top + 1.0
-		"dock":
-			var pier := BoxMesh.new()
-			pier.size = Vector3(0.6, 2.5, 0.6)
-			prop.mesh = pier
-			prop.position.y = top + 1.25
 	prop.material_override = _material(COLORS[type], type == "crystal_seam" or type == "spawn")
 	tile.add_child(prop)
 	_add_prop_details(prop, type, corp)
@@ -866,7 +852,6 @@ func _add_prop(tile: Node3D, type: String, tile_height: float, corp := "") -> vo
 ## Extra placeholder pieces that make each feature read at a glance.
 func _add_prop_details(prop: MeshInstance3D, type: String, corp := "") -> void:
 	var brass := _material(Color(0.75, 0.56, 0.26))
-	var iron := _material(Color(0.22, 0.21, 0.2))
 	match type:
 		"core", "rival_core":
 			# The headquarters building stands on this plinth (see HqModels).
@@ -884,14 +869,6 @@ func _add_prop_details(prop: MeshInstance3D, type: String, corp := "") -> void:
 				var shard := _part(_cylinder_mesh(0.0, 0.35, 1.4, 4), Vector3(0.6 * cos(i * 2.1), -0.4, 0.6 * sin(i * 2.1)), prop.material_override)
 				shard.rotation = Vector3(0.4 * sin(i * 2.1), 0, -0.4 * cos(i * 2.1))
 				prop.add_child(shard)
-		"dock":
-			var arm := BoxMesh.new()
-			arm.size = Vector3(0.3, 0.3, 1.8)
-			prop.add_child(_part(arm, Vector3(0, 1.1, 0.8), iron))
-			var lamp := SphereMesh.new()
-			lamp.radius = 0.25
-			lamp.height = 0.5
-			prop.add_child(_part(lamp, Vector3(0, 1.5, 0), _material(Color(0.5, 1.0, 0.9), true)))
 		"generator_socket":
 			var coil := TorusMesh.new()
 			coil.inner_radius = 0.5
@@ -1217,12 +1194,6 @@ func _draw_cloud(c: Dictionary) -> void:
 		puff.position = hex_center(hex) + Vector3.UP * CLOUD_HEIGHT
 		root.add_child(puff)
 	tiles_in_clouds[c.name] = HexGrid.disk(c.center, c.radius)
-
-
-func _draw_ferry_route(a_name: String, b_name: String) -> void:
-	var a := find_feature(a_name, "dock")
-	var b := find_feature(b_name, "dock")
-	_draw_markers("Ferry_%s_%s" % [a_name, b_name], a, b, FERRY_HEIGHT, COLORS.ferry, 0.5)
 
 
 ## Draws the air lane from one platform to another along `route` (from

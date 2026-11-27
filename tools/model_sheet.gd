@@ -112,12 +112,9 @@ func _initialize() -> void:
 	await _shot(sky + Vector3(0, VesperFleet.ALTITUDE * 0.6, 1.0), 0.03, out_dir + "/airships.png")
 	await _shot(sky + Vector3(0, 0, 1.0), 0.25, out_dir + "/airships-far.png")
 
-	# The ferry, the balloon island tug and each headquarters.
+	# Each headquarters.
 	for l in _labels:
 		l.visible = false
-	if not main.ferry.ferries.is_empty():
-		var ship: Node3D = main.ferry.ferries[0].ship
-		await _shot(ship.position, 0.02, out_dir + "/ferry.png")
 	await _shot(hub_at + Vector3(0, 2.5, 1.5), 0.0, out_dir + "/hq-player.png")
 	for corp in RivalCatalog.ORDER:
 		await _shot(region.get_platform_position(RivalCatalog.hq_of(corp)) + Vector3(0, 2.5, 1.5), 0.0, out_dir + "/hq-%s.png" % corp.to_lower())

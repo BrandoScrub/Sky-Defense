@@ -1,5 +1,5 @@
 ## The model for every unit: foot soldiers, the Commander, Ironbell's walker,
-## every airship, the hangar drones and the ferry. All of them are assembled
+## every airship and the hangar drones. All of them are assembled
 ## from the shared ModelKit parts, so they match the buildings.
 ##
 ## Troops share one body (boots, coat, belt, shoulders, head) and differ in
@@ -77,12 +77,10 @@ static func _soldier(root: Node3D, k: ModelKit, kind: String) -> void:
 			_shieldbearer_kit(root, k)
 		"rifleman":
 			_rifleman_kit(root, k)
-		"sapper":
-			_sapper_kit(root, k)
+		"engineer":
+			_engineer_kit(root, k)
 		"lancer":
 			_lancer_kit(root, k)
-		"medic":
-			_medic_kit(root, k)
 		_:
 			_riveteer_kit(root, k)
 
@@ -134,8 +132,9 @@ static func _rifleman_kit(root: Node3D, k: ModelKit) -> void:
 	k.rod(root, Vector3(-0.25, 1.25, 0.2), Vector3(0.25, 0.75, 0.3), 0.04, "leather", 6)
 
 
-## Sapper: lamp helmet, a toolbox of charges on the back, and a big wrench.
-static func _sapper_kit(root: Node3D, k: ModelKit) -> void:
+## Engineer: lamp helmet, a toolbox of charges on the back, a big wrench,
+## and a green tonic tank on the hip for patching up the squad.
+static func _engineer_kit(root: Node3D, k: ModelKit) -> void:
 	_helmet(root, k, "copper")
 	k.ball(root, 0.08, Vector3(0, 1.62, 0.24), "lamp")
 	var red := k.paint(Color(0.62, 0.2, 0.14))
@@ -143,7 +142,12 @@ static func _sapper_kit(root: Node3D, k: ModelKit) -> void:
 	k.box(root, Vector3(0.56, 0.06, 0.3), Vector3(0, 1.22, -0.38), "brass")
 	for x in [-0.14, 0.0, 0.14]:
 		k.drum(root, 0.05, 0.05, 0.3, Vector3(x, 1.38, -0.38), red, 6)
-	k.box(root, Vector3(0.3, 0.26, 0.2), Vector3(-0.42, 0.62, 0.05), "leather")
+	# White cross on the toolbox: this one mends people too.
+	k.box(root, Vector3(0.3, 0.08, 0.02), Vector3(0, 1.0, -0.52), "ceramic")
+	k.box(root, Vector3(0.08, 0.3, 0.02), Vector3(0, 1.0, -0.52), "ceramic")
+	# Tonic tank on the hip, with a hose.
+	k.drum(root, 0.1, 0.1, 0.36, Vector3(-0.42, 0.72, 0.0), k.paint(Color(0.4, 0.8, 0.55), 1.4), 8)
+	k.pipe(root, [Vector3(-0.42, 0.9, 0.0), Vector3(-0.48, 1.05, 0.2), Vector3(-0.3, 0.95, 0.35)], 0.03, "rubber")
 	# The wrench: shaft and open jaw.
 	k.rod(root, Vector3(0.32, 0.9, 0.25), Vector3(0.32, 1.25, 0.95), 0.045, "steel", 6)
 	for dy in [-0.09, 0.09]:
@@ -166,24 +170,6 @@ static func _lancer_kit(root: Node3D, k: ModelKit) -> void:
 	for dx in [-0.07, 0.07]:
 		k.rod(root, Vector3(0.32 + dx, 1.05, 1.38), Vector3(0.32 + dx * 0.5, 1.07, 1.72), 0.02, "copper", 6)
 	k.ball(root, 0.1, Vector3(0.32, 1.065, 1.6), "hum")
-
-
-## Medic: white cap and pack with a red cross on top, tonic tank and sprayer.
-static func _medic_kit(root: Node3D, k: ModelKit) -> void:
-	var red := k.paint(Color(0.85, 0.14, 0.12))
-	k.drum(root, 0.24, 0.25, 0.14, Vector3(0, 1.66, 0), "ceramic", 10)
-	k.box(root, Vector3(0.3, 0.03, 0.1), Vector3(0, 1.74, 0), red)
-	k.box(root, Vector3(0.1, 0.03, 0.3), Vector3(0, 1.74, 0), red)
-	k.box(root, Vector3(0.56, 0.5, 0.3), Vector3(0, 1.02, -0.4), "ceramic")
-	k.box(root, Vector3(0.4, 0.03, 0.12), Vector3(0, 1.28, -0.4), red)
-	k.box(root, Vector3(0.12, 0.03, 0.26), Vector3(0, 1.28, -0.4), red)
-	k.box(root, Vector3(0.34, 0.1, 0.02), Vector3(0, 1.02, -0.56), red)
-	k.box(root, Vector3(0.1, 0.34, 0.02), Vector3(0, 1.02, -0.56), red)
-	k.drum(root, 0.1, 0.1, 0.4, Vector3(-0.4, 0.95, -0.3), k.paint(Color(0.4, 0.8, 0.55), 1.4), 8)
-	k.pipe(root, [Vector3(-0.4, 1.15, -0.3), Vector3(-0.5, 1.2, 0.0), Vector3(-0.32, 0.95, 0.3)], 0.03, "rubber")
-	k.rod(root, Vector3(-0.32, 0.92, 0.25), Vector3(-0.32, 1.0, 0.75), 0.035, "brass", 6)
-	k.cone(root, Vector3(-0.32, 1.02, 0.86), Vector3(-0.32, 1.0, 0.75), 0.08, 0.03, "brass", 8)
-	k.box(root, Vector3(0.26, 0.22, 0.14), Vector3(0.4, 0.66, 0.1), "ceramic")
 
 
 ## The Commander: top hat with goggles, epaulettes, a cape, sabre and pistol.
@@ -422,32 +408,3 @@ static func _drone(root: Node3D, k: ModelKit, f: float) -> void:
 	k.box(root, Vector3(f * 0.05, f * 0.5, f * 0.4), Vector3(0, f * 0.3, -f * 1.15), "accent")
 	k.barrel(root, Vector3(0, -f * 0.4, 0), Vector3(0, -0.1, 1.0), f * 1.0, f * 0.07)
 	k.rod(root, Vector3(0, -f * 0.1, 0), Vector3(0, -f * 0.45, 0), f * 0.1, "iron", 6)
-
-
-## The ferry: a wide wooden deck boat under a canvas gas bag, with rails,
-## bow and stern lamps and a stern propeller. Passengers stand on the deck
-## (FerrySystem puts them 1.4 below the ship's origin).
-static func ferry(color := Color(0.2, 0.75, 0.7)) -> Node3D:
-	var ship := Node3D.new()
-	var k := ModelKit.shared(color, "player")
-	k.balloon(ship, Vector3(0, 1.3, 0), 1.15, 4.8, "canvas", 4)
-	var stripe := k.ring(ship, 1.17, 0.09, Vector3(0, 1.3, 0), "accent")
-	stripe.rotation.x = PI / 2.0
-	k.box(ship, Vector3(0.14, 0.09, 2.4), Vector3(0, 2.44, 0), "brass")
-	# Hull: a flat deck with a raised bow and gunwales.
-	k.box(ship, Vector3(2.0, 0.4, 2.9), Vector3(0, -1.65, 0), "wood")
-	k.box(ship, Vector3(2.1, 0.08, 3.0), Vector3(0, -1.42, 0), "brass")
-	var bow := k.box(ship, Vector3(1.45, 0.4, 1.45), Vector3(0, -1.65, 1.45), "wood")
-	bow.rotation.y = PI / 4.0
-	for side in [-1.0, 1.0]:
-		k.rod(ship, Vector3(side * 1.0, -1.0, -1.4), Vector3(side * 1.0, -1.0, 1.4), 0.035, "brass", 6)
-		k.box(ship, Vector3(0.06, 0.22, 2.8), Vector3(side * 1.0, -1.3, 0), "accent")
-		for z in [-1.4, -0.47, 0.47, 1.4]:
-			k.rod(ship, Vector3(side * 1.0, -1.45, z), Vector3(side * 1.0, -1.0, z), 0.03, "brass", 6)
-		for z in [-1.1, 1.1]:
-			k.rod(ship, Vector3(side * 0.95, -1.0, z), Vector3(side * 0.7, 0.45, z * 1.1), 0.03, "rubber", 6)
-	k.lamp(ship, Vector3(0, -1.45, 2.3), 0.5, 0.12)
-	k.lamp(ship, Vector3(0, -1.45, -1.4), 0.7, 0.1)
-	k.cone(ship, Vector3(0, -1.6, -1.45), Vector3(0, -1.6, -1.9), 0.25, 0.1, "brass", 8)
-	k.propeller(ship, Vector3(0, -1.6, -1.95), Vector3(0, 0, -1), 0.75, 3, 0.4)
-	return ship

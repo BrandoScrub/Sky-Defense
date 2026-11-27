@@ -105,7 +105,7 @@ func take_damage(amount: float) -> bool:
 	return hp <= 0.0
 
 
-## Restores hit points, up to the maximum (Sappers do this).
+## Restores hit points, up to the maximum (Engineers do this).
 func repair(amount: float) -> void:
 	if hp <= 0.0:
 		return

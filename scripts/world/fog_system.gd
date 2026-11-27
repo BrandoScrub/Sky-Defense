@@ -17,7 +17,6 @@ extends Node3D
 signal platform_revealed(platform_name: String)
 
 @export var region: SkyRegion
-@export var ferry: FerrySystem
 ## Side of one square fog cell in world units.
 @export var cell_size := 6.0
 ## How far a player unit sees.
@@ -150,7 +149,7 @@ func update_visibility() -> void:
 
 # --- Visibility -------------------------------------------------------------
 
-## Islands one walkway (or ferry hop) away from land you own are always on
+## Islands one walkway away from land you own are always on
 ## the map, so the next expansion is a choice you can read off the screen.
 ## They are only uncovered, not watched: rival units on them stay hidden.
 func _show_neighbours() -> void:
@@ -163,10 +162,10 @@ func _show_neighbours() -> void:
 		_uncover(region.get_platform_position(name), reach)
 
 
-## Platforms joined to one you own by a planned walkway or a ferry route.
+## Platforms joined to one you own by a planned walkway.
 func neighbour_platforms() -> Array:
 	var out: Array = []
-	var links: Array = region.layout.get("walkways", []) + region.layout.get("ferry_routes", [])
+	var links: Array = region.layout.get("walkways", [])
 	for link in links:
 		for k in 2:
 			var mine: String = link[k]
@@ -248,11 +247,6 @@ func _refresh_nodes() -> void:
 		if node is Node3D:
 			node.visible = is_visible_now(node.global_position)
 
-	# Ferries are neutral traffic: shown over explored sky.
-	if ferry:
-		for f in ferry.ferries:
-			f.ship.visible = is_explored(f.ship.global_position)
-
 	for p in layout_platforms():
 		if _revealed_platforms.has(p.name):
 			continue
@@ -270,15 +264,11 @@ func layout_platforms() -> Array:
 
 ## Hides every piece of map scenery that sits in unexplored sky.
 func _collect_scenery() -> void:
-	var ships := []
-	if ferry:
-		for f in ferry.ferries:
-			ships.append(f.ship)
 	for child in region.get_children():
-		if not child is Node3D or child == self or ships.has(child) or child.name == "Buildings" or child.name == "WalkwayCrew":
+		if not child is Node3D or child == self or child.name == "Buildings" or child.name == "WalkwayCrew":
 			continue
 		var n := String(child.name)
-		var is_group := n == "Tiles" or n.begins_with("Cloud_") or n.begins_with("AirLane_") or n.begins_with("Ferry_")
+		var is_group := n == "Tiles" or n.begins_with("Cloud_") or n.begins_with("AirLane_")
 		if is_group:
 			for part in child.get_children():
 				_track(part)
