@@ -8,10 +8,16 @@
 ##   aircraft; ground defenses can't see aircraft at all. Their fire rate scales with grid
 ##   efficiency, and they miss more on an overloaded platform.
 ## - Headquarters have a light gun of their own.
+## - Your troops fight troops first: they shoot an enemy unit in range before
+##   any building or headquarters. Every unit turns to face what it shoots.
 ## - Shots from range (units with a long reach, towers, headquarters guns) are
-##   projectiles. A shielded unit (Shieldbearer) stops most of a projectile
-##   aimed at it, and catches projectiles that would fly past it toward an
-##   ally behind. Melee hits, lightning and bombs from the air aren't blocked.
+##   shells that fly for a moment; the hit lands when the shell arrives. A
+##   shielded unit (Shieldbearer) stops most of a shell from the front, and
+##   catches shells that would fly past it toward an ally behind. Shots from
+##   the side or back get through. Melee hits, lightning and bombs from the
+##   air aren't blocked.
+## - Heavy hitters (Lancers, walkers) stagger what they hit: a shove back and
+##   a pause before its next attack. A Shieldbearer facing the hit braces.
 ## - Medics heal the most wounded ally in range instead of fighting. Sappers
 ##   repair damaged buildings in range when there's no enemy to fight.
 class_name CombatSystem
@@ -43,6 +49,18 @@ const SHIELD_REACH := 0.5
 ## Anti-armor shots (attackers with bonus damage against armor, like Lancers)
 ## punch through: shields stop this much less of them.
 const PIERCE_SHARE := 0.6
+## A shield covers shots from this wide a front (cosine of half the arc:
+## 0.5 is 120 degrees).
+const SHIELD_ARC_COS := 0.5
+## How far a heavy hit shoves a unit (half that for heavy units like walkers),
+## and how long it holds off the unit's next attack.
+const KNOCKBACK := 0.8
+const STAGGER_SECONDS := 0.45
+## Shell speed for towers and headquarters guns, units per second.
+const TOWER_SHELL_SPEED := 60.0
+## A shell whose target falls before it lands hits an enemy this close to
+## where it comes down instead.
+const SHELL_STRAY := 1.5
 
 @export var region: SkyRegion
 @export var resources: PlayerResources
@@ -50,6 +68,8 @@ const PIERCE_SHARE := 0.6
 
 var rng := RandomNumberGenerator.new()
 var _chase_timer := 0.0
+## Shells in flight: {hit, target, amount, color, left, total, from, fx}.
+var _shots: Array = []
 
 
 func _ready() -> void:
@@ -83,6 +103,7 @@ func step(delta: float) -> void:
 	var chase := _chase_timer <= 0.0
 	if chase:
 		_chase_timer = 0.5
+	_fly_shells(delta)
 
 	for faction in ["player", "rival"]:
 		for unit in _units(faction):
@@ -99,13 +120,17 @@ func step(delta: float) -> void:
 			if target != null:
 				if not unit.is_moving() or unit.attack_move:
 					unit.stop()
+				if not unit.is_moving():
+					unit.face(target.global_position)
 				if unit.cooldown_left <= 0.0 and not unit.is_moving():
 					unit.cooldown_left = unit.get_attack_cooldown()
-					deal_hit(unit, target, unit.get_damage(), Color(1.0, 0.85, 0.4))
+					fire(unit, target, unit.get_damage(), Color(0.55, 0.8, 1.0) if unit.heavy_hits else Color(1.0, 0.85, 0.4))
 			elif unit.repair_power > 0.0 and not unit.is_moving() and _repair(unit, faction, delta):
 				pass
 			elif chase and not unit.flying and (not unit.is_moving() or unit.attack_move):
-				var prey = nearest_enemy(unit.global_position, faction, unit.aggro_range, unit.hits_air, unit.targets_units)
+				var prey = nearest_enemy_unit(unit.global_position, faction, unit.aggro_range, unit.hits_air) if unit.targets_units and faction == "player" else null
+				if prey == null:
+					prey = nearest_enemy(unit.global_position, faction, unit.aggro_range, unit.hits_air, unit.targets_units)
 				if prey == null and faction == "player" and not unit.is_moving():
 					prey = _intruder_on_platform(unit)
 				if prey != null:
@@ -130,9 +155,11 @@ func step(delta: float) -> void:
 		if rng.randf() < miss:
 			_tracer(b.global_position + Vector3.UP * 1.2, target.global_position + Vector3(1.5, 1, 0), Color(0.7, 0.7, 0.7))
 			continue
-		deal_hit(b, target, amount, Color(0.6, 0.7, 1.0) if attack.has("chain") else Color(1.0, 0.85, 0.4), not attack.has("chain"))
 		if attack.has("chain"):
+			deal_hit(b, target, amount, Color(0.6, 0.7, 1.0), false)
 			_chain(target, b.faction, amount * 0.7, int(attack.chain) - 1)
+		else:
+			fire(b, target, amount, Color(1.0, 0.85, 0.4), true)
 
 	for hq in get_tree().get_nodes_in_group(Headquarters.GROUP):
 		if not hq.is_alive():
@@ -143,7 +170,7 @@ func step(delta: float) -> void:
 		var target = nearest_enemy(hq.global_position, hq.faction, hq.attack.range, true)
 		if target != null:
 			hq.cooldown_left = hq.attack.cooldown
-			deal_hit(hq, target, hq.attack.damage, Color(1.0, 0.6, 0.3), true)
+			fire(hq, target, hq.attack.damage, Color(1.0, 0.6, 0.3), true)
 
 
 ## The closest living enemy of `faction` within `max_range`: a unit, a
@@ -180,10 +207,14 @@ func nearest_enemy(from: Vector3, faction: String, max_range: float, hits_air :=
 	return best
 
 
-## What a unit shoots this tick. Units with a "hunt_range" meta (Vesper
-## gunships) go after enemy units and drones first: they shoot one in range,
-## and while one is within hunt range they ignore buildings and return true
-## (keep flying). Only with no prey around do they fall back to buildings.
+## What a unit shoots this tick. Your troops fight troops first: the nearest
+## enemy unit in range, and only with none in range a building or
+## headquarters. Rival raiders are after your Hub, so they shoot whatever is
+## nearest, buildings included (your headquarters soaks fire your troops
+## would otherwise take).
+## Units with a "hunt_range" meta (Vesper gunships) also keep flying toward
+## enemy units within hunt range instead of stopping at buildings: they
+## return true (keep flying) while prey is near but out of reach.
 func _pick_target(unit: Unit, faction: String):
 	var reach := unit.get_attack_range()
 	if unit.has_meta("hunt_range"):
@@ -192,17 +223,21 @@ func _pick_target(unit: Unit, faction: String):
 			return prey
 		if nearest_enemy_unit(unit.global_position, faction, unit.get_meta("hunt_range"), unit.hits_air) != null:
 			return true
+	if unit.targets_units and faction == "player":
+		var troop = nearest_enemy_unit(unit.global_position, faction, reach, unit.hits_air, unit.air_only)
+		if troop != null:
+			return troop
 	return nearest_enemy(unit.global_position, faction, reach, unit.hits_air, unit.targets_units, unit.air_only)
 
 
 ## The closest living enemy unit or drone (no buildings or headquarters)
 ## within `max_range`, or null.
-func nearest_enemy_unit(from: Vector3, faction: String, max_range: float, hits_air := false):
+func nearest_enemy_unit(from: Vector3, faction: String, max_range: float, hits_air := false, air_only := false):
 	var best = null
 	var best_d := max_range
 	var other := "rival" if faction == "player" else "player"
 	for unit in _units(other):
-		if (unit.flying and not hits_air) or not unit.is_alive() or unit.riding:
+		if (unit.flying and not hits_air) or (air_only and not unit.flying) or not unit.is_alive() or unit.riding:
 			continue
 		var d := _flat_distance(from, unit.global_position)
 		if d <= best_d:
@@ -228,32 +263,134 @@ func _intruder_on_platform(unit: Unit):
 	return best
 
 
-## Deals damage from an attacker to a target. With `projectile` true (the
-## default for ranged units), a shield in the way catches the shot.
+## Deals damage from an attacker to a target right now. With `projectile`
+## true (the default for ranged units), a shield in the way catches the shot.
+## Use fire() for shots that should fly to their target first.
 func deal_hit(attacker: Node3D, target: Node3D, amount: float, color: Color, projectile = null) -> void:
+	var hit := _snapshot(attacker, projectile)
+	if not hit.projectile and attacker is Unit and hit.unit:
+		hit.style = "spark"
+	_resolve(hit, target, amount, color)
+
+
+## Fires a shell from `attacker` at `target`. It flies at the attacker's
+## shell speed and the hit lands when it arrives, so a target that dies
+## first wastes the shot. Melee attackers hit at once.
+func fire(attacker: Node3D, target: Node3D, amount: float, color: Color, projectile = null) -> void:
+	var hit := _snapshot(attacker, projectile)
+	if not hit.ranged:
+		hit.style = "spark"
+		_resolve(hit, target, amount, color)
+		return
+	var from := attacker.global_position + Vector3.UP * 1.2
+	var speed: float = attacker.shell_speed if attacker is Unit else TOWER_SHELL_SPEED
+	var time := from.distance_to(_aim_point(target)) / maxf(speed, 1.0)
+	hit.style = "spark"
+	CombatFx.flash(region, from, color, 0.18, 0.08)
+	_shots.append({"hit": hit, "target": target, "amount": amount, "color": color, "left": time, "total": time,
+		"from": from, "last_aim": _aim_point(target), "air": target is Unit and (target as Unit).flying, "fx": CombatFx.shell(region, from, color, 0.4 if hit.heavy else 0.24)})
+
+
+## Moves shells along and lands the ones that arrive.
+func _fly_shells(delta: float) -> void:
+	if _shots.is_empty():
+		return
+	var still: Array = []
+	for shot in _shots:
+		var target = shot.target
+		var alive: bool = is_instance_valid(target) and target.is_alive()
+		if alive:
+			shot.last_aim = _aim_point(target)
+		shot.left -= delta
+		if shot.left > 0.0:
+			if shot.fx:
+				var k: float = 1.0 - shot.left / maxf(shot.total, 0.001)
+				var aim: Vector3 = shot.last_aim
+				shot.fx.global_position = (shot.from as Vector3).lerp(aim, k)
+				if shot.fx.global_position.distance_to(aim) > 0.05:
+					shot.fx.look_at(aim, Vector3.UP if absf((aim - shot.fx.global_position).normalized().y) < 0.99 else Vector3.RIGHT)
+			still.append(shot)
+			continue
+		if shot.fx and is_instance_valid(shot.fx):
+			shot.fx.queue_free()
+		if not alive and shot.left <= 0.0:
+			# Its target fell first: the shell hits whoever stands where it lands.
+			target = _unit_near(shot.last_aim, shot.hit.faction, SHELL_STRAY, shot.air)
+			alive = target != null
+		if alive:
+			_resolve(shot.hit, target, shot.amount, shot.color)
+	_shots = still
+
+
+## The enemy unit of `faction` nearest `point` within `reach`, or null:
+## aircraft only when `air`, otherwise ground units only.
+func _unit_near(point: Vector3, faction: String, reach: float, air := false):
+	if faction == "":
+		return null
+	var best = null
+	var best_d := reach
+	for u in _units("rival" if faction == "player" else "player"):
+		if not u.is_alive() or u.riding or u.flying != air:
+			continue
+		var d := _aim_point(u).distance_to(point)
+		if d <= best_d:
+			best_d = d
+			best = u
+	return best
+
+
+func _aim_point(target: Node3D) -> Vector3:
+	return target.global_position + Vector3.UP * (0.0 if target is Unit and (target as Unit).flying else 1.0)
+
+
+## What a hit needs to know about its attacker, taken when it fires (the
+## attacker may be gone by the time a shell lands).
+func _snapshot(attacker: Node3D, projectile) -> Dictionary:
+	var hit := {"from": attacker.global_position, "unit": attacker is Unit,
+		"faction": attacker.faction if "faction" in attacker else "", "vs_armor": 1.0,
+		"vs_buildings": 1.0, "heavy": false, "ranged": true, "style": "tracer"}
 	if attacker is Unit:
 		var a := attacker as Unit
+		hit.vs_armor = a.vs_armor
+		hit.vs_buildings = a.vs_buildings
+		hit.heavy = a.heavy_hits
+		hit.ranged = a.is_ranged()
 		if projectile == null:
 			projectile = a.is_ranged() and not a.flying
+	hit.projectile = projectile == true
+	return hit
+
+
+func _resolve(hit: Dictionary, target: Node3D, amount: float, color: Color) -> void:
+	if not is_instance_valid(target) or not target.is_alive():
+		return
+	if hit.unit:
 		if target is Building or target is Headquarters:
-			amount *= a.vs_buildings
+			amount *= hit.vs_buildings
 		elif target is Unit and (target as Unit).armored:
-			amount *= a.vs_armor
-	if projectile == true and not (target is Unit and (target as Unit).flying):
-		var blocker := shield_in_path(attacker.global_position, target)
+			amount *= hit.vs_armor
+	var blocked := false
+	if hit.projectile and not (target is Unit and (target as Unit).flying):
+		var blocker := shield_in_path(hit.from, target)
 		if blocker != null:
 			target = blocker
-		if target is Unit and (target as Unit).shield > 0.0:
-			var pierce: bool = attacker is Unit and (attacker as Unit).vs_armor > 1.0
+		if target is Unit and (target as Unit).shield > 0.0 and (target as Unit).is_facing(hit.from, SHIELD_ARC_COS):
+			var pierce: bool = hit.vs_armor > 1.0
 			var stopped: float = (target as Unit).shield * ((1.0 - PIERCE_SHARE) if pierce else 1.0)
 			amount *= 1.0 - stopped
 			color = Color(0.75, 0.8, 0.9)
-	_tracer(attacker.global_position + Vector3.UP * 1.2, target.global_position + Vector3.UP * 1.0, color)
+			blocked = true
+	var at := _aim_point(target)
+	if hit.style == "tracer":
+		_tracer(hit.from + Vector3.UP * 1.2, at, color)
+	else:
+		CombatFx.flash(region, at, color, 0.22 if not hit.heavy else 0.4, 0.12 if not blocked else 0.18)
 	if target is Building:
 		var b := target as Building
 		if b.take_damage(amount):
 			region.remove_building(b.hex)
 			building_destroyed.emit(b.get_data().name, b.faction)
+			CombatFx.puff(region, b.global_position + Vector3.UP * 0.8, 1.6)
 			b.queue_free()
 	elif target is Unit:
 		var u := target as Unit
@@ -262,14 +399,35 @@ func deal_hit(attacker: Node3D, target: Node3D, amount: float, color: Color, pro
 		if was_alive and u.hp <= 0.0:
 			if u.faction == "rival" and resources:
 				resources.add_scrap(int(round(u.bounty * BOUNTY_SHARE)))
+			CombatFx.puff(region, u.global_position + Vector3.UP * 0.6, u.footprint * 1.4)
 			unit_killed.emit(u)
+		elif hit.heavy and not u.flying and not u.riding:
+			_stagger(u, hit.from, hit.ranged)
 	else:
 		target.take_damage(amount)
 
 
+## A heavy hit shoves a ground unit away from the attacker and delays its
+## next attack, unless it's a Shieldbearer facing the blow.
+func _stagger(u: Unit, from: Vector3, ranged := true) -> void:
+	if u.shield > 0.0 and u.is_facing(from, SHIELD_ARC_COS):
+		return
+	var push := u.global_position - from
+	push.y = 0.0
+	if push.length() < 0.01:
+		push = -u.forward()
+	var dest := u.global_position + push.normalized() * KNOCKBACK * (0.5 if u.weight >= 3 else 1.0)
+	# Melee blows only rock the target in place: a shove would knock it
+	# out of reach and hand a ranged victim a free retreat.
+	if not ranged or region == null or not region.is_walkable(dest):
+		dest = u.global_position
+	u.stagger(dest, STAGGER_SECONDS)
+
+
 ## The shielded unit that would catch a projectile flying from `from` to
 ## `target`, or null. Only shields on the target's side count, and only ones
-## standing between the two (the one nearest the shooter wins).
+## standing between the two and facing the shooter (the one nearest the
+## shooter wins).
 func shield_in_path(from: Vector3, target: Node3D) -> Unit:
 	if not ("faction" in target):
 		return null
@@ -284,6 +442,9 @@ func shield_in_path(from: Vector3, target: Node3D) -> Unit:
 	var best_t := INF
 	for u in _units(side):
 		if u == target or u.shield <= 0.0 or not u.is_alive() or u.riding or u.flying:
+			continue
+		# Only a shield facing the shooter covers the allies behind it.
+		if not u.is_facing(from, SHIELD_ARC_COS):
 			continue
 		var p := Vector2(u.global_position.x, u.global_position.z)
 		var t := (p - a).dot(path) / (length * length)

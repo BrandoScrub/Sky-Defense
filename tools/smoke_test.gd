@@ -1135,11 +1135,22 @@ func _check_unit_roster(main: Node) -> void:
 	var shield: Unit = spawn.call("shieldbearer", "player", Vector3(0, 0, 3))
 	await process_frame
 
-	# A shield catches a shot flying past it, and stops most of it.
+	# A shield catches a shot flying past it, and stops most of it, but only
+	# when it faces the shooter.
+	shield.face(shooter.global_position)
 	_expect(combat.shield_in_path(shooter.global_position, rifle) == shield, "the Shieldbearer stands in the line of fire")
 	combat.deal_hit(shooter, rifle, 20.0, Color.WHITE)
 	_expect(rifle.hp == rifle.max_hp, "the Rifleman behind the shield is untouched")
 	_expect(is_equal_approx(shield.max_hp - shield.hp, 20.0 * (1.0 - shield.shield)), "the shield stops %d%% of a shot" % int(shield.shield * 100))
+	# Turned away, the shield covers nobody, and its back is open.
+	shield.face(rifle.global_position)
+	_expect(combat.shield_in_path(shooter.global_position, rifle) == null, "a shield facing away doesn't cover allies")
+	var back_hp := shield.hp
+	combat.deal_hit(shooter, shield, 20.0, Color.WHITE)
+	_expect(is_equal_approx(back_hp - shield.hp, 20.0), "a shot in the back goes through the shield")
+	shield.face(shooter.global_position)
+	shield.hp = shield.max_hp
+	rifle.hp = rifle.max_hp
 	# Off to the side, the shield doesn't help.
 	shield.position.x += 4.0
 	_expect(combat.shield_in_path(shooter.global_position, rifle) == null, "a shield off to the side doesn't block")
@@ -1159,6 +1170,29 @@ func _check_unit_roster(main: Node) -> void:
 	combat.deal_hit(lancer, armored, lancer.damage, Color.WHITE)
 	_expect(is_equal_approx(walker_hp - armored.hp, lancer.damage * lancer.vs_armor), "a Lancer does bonus damage to armored walkers")
 	_expect(not armored.is_ranged(), "walkers fight up close, so riot shields don't stop them")
+	# Heavy hits stagger: a walker stomp holds off a Riveteer's next attack,
+	# but a braced Shieldbearer facing it doesn't flinch.
+	var grunt: Unit = spawn.call("riveteer", "player", Vector3(-7.5, 0, 0))
+	grunt.cooldown_left = 0.0
+	combat.deal_hit(armored, grunt, 1.0, Color.WHITE)
+	_expect(grunt.cooldown_left >= CombatSystem.STAGGER_SECONDS - 0.01, "a walker's heavy hit staggers a light trooper")
+	var brace: Unit = spawn.call("shieldbearer", "player", Vector3(-6, 0, 1.5))
+	brace.face(armored.global_position)
+	brace.cooldown_left = 0.0
+	combat.deal_hit(armored, brace, 1.0, Color.WHITE)
+	_expect(brace.cooldown_left == 0.0, "a Shieldbearer facing the blow braces against it")
+	# Troops fight troops first: with a unit and a building both in reach,
+	# the unit is the target.
+	_expect(combat._pick_target(grunt, "player") == armored, "units shoot enemy troops before anything else")
+	# Shells fly: the hit lands a moment after the shot.
+	var far_hp := armored.hp
+	combat.fire(lancer, armored, 10.0, Color.WHITE)
+	_expect(armored.hp == far_hp, "a shell hasn't landed the moment it's fired")
+	for k in 20:
+		combat._fly_shells(0.05)
+	_expect(armored.hp < far_hp, "the shell lands when it arrives")
+	grunt.free()
+	brace.free()
 
 	# Medics heal the most wounded ally in range.
 	var medic: Unit = spawn.call("medic", "player", Vector3(1, 0, 6))

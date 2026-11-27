@@ -39,6 +39,10 @@ const DEFAULTS := {
 	# Sapper: hit points restored per second to one damaged building in range.
 	"repair": 0.0,
 	"hits_air": false,
+	# Heavy hits shove the target back and delay its next attack.
+	"heavy": false,
+	# How fast its shots fly, units per second.
+	"shell_speed": 50.0,
 	"color": Color(0.42, 0.5, 0.6),
 	"blurb": "",
 }
@@ -64,7 +68,7 @@ const UNITS := {
 		"footprint": 0.7,
 		"shield": 0.75,
 		"color": Color(0.32, 0.36, 0.44),
-		"blurb": "Riot trooper with a riveted tower shield. Strong in melee. The shield stops most of any shot aimed at it, and catches enemy shots that try to fly past it at allies behind. Put them in front.",
+		"blurb": "Riot trooper with a riveted tower shield. Strong in melee. The shield faces forward: it stops most of any shot from the front, and catches shots flying past at allies behind. Braced, it doesn't flinch from heavy hits. Shots from the side or back get through, so watch the flanks.",
 	},
 	"rifleman": {
 		"name": "Rifleman",
@@ -74,6 +78,7 @@ const UNITS := {
 		"range": 7.5,
 		"cooldown": 1.4,
 		"aggro": 11.0,
+		"shell_speed": 70.0,
 		"color": Color(0.45, 0.42, 0.3),
 		# The only ground troop that can shoot at aircraft, so a wave of
 		# airships can't drag on forever with no flak around.
@@ -107,8 +112,10 @@ const UNITS := {
 		"weight": 2,
 		"vs_armor": 2.5,
 		"vs_buildings": 1.5,
+		"heavy": true,
+		"shell_speed": 26.0,
 		"color": Color(0.35, 0.45, 0.55),
-		"blurb": "Anti-armor trooper with a Hum-charged arc lance. Slow, heavy shots that do over double damage to armored walkers. Its bolts burn through shields too.",
+		"blurb": "Anti-armor trooper with a Hum-charged arc lance. Slow, heavy bolts that do over double damage to armored walkers and knock them back. Its bolts burn through shields too.",
 	},
 	"medic": {
 		"name": "Medic",
@@ -135,8 +142,9 @@ const UNITS := {
 		"weight": 3,
 		"footprint": 0.75,
 		"armored": true,
+		"heavy": true,
 		"color": Color(0.55, 0.18, 0.15),
-		"blurb": "Ironbell's armored walker. Marches down walkways toward your Hub, claiming platforms and smashing buildings on the way. Lancers make short work of it.",
+		"blurb": "Ironbell's armored walker. Marches down walkways toward your Hub, claiming platforms and smashing buildings on the way. Its stomps knock light troops back; braced Shieldbearers hold it, and Lancers make short work of it.",
 	},
 }
 
@@ -192,6 +200,8 @@ static func apply(u: Unit, type_id: String, faction := "player") -> void:
 	u.heal_power = d.heal
 	u.repair_power = d.repair
 	u.hits_air = d.hits_air
+	u.heavy_hits = d.heavy
+	u.shell_speed = d.shell_speed
 	var color: Color = d.color
 	if FACTION_TINT.has(faction) and type_id != "walker":
 		color = color.lerp(FACTION_TINT[faction], 0.55)
