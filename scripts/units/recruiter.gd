@@ -56,9 +56,9 @@ func queue_one(type_id := "riveteer") -> String:
 		return "Unknown unit: %s" % type_id
 	var unit_name: String = UnitCatalog.get_data(type_id).name
 	if queue.size() >= max_queue:
-		return "The training queue is full"
+		return "The barracks queue is full"
 	if _field_count() + queue.size() >= unit_cap:
-		return "Unit limit reached (%d)" % unit_cap
+		return "No more bunks: %d troops is the limit" % unit_cap
 	var crystals := crystals_of(type_id)
 	if not resources.pay(cost_of(type_id), crystals):
 		return "Not enough %s: a %s costs %d scrap%s" % ["scrap" if resources.scrap < cost_of(type_id) else "crystals", unit_name, cost_of(type_id), " and %d crystals" % crystals if crystals > 0 else ""]

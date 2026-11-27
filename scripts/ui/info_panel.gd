@@ -14,43 +14,43 @@ const PICK_RADIUS := 28.0
 ## What each kind of unit is for, by display name. Ground units not listed
 ## here use their blurb from UnitCatalog.
 const UNIT_INFO := {
-	"Commander": "Leads your squad. Tougher and faster than a Riveteer, and can shoot aircraft. Comes back to the Hub 15 seconds after falling.",
-	"Skyhawk Interceptor": "Your air-to-air airship. Patrols from its Airship Hangar along your Mooring Masts and shoots down enemy aircraft within reach of them. Can't hit anything on the ground.",
-	"Thunder Gunboat": "Your air-to-ground airship. Patrols your route and shells enemy troops and buildings below. Can't hit aircraft.",
-	"Repair Tender": "Your utility airship, on repair duty. Mends your buildings it flies over. Doesn't fight.",
-	"Scout Tender": "Your utility airship, on scouting duty. Fast, and sees far through the storm clouds. Doesn't fight.",
-	"Troop Tender": "Your utility airship, carrying 3 Riveteers. When enemies land on one of your platforms on its route, it drops them there, then flies home to reload (45 scrap). Doesn't fight.",
-	"Vesper Gunship": "Vesper's escort airship. Flies with the bombers, around islands and with the wind, and hunts your units and drones, in the air and on the decks. Only anti-air can hit it.",
-	"Ironbell Troop Carrier": "Ironbell's troop airship. Flies around islands to your platform nearest Ironbell, hovers, and drops a squad (Shieldbearer, Rifleman, Riveteer) onto the deck. Shoot it down first and the squad goes down with it.",
-	"Vesper Bomber": "Vesper's bomber airship. Flies the red air lanes around islands, attacking from upwind, and bombs your buildings and Hub. Only anti-air can hit it: flak towers, drones, the Commander and headquarters guns.",
-	"Defense Drone": "A small clockwork flyer from an Airship Hangar. Chases anything that comes near its hangar, aircraft included, then flies home. Only anti-air can hit it. The hangar builds a new one when it's lost.",
+	"Commander": "You, in a walking rig. Tougher and quicker than any trooper, and can shoot at aircraft. Back on the Hub 15 seconds after falling.",
+	"Skyhawk Interceptor": "Air-to-air patrol ship. Flies from its hangar along your Mooring Masts and hunts enemy aircraft near them. Can't hit the ground.",
+	"Thunder Gunboat": "Air-to-ground patrol ship. Shells enemy troops and buildings below its route. Can't hit aircraft.",
+	"Repair Tender": "Utility ship on repair duty. Mends the buildings it flies over. Doesn't fight.",
+	"Scout Tender": "Utility ship on scouting duty. Fast, and sees far into the storm clouds. Doesn't fight.",
+	"Troop Tender": "Utility ship carrying 3 Riveteers. Drops them wherever enemies land on its route, then flies home to reload (45 scrap). Doesn't fight.",
+	"Vesper Gunship": "Vesper's escort. Rides the wind with the bombers and strafes your units and drones. Only anti-air can hit it.",
+	"Ironbell Troop Carrier": "Ironbell's troop ship. Hovers over your island nearest Ironbell and drops a squad on the deck. Shoot it down first and the squad goes down with it.",
+	"Vesper Bomber": "Vesper's bomber. Flies the red air lanes from upwind and bombs your buildings and Hub. Only anti-air can hit it: flak, drones, the Commander and headquarters guns.",
+	"Defense Drone": "A clockwork flyer from an Airship Hangar. Chases anything that comes near, aircraft included, then flies home. The hangar winds up a new one when it's lost.",
 }
 
 ## What each building is for, by type id.
-const BUILDING_INFO := {
-	"dynamo": "Burns fuel to power your towers. Makes more on a yellow generator socket.",
-	"lift_engine": "An extra lift rotor under the deck. The platform it stands on can carry %d more weight, and the engine itself weighs nothing. One per island." % BuildingCatalog.BUILDINGS.lift_engine.capacity,
-	"harvester": "Taps a storm cloud from a blue anchor. Gives power, pays crystals at the end of each wave, and counts toward who controls the storm.",
-	"rivet_turret": "Sturdy gun tower against walkers. Its plating gives cover, so your units fighting beside it take less damage. Can't hit aircraft.",
-	"arc_coil": "Chain lightning that jumps between up to 3 walkers. Power hungry, and can't hit aircraft.",
-	"rally_horn": "A brass horn that blares marching tunes. Its own gun is weak, but your units nearby hit harder and fire faster. Can't hit aircraft.",
-	"flak_battery": "Rapid anti-air guns. Shreds bombers and other aircraft, but ignores everything on the ground.",
-	"skyhook_cannon": "A long-range harpoon gun for big airships. Slow, but each hit tears a hole in the envelope. Ignores everything on the ground.",
-	"turbine_engine": "A big brass propeller bolted to a turbine island. Build 4 on one island and you can steer it with Steer Island (Industry tab): it moves up to 4 hexes, breaking off its walkways after a warning, and draws 30 power while under way.",
-	"airship_hangar": "Keeps 2 defensive drones in the air that chase off anything coming near, then return. Also builds your patrol airships (Army tab, Z X C), which fly a loop from here through your Mooring Masts. Holds 4 ships. If it falls, its ships go to another hangar or go down.",
-	"mooring_mast": "A patrol point for your airships. Ships only hunt within reach of a hangar or mast, so masts decide which sky you cover. Ships near one spot enemies twice as far away, and it sees far through the storm clouds.",
+static var BUILDING_INFO := {
+	"dynamo": "A coal-fired dynamo that powers your towers. Makes %d power, or %d on a yellow generator socket." % [BuildingCatalog.BUILDINGS.dynamo.power, BuildingCatalog.BUILDINGS.dynamo.power_on_socket],
+	"lift_engine": "An extra lift rotor under the deck. This island carries %d more weight, and the engine weighs nothing. One per island." % BuildingCatalog.BUILDINGS.lift_engine.capacity,
+	"harvester": "Draws charge from a storm cloud through a blue anchor. Gives power, pays crystals each wave, and counts toward who holds the storm.",
+	"rivet_turret": "A sturdy gun tower for walkers. Its plating gives cover to your units fighting beside it. Can't hit aircraft.",
+	"arc_coil": "Throws chain lightning across up to 3 walkers. Power hungry, and can't hit aircraft.",
+	"rally_horn": "A brass horn blaring marching tunes. Its own gun is weak, but nearby troops hit harder and fire faster. Can't hit aircraft.",
+	"flak_battery": "Rapid anti-air guns. Shreds bombers and other aircraft, ignores everything on the ground.",
+	"skyhook_cannon": "A long harpoon gun for big airships. Slow, but every hit tears the envelope. Ignores the ground.",
+	"turbine_engine": "A big brass propeller bolted to a turbine island. With 4 on one island you can steer it (Industry tab). It drifts up to 4 hexes, drops its walkways after a warning, and draws 30 power while under way.",
+	"airship_hangar": "Keeps 2 defense drones aloft and builds your patrol ships (Army tab, Z X). Ships fly a loop from here through your Mooring Masts. Holds 4. If it falls, its ships go to another hangar or go down.",
+	"mooring_mast": "A waypoint for your patrol ships. Ships only hunt within reach of a hangar or mast, so masts decide which sky you cover. It also sees far into the storm clouds.",
 }
 
 ## What each tile feature is for, by tile type.
-const TILE_INFO := {
-	"generator_socket": ["Generator socket", "A Dynamo Generator built here makes 15 power instead of 10."],
-	"harvester_anchor": ["Storm harvester anchor", "Cloud Harvesters can only be built here. They tap the nearest storm cloud for power and crystals."],
-	"scrap_heap": ["Scrap heap", "Salvage. Pays scrap at the end of each wave while you own this platform."],
-	"crystal_seam": ["Crystal seam", "A seam of energized crystals. Each one pays 5 crystals a wave while you hold its island. Crystals buy advanced gear (Arc Coil, Skyhook Gun, Hangar, Lancer, Gunboat) and Hum powers."],
-	"dock": ["Ferry dock", "Airships stop here. Right click a platform with no walkway and your units ride the ferry there."],
-	"spawn": ["Rival wave spawn", "Rival walkers set out from here when a wave starts."],
-	"walkway": ["Walkway", "A metal walkway between platforms. Units walk along it. Islands start unconnected: build walkways from the Industry tab to expand."],
-	"rival_walkway": ["Ironbell bridge", "A span Ironbell's crews bridged toward your Hub. Its walkers march along it. Your units can use it too."],
+static var TILE_INFO := {
+	"generator_socket": ["Generator socket", "A Dynamo built here makes %d power instead of %d." % [BuildingCatalog.BUILDINGS.dynamo.power_on_socket, BuildingCatalog.BUILDINGS.dynamo.power]],
+	"harvester_anchor": ["Storm anchor", "Cloud Harvesters go here. They tap the nearest storm cloud for power and crystals."],
+	"scrap_heap": ["Scrap heap", "Salvage left by the Rising. Pays scrap at the end of each wave while you hold this island."],
+	"crystal_seam": ["Crystal seam", "A seam of Hum-charged crystal. Pays 5 crystals a wave while you hold the island."],
+	"dock": ["Ferry dock", "The ferry stops here. Right click an island with no walkway and your units ride across."],
+	"spawn": ["Rival muster point", "Rival walkers set out from here when a wave starts."],
+	"walkway": ["Walkway", "Riveted decking between islands. Lay new ones from the Industry tab to expand."],
+	"rival_walkway": ["Ironbell bridge", "A span Ironbell's crews built toward your Hub. Their walkers march along it, and so can yours."],
 }
 
 var region: SkyRegion
@@ -97,6 +97,7 @@ func _ready() -> void:
 	box.add_child(top)
 	_title = Label.new()
 	_title.name = "Title"
+	_title.theme_type_variation = "Title"
 	_title.add_theme_font_size_override("font_size", 20)
 	_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -108,11 +109,11 @@ func _ready() -> void:
 	close.tooltip_text = "Close (Esc)"
 	close.pressed.connect(clear)
 	top.add_child(close)
-	_subtitle = _label("Subtitle", 13, Color(1.0, 0.85, 0.45))
+	_subtitle = _label("Subtitle", 14, HudTheme.AMBER)
 	box.add_child(_subtitle)
-	_body = _label("Body", 15, Color.WHITE)
+	_body = _label("Body", 16, HudTheme.PARCHMENT)
 	box.add_child(_body)
-	_stats = _label("Stats", 13, Color(1, 1, 1, 0.75))
+	_stats = _label("Stats", 14, Color(HudTheme.PARCHMENT, 0.75))
 	box.add_child(_stats)
 	visible = false
 
@@ -123,7 +124,7 @@ func _label(node_name: String, font_size: int, color: Color) -> Label:
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label.custom_minimum_size.x = WIDTH
 	label.add_theme_font_size_override("font_size", font_size)
-	label.modulate = color
+	label.add_theme_color_override("font_color", color)
 	return label
 
 
@@ -280,11 +281,11 @@ func describe(thing) -> Dictionary:
 		if hq.faction == "player":
 			info.title = "Your Headquarters"
 			info.subtitle = "Hub"
-			info.body = "The heart of your sky city. Its guns defend the Hub and can hit aircraft. If it falls, you lose."
+			info.body = "The heart of your company. Its guns cover the Hub and can hit aircraft. If it falls, the charter is lost."
 		else:
 			info.title = hq.platform
 			info.subtitle = "%s headquarters" % (corp if corp != "" else "Rival")
-			info.body = "The rival's base. Its guns defend the platform. Destroy it and %s stops attacking; destroy every rival headquarters to win." % (corp if corp != "" else "that rival")
+			info.body = "%s's headquarters. Its guns cover the island. Wreck it and they stop attacking; ground every rival to win." % (corp if corp != "" else "The rival")
 		info.stats = "Health %d / %d   Damage %d, range %d" % [ceili(hq.hp), int(hq.max_hp), int(hq.attack.damage), int(hq.attack.range)]
 	elif thing is Dictionary:
 		match thing.kind:
@@ -299,7 +300,7 @@ func describe(thing) -> Dictionary:
 			"cloud":
 				info.title = thing.name
 				info.subtitle = "Storm cloud"
-				info.body = "An electromagnetic storm. Whoever has more Cloud Harvesters on it controls it: yours add power to your grid, a rival's throws lightning at your units and buildings nearby."
+				info.body = "A charged storm. Whoever has more Cloud Harvesters on it holds it: yours feeds your grid, a rival's throws lightning at everything of yours nearby."
 				if storms:
 					var count := storms.harvesters_on(thing.name)
 					var who: String = {"player": "You", "rival": "Rival"}.get(storms.control.get(thing.name, ""), "Nobody")
@@ -307,11 +308,11 @@ func describe(thing) -> Dictionary:
 			"ferry":
 				info.title = "Ferry route"
 				info.subtitle = "%s to %s" % [thing.a, thing.b]
-				info.body = "An airship shuttles between the two docks. Right click the far platform and your units walk to the dock and ride across."
+				info.body = "A small airship shuttles between the two docks. Right click the far island and your units ride across."
 			"air_lane":
 				info.title = "Rival air lane"
 				info.subtitle = "%s to %s" % [thing.a, thing.b]
-				info.body = "Vesper bombers fly this route toward your buildings, steering around islands and attacking from upwind. It moves when the wind turns (every 3 waves). Put flak towers or an Airship Hangar under it."
+				info.body = "Vesper's bombers fly this route from upwind. It moves when the wind turns, every 3 waves. Put flak or a Hangar under it."
 				if wind:
 					info.stats = "Wind from the %s, turns in %d wave%s" % [wind.from_name(), wind.waves_until_shift(wind.waves.wave), "" if wind.waves_until_shift(wind.waves.wave) == 1 else "s"]
 	return info
@@ -321,19 +322,19 @@ func _describe_platform(platform_name: String, info: Dictionary) -> void:
 	var p: Dictionary = region.platforms.get(platform_name, {})
 	var owner := region.platform_owner(platform_name)
 	info.title = platform_name
-	info.subtitle = {"player": "Your platform", "rival": "Rival platform"}.get(owner, "Neutral platform")
+	info.subtitle = {"player": "Your island", "rival": "Rival island"}.get(owner, "Unclaimed island")
 	match owner:
 		"player":
-			info.body = "You can build here. Keep its load under the limit or it sways, sags, and starts dropping buildings."
+			info.body = "Yours to build on. Keep its load under the limit or it sways, sags and sheds buildings."
 		"rival":
-			info.body = "Held by a rival. Send units to stand on it to take it back."
+			info.body = "Held by a rival. Park your units on it to take it."
 		_:
-			info.body = "Nobody owns it yet. Park units on it to claim it, then you can build here."
+			info.body = "Nobody holds it yet. Park units on it to claim it."
 	if platform_name == "Hub":
-		info.body = "Your home platform and headquarters. Build defenses here first."
+		info.body = "Your home island and headquarters. Fortify it first."
 	if p.get("balloon", false):
 		info.subtitle += ", drifting balloon"
-		info.body += " It drifts between two moorings. Before it casts off, its walkway flashes: anything still on the walkway falls. Units aboard ride along."
+		info.body += " It drifts between two moorings. When its walkway flashes, clear it: anything left on it falls."
 	var features := PackedStringArray()
 	for f in p.get("features", []):
 		var t: String = f[0] if f is Array else (f.get("type", "") if f is Dictionary else str(f))

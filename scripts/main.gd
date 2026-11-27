@@ -10,15 +10,15 @@ const HERO_RESPAWN_SECONDS := 15.0
 ## selection line). Players page through with Next / Back, close it with x,
 ## and bring it back with the Tips button or the / key.
 const TIPS := [
-	"Welcome, tycoon. Destroy every rival HQ before they destroy your Hub. Ironbell bridges its way to you on foot; Vesper flies bombers.",
-	"Controls: left click or drag to select, right click to move, Alt + right click to attack-move. Ctrl + A: all on screen. H: hero. Ctrl + 1-5 saves a group, 1-5 recalls it. Shift + WASD pans.",
-	"Islands start unconnected. Build a walkway (Industry, W) from a platform you own, then park units on the far island to claim it. The Foundry gives scrap, the Generator Rig power.",
-	"Ironbell's crews bridge one span at a time toward your Hub (red-brown walkways). Its walkers camp at the bridge end until it reaches you. Park units beside an Ironbell span for 8 seconds, with no enemy close, to cut it down.",
-	"Build from the grid at the bottom left (Tab switches tabs). Rivet Turrets (Defense, Q) guard where the bridge lands. Towers need power: keep the Power number positive with Dynamos (Industry, Q). A tower marked NO POWER barely fires.",
-	"From wave 3 Vesper bombers fly the red air lanes: Flak Batteries (Defense, A) shred them, ground towers can't. Troop carriers come from wave 5, gunships from wave 7. The wind turns every 3 waves.",
-	"Put Cloud Harvesters (Industry, R) on storm anchors. Hold more harvesters on a storm than Ironbell to get its power, or its lightning strikes you. Crystals buy Hum powers (Hum, Q and W).",
-	"Keep platforms under their weight limit or they sag and shed buildings. A Lift Engine (Industry, E) carries 10 more. Each island you hold pays %d scrap a wave. Right click the Crystal Spire to ferry units there.",
-	"Dark storm clouds hide the sky you haven't scouted. Glowing islands hint at what's inside. Click anything to see what it is and what it does.",
+	"Welcome, Tycoon. Your charter is fresh and your rivals want it. Wreck every rival headquarters, or hold the Hub until the last wave.",
+	"Left click or drag to select, right click to move. Alt + right click attacks on the way. H finds your Commander. Ctrl + 1-5 saves a squad, 1-5 calls it back.",
+	"Islands start cut off. Lay a walkway (Industry, W) from an island you own, then park units on the far island to claim it. The Foundry has scrap, the Generator Rig has power.",
+	"Ironbell's crews build a bridge toward you one span at a time, and their walkers wait at its end. Park units beside a span for 8 quiet seconds to cut it down.",
+	"Rivet Turrets (Defense, Q) hold the spot where the bridge lands. Towers need power: keep Power positive with Dynamos (Industry, Q). A tower marked NO POWER barely fires.",
+	"From wave 3 Vesper bombers fly the red air lanes. Flak Batteries (Defense, A) shred them, ground guns can't. The wind turns every 3 waves and moves the lanes.",
+	"Cloud Harvesters (Industry, R) sit on storm anchors. Outnumber a rival's harvesters to take the storm's power, or its lightning hits you. Crystals buy Hum powers.",
+	"Every island has a weight limit. Overload it and it sags and sheds buildings; a Lift Engine (Industry, E) carries 10 more. Each island you hold pays %d scrap a wave.",
+	"Storm clouds hide the sky you haven't scouted, but glowing islands hint at what's inside. Click anything to learn what it is.",
 ]
 ## Width of the tips card, in pixels.
 const TIPS_WIDTH := 360.0
@@ -74,6 +74,7 @@ var _game_over := false
 
 
 func _ready() -> void:
+	HudTheme.apply()
 	camera.bounds = region.get_bounds()
 	var backdrop := SkyBackdrop.new()
 	backdrop.name = "SkyBackdrop"
@@ -226,8 +227,8 @@ func _ready() -> void:
 		r.bridges = bridges
 	bridges.combat = combat
 	waves.bridges = bridges
-	bridges.cutting_started.connect(func(c): show_notice("Your units are cutting %s's bridge: hold them there %d seconds" % [c, int(bridges.cut_seconds)]))
-	bridges.span_cut.connect(func(c, _n): show_notice("You cut %s's bridge! Its crew has to build that span again" % c))
+	bridges.cutting_started.connect(func(c): show_notice("Cutting %s's bridge. Hold your ground %d seconds" % [c, int(bridges.cut_seconds)]))
+	bridges.span_cut.connect(func(c, _n): show_notice("%s's bridge is cut! Their crew must rebuild the span" % c))
 	combat.headquarters_damaged.connect(_on_hq_damaged)
 	bridges.reached_player.connect(func(c, p): show_notice("%s's bridge reached %s: expect walkers!" % [c, p]))
 
@@ -273,22 +274,22 @@ func _ready() -> void:
 	patrols.notice.connect(show_notice)
 	powers.notice.connect(show_notice)
 	powers.changed.connect(build_menu.refresh)
-	patrols.mode_changed.connect(func(on): build_menu.set_hint("Patrol Route: click an Airship Hangar, then Mooring Masts in order. Right click: finish. Esc: cancel." if on else ""))
-	patrols.ship_launched.connect(func(s): show_notice("Your %s took off from the hangar" % s.display_name))
+	patrols.mode_changed.connect(func(on): build_menu.set_hint("Patrol route: click a Hangar, then Mooring Masts in order. Right click finishes, Esc cancels." if on else ""))
+	patrols.ship_launched.connect(func(s): show_notice("%s cast off from the hangar" % s.display_name))
 	region.buildings_changed.connect(patrols.mark_routes_dirty)
-	steering.mode_changed.connect(func(on): build_menu.set_hint("Steer Island: click your turbine island, then open sky in the direction to go. Esc or right click: cancel." if on else ""))
+	steering.mode_changed.connect(func(on): build_menu.set_hint("Steer Island: click your turbine island, then open sky to head for. Esc or right click cancels." if on else ""))
 	steering.steering_started.connect(func(_p, _n): _refresh_resources())
 	steering.arrived.connect(func(_p): _refresh_resources())
 	walkways.mode_changed.connect(_on_walkway_mode_changed)
 	capture.platform_claimed.connect(_on_platform_claimed)
 	for corp in all_raids:
 		all_raids[corp].raid_sent.connect(func(n): show_notice(
-			("Wave %d: %s sent %d raiders toward your Hub" if waves.has_contact(corp)
-			else "Wave %d: %s sent %d raiders to wait at the end of its bridge") % [waves.wave, corp, n]))
-	combat.building_destroyed.connect(func(n, f): show_notice(("Your %s was destroyed" if f == "player" else "Destroyed a rival %s") % n))
+			("Wave %d: %s sends %d raiders at your Hub" if waves.has_contact(corp)
+			else "Wave %d: %s sends %d raiders to wait at its bridgehead") % [waves.wave, corp, n]))
+	combat.building_destroyed.connect(func(n, f): show_notice(("We lost a %s" if f == "player" else "Rival %s wrecked") % n))
 	waves.game_over.connect(_on_game_over)
 	waves.rival_defeated.connect(func(p): show_notice("%s has fallen! Its attacks stop" % p))
-	fleet.flight_sent.connect(func(n): show_notice("Vesper bombers inbound: %d airship%s on the air lane" % [n, "" if n == 1 else "s"]))
+	fleet.flight_sent.connect(func(n): show_notice("Vesper bombers inbound: %d on the air lane" % n))
 	fleet.airships_launched.connect(_on_airships_launched)
 	fleet.troops_dropped.connect(func(corp, p, units): show_notice("%s dropped %d troops on %s!" % [corp, units.size(), p]))
 	ferry.departed.connect(_on_ferry_departed)
@@ -297,7 +298,7 @@ func _ready() -> void:
 	economy.watch(waves)
 	wind.wind_changed.connect(func(_i, first):
 		if not first:
-			show_notice("The wind turned: it now blows from the %s. Vesper's air lanes have moved" % wind.from_name()))
+			show_notice("The wind has turned and blows from the %s. Vesper's lanes have shifted" % wind.from_name()))
 	drift.warning_started.connect(_on_drift_warning)
 	drift.cast_off.connect(_on_drift_cast_off)
 	_refresh_resources()
@@ -316,17 +317,17 @@ func _on_hq_damaged(faction: String, platform: String, _amount: float) -> void:
 	_hub_warned_msec = now
 	var hq := combat.headquarters_on(platform)
 	if hq:
-		show_notice("The Hub is under attack! %d%% health left" % roundi(100.0 * hq.hp / hq.max_hp))
+		show_notice("The Hub is under fire! %d%% plating left" % roundi(100.0 * hq.hp / hq.max_hp))
 
 
 func _on_storm_control_changed(cloud: String, controller: String) -> void:
 	match controller:
 		"player":
-			show_notice("You control the %s: +%d power" % [cloud, storms.power_per_storm])
+			show_notice("The %s is ours: +%d power" % [cloud, storms.power_per_storm])
 		"rival":
 			show_notice("A rival controls the %s: expect lightning near it" % cloud)
 		_:
-			show_notice("Nobody controls the %s now" % cloud)
+			show_notice("The %s answers to no one now" % cloud)
 	_refresh_resources()
 
 
@@ -340,7 +341,7 @@ func _on_airships_launched(corp: String, kind: String, n: int) -> void:
 
 func _on_ferry_departed(from_platform: String, to_platform: String, passengers: int) -> void:
 	if passengers > 0:
-		show_notice("Ferry left %s for %s with %d aboard" % [from_platform, to_platform, passengers])
+		show_notice("Ferry away from %s to %s, %d aboard" % [from_platform, to_platform, passengers])
 
 
 func _on_drift_warning(balloon_name: String, platform_name: String, seconds: float, player_units: int) -> void:
@@ -402,13 +403,13 @@ func _process(delta: float) -> void:
 		return
 	match waves.phase:
 		WaveManager.BUILD:
-			_phase_label.text = "Build phase: wave %d%s in %ds (Space to start now)" % [waves.wave, _of_final(), ceili(waves.time_left)]
+			_phase_label.text = "Wave %d%s inbound in %s  ·  Space to ring the alarm" % [waves.wave, _of_final(), TopBar.clock(waves.time_left)]
 			if waves.is_push_wave():
-				_phase_label.text = "BIG PUSH next: wave %d%s in %ds, every rival sends 40%% more" % [waves.wave, _of_final(), ceili(waves.time_left)]
+				_phase_label.text = "Big push! Wave %d%s in %s, every rival sends 40%% more" % [waves.wave, _of_final(), TopBar.clock(waves.time_left)]
 			elif waves.camped() > 0:
 				_phase_label.text += "   %d raiders camped" % waves.camped()
 		WaveManager.WAVE:
-			_phase_label.text = "Wave %d%s: %d attackers left" % [waves.wave, _of_final(), waves.remaining()]
+			_phase_label.text = "Wave %d%s  ·  %d raider%s left" % [waves.wave, _of_final(), waves.remaining(), "" if waves.remaining() == 1 else "s"]
 		_:
 			_phase_label.text = ""
 	if recruiter and recruiter.queued > 0:
@@ -428,13 +429,13 @@ func _of_final() -> String:
 func _on_game_over(won: bool) -> void:
 	_game_over = true
 	var grounded := waves.rivals_grounded()
-	var text := "Defeat. Your Hub has fallen."
+	var text := "The Hub has fallen.\nYour charter is lost."
 	if won and grounded[0] == grounded[1]:
-		text = "Victory! Every rival corporation is grounded."
+		text = "Every rival grounded.\nThe sky is yours, Tycoon."
 	elif won:
-		text = "Victory! You held the sky for %d waves" % waves.match_waves
+		text = "You held the sky for %d waves.\nThe charter is yours, Tycoon." % waves.match_waves
 		text += (" and grounded %d of %d rivals." % grounded) if grounded[0] > 0 else "."
-	_banner.text = text + "\nPress Enter to play again"
+	_banner.text = text + "\n\nPress Enter to play again"
 	_banner.modulate = Color(1.0, 0.85, 0.4) if won else Color(1.0, 0.4, 0.35)
 	_banner.visible = true
 
@@ -497,10 +498,10 @@ func _build_tips(layer: CanvasLayer) -> void:
 	var pos := Vector2(16, TopBar.HEIGHT + 40)
 	_help_button = Button.new()
 	_help_button.name = "TipsButton"
-	_help_button.text = "?  Tips (/)"
+	_help_button.text = "Foreman's Notes (/)"
 	_help_button.focus_mode = Control.FOCUS_NONE
 	_help_button.position = pos
-	_help_button.tooltip_text = "Show the how-to-play tips (/)"
+	_help_button.tooltip_text = "Show the how-to-play notes (/)"
 	_help_button.pressed.connect(set_tips_open.bind(true))
 	layer.add_child(_help_button)
 
@@ -513,21 +514,21 @@ func _build_tips(layer: CanvasLayer) -> void:
 	var header := HBoxContainer.new()
 	box.add_child(header)
 	_help_page = Label.new()
-	_help_page.add_theme_font_size_override("font_size", 13)
-	_help_page.add_theme_color_override("font_color", Color(1.0, 0.82, 0.45))
+	_help_page.theme_type_variation = "Title"
+	_help_page.add_theme_font_size_override("font_size", 15)
 	_help_page.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(_help_page)
 	var close := Button.new()
 	close.text = "x"
 	close.flat = true
 	close.focus_mode = Control.FOCUS_NONE
-	close.tooltip_text = "Hide tips (/)"
+	close.tooltip_text = "Hide the notes (/)"
 	close.pressed.connect(set_tips_open.bind(false))
 	header.add_child(close)
 	_help_text = Label.new()
 	_help_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_help_text.custom_minimum_size.x = TIPS_WIDTH
-	_help_text.add_theme_font_size_override("font_size", 15)
+	_help_text.add_theme_font_size_override("font_size", 16)
 	box.add_child(_help_text)
 	var nav := HBoxContainer.new()
 	nav.alignment = BoxContainer.ALIGNMENT_END
@@ -546,7 +547,7 @@ func _build_tips(layer: CanvasLayer) -> void:
 ## Shows tip i (or steps by i when relative), wrapping around the ends.
 func show_tip(i: int, relative := false) -> void:
 	_tip = posmod(_tip + i if relative else i, TIPS.size())
-	_help_page.text = "How to play  %d / %d" % [_tip + 1, TIPS.size()]
+	_help_page.text = "Foreman's Notes  %d / %d" % [_tip + 1, TIPS.size()]
 	var text: String = TIPS[_tip]
 	# Tips quote live numbers so they can't go stale.
 	if text.contains("%d"):
@@ -565,7 +566,7 @@ func _on_hero_died(_hero: Unit) -> void:
 	if _game_over:
 		return
 	_hero_respawn_left = HERO_RESPAWN_SECONDS
-	show_notice("The Commander has fallen! Back in %d seconds" % int(HERO_RESPAWN_SECONDS))
+	show_notice("The Commander is down! Back in %d seconds" % int(HERO_RESPAWN_SECONDS))
 
 
 func _build_hud() -> void:
@@ -651,7 +652,8 @@ func _build_hud() -> void:
 	_notice.modulate.a = 0.0
 	layer.add_child(_notice)
 
-	_phase_label = _hud_label("Phase", 18)
+	_phase_label = _hud_label("Phase", 20)
+	_phase_label.add_theme_font_override("font", load(HudTheme.FONT_BOLD))
 	_phase_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	_phase_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_phase_label.position.y = TopBar.HEIGHT + 8
@@ -661,7 +663,10 @@ func _build_hud() -> void:
 	_build_tips(layer)
 	waves.phase_changed.connect(_on_phase_changed)
 
-	_banner = _hud_label("Banner", 48)
+	_banner = _hud_label("Banner", 46)
+	_banner.theme_type_variation = "Title"
+	_banner.add_theme_constant_override("outline_size", 10)
+	_banner.add_theme_color_override("font_outline_color", Color(0.08, 0.06, 0.04, 0.9))
 	_banner.set_anchors_preset(Control.PRESET_CENTER)
 	_banner.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_banner.grow_vertical = Control.GROW_DIRECTION_BOTH
@@ -687,7 +692,7 @@ func _build_difficulty_picker(layer: CanvasLayer) -> void:
 	_difficulty_row.add_theme_constant_override("separation", 6)
 	panel.add_child(_difficulty_row)
 	var label := Label.new()
-	label.text = "Difficulty (until wave 1):"
+	label.text = "Difficulty"
 	_difficulty_row.add_child(label)
 	var group := ButtonGroup.new()
 	for level in Difficulty.ORDER:
@@ -716,7 +721,7 @@ func set_difficulty(level: String) -> void:
 	resources.add_scrap(Difficulty.get_data().scrap - before)
 	if _difficulty_buttons.has(level):
 		_difficulty_buttons[level].button_pressed = true
-	show_notice("Difficulty: %s" % level)
+	show_notice("Difficulty set to %s" % level)
 
 
 func _hud_label(node_name: String, font_size: int) -> Label:
@@ -726,6 +731,9 @@ func _hud_label(node_name: String, font_size: int) -> Label:
 	label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
 	label.add_theme_constant_override("shadow_offset_x", 1)
 	label.add_theme_constant_override("shadow_offset_y", 1)
+	# A dark outline keeps text readable over bright sky and pale islands.
+	label.add_theme_constant_override("outline_size", 5)
+	label.add_theme_color_override("font_outline_color", Color(0.06, 0.05, 0.04, 0.85))
 	return label
 
 
@@ -749,7 +757,7 @@ func _refresh_resources() -> void:
 func _on_build_mode_changed(type_id: String) -> void:
 	if type_id != "":
 		var data := BuildingCatalog.get_data(type_id)
-		build_menu.set_hint("Placing %s (weight %d; platform loads are shown while you build). Left click: place. Shift: keep placing. R: rotate. Esc or right click: cancel." % [data.name, data.weight])
+		build_menu.set_hint("Placing %s (weight %d). Click to build, Shift + click to keep going, R rotates, Esc or right click cancels." % [data.name, data.weight])
 	else:
 		build_menu.set_hint("")
 	region.set_show_loads(type_id != "")
@@ -757,14 +765,14 @@ func _on_build_mode_changed(type_id: String) -> void:
 
 func _on_walkway_mode_changed(active: bool) -> void:
 	if active:
-		build_menu.set_hint("Walkway: click a tile on your platform, then a tile on another platform. Esc or right click: cancel.")
+		build_menu.set_hint("Walkway: click your island, then the island to reach. Esc or right click cancels.")
 	else:
 		build_menu.set_hint("")
 
 
 func _on_platform_claimed(platform_name: String, new_owner: String) -> void:
 	if new_owner == "player":
-		show_notice("You claimed %s" % platform_name)
+		show_notice("%s is ours" % platform_name)
 	else:
 		# Losing an island costs what you built there.
 		var wrecked := 0
@@ -778,9 +786,9 @@ func _on_platform_claimed(platform_name: String, new_owner: String) -> void:
 			corp = u.get_meta("corp", corp)
 		var who := corp if corp != "" else "A rival"
 		if wrecked > 0:
-			show_notice("%s took %s and wrecked %d of your building%s there" % [who, platform_name, wrecked, "" if wrecked == 1 else "s"])
+			show_notice("%s seized %s and wrecked %d of our building%s" % [who, platform_name, wrecked, "" if wrecked == 1 else "s"])
 		else:
-			show_notice("%s took %s" % [who, platform_name])
+			show_notice("%s seized %s" % [who, platform_name])
 
 
 ## Colour key for the placeholder tiles, top right. Click its title (or
@@ -795,7 +803,7 @@ func _build_legend() -> Control:
 	toggle.flat = true
 	toggle.focus_mode = Control.FOCUS_NONE
 	toggle.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	toggle.tooltip_text = "Show or hide the legend (L)"
+	toggle.tooltip_text = "Show or hide the map key (L)"
 	outer.add_child(toggle)
 	var box := VBoxContainer.new()
 	box.name = "Entries"
@@ -823,7 +831,7 @@ func _build_legend() -> Control:
 ## Shows or folds away the legend's list.
 func set_legend_open(open: bool) -> void:
 	_legend_entries.visible = open
-	_legend_toggle.text = ("v  Legend" if open else ">  Legend")
+	_legend_toggle.text = ("v  Map key" if open else ">  Map key")
 	_fit_right_column()
 
 
@@ -848,4 +856,4 @@ func _on_selection_changed(units: Array[Unit]) -> void:
 	var parts := PackedStringArray()
 	for n in counts:
 		parts.append("%s x%d" % [n, counts[n]] if counts[n] > 1 else n)
-	_status.text = "Selected: " + ", ".join(parts)
+	_status.text = ", ".join(parts)
