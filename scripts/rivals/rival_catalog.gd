@@ -55,7 +55,7 @@ const RIVALS := {
 		"tile": "rival",
 		"glow": [Color(0.5, 0.75, 1.0), "Thunder rumble"],
 		"bridges": true, "air_lanes": false, "span_seconds": 40,
-		"party_mix": ["riveteer", "rifleman", "riveteer", "medic"],
+		"party_mix": ["riveteer", "rifleman", "riveteer", "engineer"],
 		"waves": [
 			{"unit": "ground", "first": 2, "base": 2, "every": 2, "max": 7},
 		],
@@ -66,7 +66,7 @@ const RIVALS := {
 		"tile": "rival",
 		"glow": [Color(1.0, 0.85, 0.35), "Gilded gleam"],
 		"bridges": true, "air_lanes": false, "span_seconds": 50,
-		"party_mix": ["shieldbearer", "lancer", "shieldbearer", "medic"],
+		"party_mix": ["shieldbearer", "lancer", "shieldbearer", "engineer"],
 		"waves": [
 			{"unit": "ground", "first": 4, "base": 2, "every": 3, "max": 5},
 		],

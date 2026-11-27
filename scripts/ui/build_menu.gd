@@ -29,8 +29,8 @@ const TABS := {
 	# Hangar. (Tenders and hand-drawn patrol routes are parked: ships patrol
 	# every Mooring Mast, nearest first.)
 	"Army": [
-		"unit:riveteer", "unit:shieldbearer", "unit:rifleman", "unit:sapper",
-		"unit:lancer", "unit:medic", "", "",
+		"unit:riveteer", "unit:shieldbearer", "unit:rifleman", "unit:lancer",
+		"unit:engineer", "", "", "",
 		"ship:interceptor", "ship:gunboat",
 	],
 	"Defense": [
@@ -44,12 +44,13 @@ const TABS := {
 		"dynamo", "walkway", "lift_engine", "harvester",
 	],
 	# Everything bought with crystals (Humglass).
-	"Hum": ["power:overcharge", "power:emergency_lift"],
+	"Hum": ["power:overcharge"],
 }
 
 const DEFAULT_HINT := "Tab  next tab     Shift + WASD  pan     Del  demolish\nSpace  ring the alarm     P  pause     F1-F3  speed"
 
 var building: BuildController
+var region: SkyRegion
 var walkways: WalkwayBuilder
 var steering: IslandSteering
 var patrols: AirPatrols
@@ -130,6 +131,9 @@ func _ready() -> void:
 		patrols.mode_changed.connect(func(_a): refresh())
 	if resources:
 		resources.changed.connect(refresh)
+	if region:
+		region.buildings_changed.connect(refresh)
+		region.owner_changed.connect(func(_p, _o): refresh())
 	show_tab(TABS.keys()[0])
 
 
@@ -419,6 +423,13 @@ func _update_button(entry: String) -> void:
 		button.modulate = Color(1.0, 0.85, 0.4)
 	else:
 		button.modulate = Color.WHITE if affordable else Color(1.0, 0.6, 0.55, 0.75)
+	# Towers need spare power: greyed out until the grid can carry them.
+	if not entry.begins_with("ship:") and not entry.begins_with("unit:") and entry != "walkway" and entry != "steer":
+		var draw := -int(BuildingCatalog.get_data(entry).power)
+		if region and draw > 0 and region.spare_power() < draw and not active:
+			button.text = "\n%s\nneeds power" % title
+			button.modulate = Color(1, 1, 1, 0.4)
+			button.tooltip_text += "\nNeeds %d spare power, you have %d. Build a Dynamo (Industry, Q)." % [draw, maxi(region.spare_power(), 0)]
 	# Airships are built at a Hangar: greyed out until you have one.
 	if entry.begins_with("ship:") and (patrols == null or patrols.hangars.is_empty()):
 		button.text = "\n%s\nHangar first" % title
@@ -427,10 +438,10 @@ func _update_button(entry: String) -> void:
 
 func _unit_stats(unit: Dictionary) -> String:
 	var parts := PackedStringArray(["Health %d" % int(unit.hp)])
+	if unit.damage > 0.0:
+		parts.append("Damage %d, range %s" % [int(unit.damage), str(unit.range)])
 	if unit.heal > 0.0:
 		parts.append("Heals %d/s" % int(unit.heal))
-	else:
-		parts.append("Damage %d, range %s" % [int(unit.damage), str(unit.range)])
 	if unit.shield > 0.0:
 		parts.append("Shield blocks %d%%" % int(unit.shield * 100))
 	if unit.vs_armor > 1.0:
@@ -470,6 +481,10 @@ static func defense_lines(data: Dictionary) -> PackedStringArray:
 			lines.append("Anti-air damage %d, range %d" % [int(attack.air), int(attack.range)])
 		else:
 			lines.append("Damage %d, range %d" % [int(attack.damage), int(attack.range)])
+		if attack.has("chain"):
+			lines.append("Chains to %d enemies" % int(attack.chain))
+		if attack.has("hook"):
+			lines.append("Hooked ships slowed %d%% for %ds" % [roundi((1.0 - attack.hook.slow) * 100), int(attack.hook.seconds)])
 	if data.has("aura"):
 		var aura: Dictionary = data.aura
 		var parts := PackedStringArray()

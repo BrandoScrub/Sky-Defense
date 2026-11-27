@@ -41,7 +41,6 @@ func _initialize() -> void:
 	_check_bomb_target(main)
 	_check_top_bar(main)
 	_check_debug_panel(main)
-	_check_ferry(main)
 	await _check_claiming_walkways_and_raids(main)
 	_check_weight_power_income(main)
 	_check_storms(main)
@@ -95,8 +94,11 @@ func _check_open_map() -> void:
 	var foundry: Dictionary = region.platforms["Foundry"]
 	main.resources.add_scrap(200)
 	region.crew.set_process(false)
+	var walk_plan := region.plan_walkway(region.rim_toward(hub, foundry.center, true), region.rim_toward(foundry, hub.center, true))
+	var scrap_before: int = main.resources.scrap
 	var err: String = main.walkways.try_build(region.rim_toward(hub, foundry.center, true), region.rim_toward(foundry, hub.center, true))
 	_expect(err == "", "the player should be able to bridge to the Foundry (%s)" % err)
+	_expect(main.resources.scrap == scrap_before - walk_plan.cost and walk_plan.cost > 0, "a walkway should cost %d" % walk_plan.cost)
 	# Harpoons first, then the tiles one at a time.
 	_expect(region.crew.jobs.size() == 1, "building a walkway should start a harpoon crew job")
 	var job: Dictionary = region.crew.jobs[0] if not region.crew.jobs.is_empty() else {}
@@ -213,9 +215,6 @@ func _check_models() -> void:
 		HqModels.build(plinth, corp, 0.6)
 		_expect(plinth.get_node("Headquarters").get_child_count() >= 20, "the %s headquarters has a model" % (corp if corp != "" else "player"))
 		plinth.free()
-	var boat := UnitModels.ferry()
-	_expect(boat.get_child_count() >= 15, "the ferry has a model")
-	boat.free()
 
 
 func _check_input_map() -> void:
@@ -236,7 +235,7 @@ func _check_scene(main: Node) -> void:
 	var types := {}
 	for hex in region.tiles:
 		types[region.tiles[hex].type] = true
-	for t in ["core", "rival_core", "generator_socket", "harvester_anchor", "scrap_heap", "crystal_seam", "dock", "spawn", "walkway"]:
+	for t in ["core", "rival_core", "generator_socket", "harvester_anchor", "scrap_heap", "crystal_seam", "spawn", "walkway"]:
 		_expect(types.has(t), "no %s tile in the layout" % t)
 	_expect(region.has_node("Tiles") and region.get_node("Tiles").get_child_count() == region.tiles.size(),
 		"every tile should have a placeholder mesh")
@@ -253,9 +252,9 @@ func _check_fog(main: Node) -> void:
 	for hq in ["Ironbell HQ", "Vesper Aerodrome"]:
 		_expect(not fog.is_platform_revealed(hq), "%s should start hidden in the fog" % hq)
 		_expect(fog.beacons.has(hq), "%s should glow through the fog" % hq)
-	# Islands one walkway or ferry hop from the Hub are shown from the start,
+	# Islands one walkway from the Hub are shown from the start,
 	# with what they hold on their label.
-	for near in ["Foundry", "Generator Rig", "Crystal Spire"]:
+	for near in ["Foundry", "Generator Rig"]:
 		_expect(fog.is_platform_revealed(near), "%s (next to the Hub) should start out of the fog" % near)
 	_expect(region.platform_label_text("Foundry").contains("2 scrap heaps"), "the Foundry's label should say it holds 2 scrap heaps")
 	_expect(not region.platform_label_text("Hub").contains("scrap heap"), "your own Hub's label shouldn't list its contents")
@@ -331,8 +330,9 @@ func _check_routing(region: SkyRegion) -> void:
 		"Hub to Ironbell HQ should follow the chain %s, got %s" % [region.layout.paths.Ironbell, along])
 	_expect(route[route.size() - 1].is_equal_approx(ironbell), "route should end at the target")
 	_expect(not region.find_route(hub, foundry).is_empty(), "Hub to Foundry should be walkable")
-	_expect(region.find_route(hub, region.get_platform_position("Crystal Spire") + Vector3(1, 0, 0)).is_empty(),
-		"Crystal Spire is ferry-only and shouldn't be walkable from the Hub")
+	_expect(not region.find_route(hub, region.get_platform_position("Crystal Spire") + Vector3(1, 0, 0)).is_empty(),
+		"Crystal Spire is walkable once its planned walkway is built")
+	_expect(region.layout.walkways.has(["Foundry", "Crystal Spire"]), "a walkway is planned from the Foundry to the Crystal Spire")
 	_expect(region.find_route(hub, Vector3(500, 0, 500)).is_empty(), "open sky should be unreachable")
 	_expect(not region.is_walkable(hub), "the Hub core blocks walking")
 	var near := hub + Vector3(3, 0, 0)
@@ -623,8 +623,6 @@ func _check_info_panel(main: Node) -> void:
 		things.append(hq)
 	for lane in region.air_lane_routes():
 		things.append({"kind": "air_lane", "a": lane[0], "b": lane[1]})
-	for pair in region.layout.ferry_routes:
-		things.append({"kind": "ferry", "a": pair[0], "b": pair[1]})
 	for thing in things:
 		var d := info.describe(thing)
 		_expect(d.title != "" and d.body != "", "info card is missing text for %s" % str(thing))
@@ -678,7 +676,6 @@ func _check_top_bar(main: Node) -> void:
 		return
 	bar.refresh()
 	_expect(bar._scrap.text == "Scrap %d" % main.resources.scrap, "the top bar should show scrap")
-	_expect(not bar._overload.visible, "no overload warning while every platform is stable")
 	var plan := waves.wave_plan()
 	_expect(plan.size() >= 2, "the wave plan should list every rival")
 	for entry in plan:
@@ -748,24 +745,11 @@ func _check_claiming_walkways_and_raids(main: Node) -> void:
 		capture.step(1.0)
 	_expect(region.platform_owner("Foundry") == "player", "two units should claim the Foundry within 11 s")
 
-	# Building a walkway from the Foundry to the ferry-only Crystal Spire.
-	var crystal: Dictionary = region.platforms["Crystal Spire"]
-	var foundry_data: Dictionary = region.platforms["Foundry"]
-	var from_hex: Vector2i = region.rim_toward(foundry_data, crystal.center, true)
-	var to_hex: Vector2i = region.rim_toward(crystal, foundry_data.center, true)
-	var plan := region.plan_walkway(from_hex, to_hex)
-	_expect(plan.problem == "" and plan.tiles.size() > 0, "Foundry to Crystal Spire walkway should plan: %s" % plan.problem)
-	_expect(region.plan_walkway(to_hex, from_hex).problem != "", "can't start a walkway on a platform you don't own")
-	_expect(region.plan_walkway(from_hex, region.platforms["Foundry"].center).problem != "", "walkway must end on another platform")
-	var walkways_before := region.walkway_count
-	var scrap_before := res.scrap
-	res.add_scrap(100)
-	_expect(main.walkways.try_build(from_hex, to_hex) == "", "walkway build should succeed")
-	_expect(res.scrap == scrap_before + 100 - plan.cost, "walkway should cost %d" % plan.cost)
-	_expect(region.walkway_count == walkways_before + 1, "walkway count should go up")
+	# The Crystal Spire hangs off the Foundry by a planned walkway (built
+	# here, since this map starts with every planned walkway down).
 	var spire := region.get_platform_position("Crystal Spire") + Vector3(1, 0, 0)
 	_expect(not region.find_route(region.get_platform_position("Hub") + Vector3(0, 0, 3), spire).is_empty(),
-		"Crystal Spire should be walkable after the new walkway")
+		"Crystal Spire should be walkable through the Foundry")
 
 	# Contested: a rival on the Foundry stops progress.
 	var rival := raids.send_party(1)[0]
@@ -802,11 +786,9 @@ func _check_claiming_walkways_and_raids(main: Node) -> void:
 
 func _check_weight_power_income(main: Node) -> void:
 	var region: SkyRegion = main.get_node("Region")
-	var loads: LoadSystem = main.loads
 	var economy: EconomySystem = main.economy
 	var build: BuildController = main.building
 	var res: PlayerResources = main.resources
-	loads.set_process(false)
 	economy.set_process(false)
 	# Storm power is checked on its own in _check_storms.
 	main.storms.set_process(false)
@@ -814,12 +796,7 @@ func _check_weight_power_income(main: Node) -> void:
 	for e in get_root().get_tree().get_nodes_in_group(Unit.ENEMY_GROUP):
 		e.free()
 
-	_expect(LoadSystem.state_for(40, 40) == LoadSystem.STABLE, "100% is stable")
-	_expect(LoadSystem.state_for(41, 40) == LoadSystem.SWAYING, "102% sways")
-	_expect(LoadSystem.state_for(47, 40) == LoadSystem.SAGGING, "117% sags")
-	_expect(LoadSystem.state_for(53, 40) == LoadSystem.FAILING, "132% fails")
-
-	# Overload the small Generator Rig (capacity 10) with units and buildings.
+	# Weight is a building limit: an island refuses what it can't lift.
 	region.set_platform_owner("Generator Rig", "player")
 	var rig: Vector2i = region.platforms["Generator Rig"].center
 	res.add_scrap(500)
@@ -829,45 +806,42 @@ func _check_weight_power_income(main: Node) -> void:
 	_expect(region.platform_load("Generator Rig") == 8, "Rig buildings weigh 8")
 	var units: Array[Unit] = main.selection.all_units()
 	var spots := [Vector2i(0, 1), Vector2i(0, -1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(0, 1)]
+	var unit_spots := []
 	for i in units.size():
+		unit_spots.append(units[i].position)
 		units[i].position = region.hex_center(rig + spots[i])
-	_expect(region.platform_load("Generator Rig") == 11, "units add half their weight (hero 2 + 4 x 1 = 6, counts 3), got %d" % region.platform_load("Generator Rig"))
-	loads.step(0.1)
-	_expect(loads.state_of("Generator Rig") == LoadSystem.SWAYING, "110% load should sway")
-	_expect(is_equal_approx(units[0].speed_multiplier, 1.0), "swaying doesn't slow units")
-	# Shrink the Rig to push it over the edge: 11 / 8 is 137%.
+	_expect(region.platform_load("Generator Rig") == 8, "units don't add weight, got %d" % region.platform_load("Generator Rig"))
+	for i in units.size():
+		units[i].position = unit_spots[i]
 	var rig_cap: int = region.platforms["Generator Rig"].capacity
-	region.platforms["Generator Rig"].capacity = 8
-	loads.step(0.1)
-	_expect(loads.state_of("Generator Rig") == LoadSystem.FAILING, "137% load should be failing")
-	_expect(is_equal_approx(units[0].speed_multiplier, 0.4), "units on a failing platform move at 40%")
-	# Emergency Lift (a company power) holds it steady while it runs.
+	region.platforms["Generator Rig"].capacity = 9
+	_expect(build.placement_problem("rivet_turret", rig + Vector2i(0, 1)).contains("can't lift"), "a full island refuses another building")
+	var lift_hex := rig + Vector2i(0, -1)
+	_expect(build.try_place("lift_engine", lift_hex) == "", "a Lift Engine fits even on a full island")
+	_expect(region.platform_capacity("Generator Rig") == 9 + 10, "a Lift Engine adds 10 capacity")
+	_expect(region.platform_load("Generator Rig") == 8, "a Lift Engine weighs nothing")
+	_expect(build.placement_problem("rivet_turret", rig + Vector2i(0, 1)) == "", "with a Lift Engine the turret fits")
+	build.demolish(lift_hex)
+	_expect(region.platform_capacity("Generator Rig") == 9, "capacity drops when the Lift Engine goes")
+	region.platforms["Generator Rig"].capacity = rig_cap
+	_expect(not CompanyPowers.POWERS.has("emergency_lift"), "Emergency Lift is cut (weight is a build limit)")
+	# Power is a build budget: no tower without spare power.
+	var spare := region.spare_power()
+	_expect(spare >= 3, "some spare power before the budget check, got %d" % spare)
+	region.engine_draw = spare - 1
+	_expect(build.placement_problem("rivet_turret", rig + Vector2i(0, 1)).contains("spare power"), "no tower without spare power")
+	_expect(not build.placement_problem("dynamo", rig + Vector2i(0, 1)).contains("spare power"), "generators never need spare power")
+	var menu: BuildMenu = main.build_menu
+	menu.show_tab("Defense")
+	menu.refresh()
+	_expect(menu._entry_buttons["rivet_turret"].text.contains("needs power"), "the turret button says it needs power")
+	region.engine_draw = 0
+	menu.refresh()
+	_expect(not menu._entry_buttons["rivet_turret"].text.contains("needs power"), "the turret button clears once power is spare")
 	var powers: CompanyPowers = main.powers
 	res.crystals = 0
-	_expect(powers.use("emergency_lift") != "", "company powers cost crystals")
+	_expect(powers.use("overcharge") != "", "company powers cost crystals")
 	res.add_crystals(50)
-	_expect(powers.use("emergency_lift") == "" and res.crystals == 30, "Emergency Lift costs 20 crystals")
-	loads.step(6.0)
-	_expect(loads.state_of("Generator Rig") == LoadSystem.STABLE, "Emergency Lift keeps your platforms stable")
-	_expect(region.buildings_on("Generator Rig").size() == 3, "nothing breaks off under Emergency Lift")
-	powers.step(CompanyPowers.POWERS.emergency_lift.seconds + 0.1)
-	_expect(not powers.is_running("emergency_lift") and powers.use("emergency_lift") != "", "Emergency Lift wears off and recharges")
-	powers.step(CompanyPowers.POWERS.emergency_lift.cooldown + 0.1)
-	loads.step(0.1)
-	_expect(loads.state_of("Generator Rig") == LoadSystem.FAILING, "overload returns when Emergency Lift ends")
-	loads.step(6.0)
-	_expect(region.buildings_on("Generator Rig").size() == 2, "the newest building should break off")
-	_expect(not region.buildings.has(rig + Vector2i(-1, 0)), "the Flak Battery (newest) is the one lost")
-	loads.step(0.1)
-	_expect(loads.state_of("Generator Rig") == LoadSystem.STABLE, "8 of 8 is stable")
-	# A Lift Engine adds 10 capacity, and weighs nothing itself.
-	region.platforms["Generator Rig"].capacity = rig_cap
-	var lift_hex := rig + Vector2i(-1, 0)
-	_expect(build.try_place("lift_engine", lift_hex) == "", "a Lift Engine on the Rig")
-	_expect(region.platform_capacity("Generator Rig") == rig_cap + 10, "a Lift Engine adds 10 capacity")
-	_expect(region.platform_load("Generator Rig") == 8, "a Lift Engine weighs nothing")
-	build.demolish(lift_hex)
-	_expect(region.platform_capacity("Generator Rig") == rig_cap, "capacity drops when the Lift Engine goes")
 	# Overcharge makes your towers fire faster while it runs.
 	_expect(powers.use("overcharge") == "" and is_equal_approx(main.combat.player_tower_rate, CompanyPowers.OVERCHARGE_RATE), "Overcharge speeds up your towers")
 	powers.step(CompanyPowers.POWERS.overcharge.seconds + 0.1)
@@ -939,47 +913,11 @@ func _check_weight_power_income(main: Node) -> void:
 	build.demolish(deck[0])
 
 
-func _check_ferry(main: Node) -> void:
-	var region: SkyRegion = main.get_node("Region")
-	var ferry: FerrySystem = main.ferry
-	var sel: SelectionController = main.selection
-	ferry.set_process(false)
-	_expect(ferry.ferries.size() == 1, "expected one ferry route")
-	var hero: Unit = sel.find_hero()
-	hero.position = region.get_platform_position("Hub") + Vector3(0, 0, 3)
-	hero.stop()
-	sel.select_units([hero])
-	var spire := region.get_platform_position("Crystal Spire") + Vector3(1, 0, 0)
-	_expect(region.find_route(hero.position, spire).is_empty(), "Crystal Spire can't be walked to")
-	_expect(sel.order_move(spire), "an order to the Crystal Spire should go by ferry")
-	_expect(ferry.is_waiting(hero), "the hero should head for the ferry dock")
-	var rode := false
-	for i in 1200:
-		hero._process(0.05)
-		ferry.step(0.05)
-		rode = rode or hero.riding
-		if not hero.riding and not hero.is_moving() and region.platform_at(hero.position) == "Crystal Spire":
-			break
-	_expect(rode, "the hero should have boarded the ferry")
-	_expect(region.platform_at(hero.position) == "Crystal Spire", "the ferry should land the hero on the Crystal Spire, got '%s'" % region.platform_at(hero.position))
-	_expect(not ferry.is_waiting(hero) and not hero.riding, "the trip should be finished")
-	# And back: an order to the Hub also goes by ferry.
-	_expect(sel.order_move(region.get_platform_position("Hub") + Vector3(0, 0, 3)), "ferry back to the Hub")
-	for i in 1200:
-		hero._process(0.05)
-		ferry.step(0.05)
-		if not hero.riding and not hero.is_moving() and region.platform_at(hero.position) == "Hub":
-			break
-	_expect(region.platform_at(hero.position) == "Hub", "the ferry should bring the hero home")
-	sel.select_units([])
-
-
 func _check_storms(main: Node) -> void:
 	var region: SkyRegion = main.get_node("Region")
 	var storms: StormSystem = main.storms
 	var build: BuildController = main.building
 	storms.set_process(false)
-	main.ferry.set_process(false)
 	var anchors := {}
 	for hex in region.tiles:
 		var t: Dictionary = region.tiles[hex]
@@ -1026,7 +964,6 @@ func _check_storms(main: Node) -> void:
 	storms.refresh()
 	_expect(storms.control[storm] == "rival", "%d v 1 harvesters should give Ironbell the %s" % [rival_anchors, storm])
 	_expect(region.power_supply() == supply_with - storms.power_per_storm, "losing the storm loses its power")
-	_expect(is_equal_approx(main.waves.hp_bonus, storms.wave_hp_per_storm), "an Ironbell storm toughens waves")
 	var rival_harvester: Building = null
 	for b in region.buildings.values():
 		if b.faction == "rival":
@@ -1047,7 +984,10 @@ func _check_storms(main: Node) -> void:
 	for platform_name in owners_before:
 		region.set_platform_owner(platform_name, owners_before[platform_name])
 	storms.refresh()
-	_expect(region.storm_bonus == 0 and main.waves.hp_bonus == 0.0, "storm effects clear when harvesters go")
+	_expect(region.storm_bonus == 0, "storm effects clear when harvesters go")
+	# The checks after this build lots of towers: towers need spare power
+	# now, so give the grid plenty (storms stay paused from here on).
+	region.storm_bonus = 500
 
 
 func _check_hero_respawn(main: Node) -> void:
@@ -1194,11 +1134,14 @@ func _check_unit_roster(main: Node) -> void:
 	grunt.free()
 	brace.free()
 
-	# Medics heal the most wounded ally in range.
-	var medic: Unit = spawn.call("medic", "player", Vector3(1, 0, 6))
+	# Engineers heal the most wounded ally in range, and fight when nobody
+	# needs patching.
+	var medic: Unit = spawn.call("engineer", "player", Vector3(1, 0, 6))
 	rifle.hp = 10.0
-	combat._tend(medic, "player", 1.0)
-	_expect(is_equal_approx(rifle.hp, 10.0 + medic.heal_power), "a Medic heals a wounded ally")
+	_expect(combat._tend(medic, "player", 1.0), "an Engineer tends a wounded ally")
+	_expect(is_equal_approx(rifle.hp, 10.0 + medic.heal_power), "an Engineer heals a wounded ally")
+	_expect(medic.damage > 0.0 and medic.repair_power > 0.0 and medic.vs_buildings > 1.0, "an Engineer also fights, repairs and wrecks buildings")
+	_expect(not UnitCatalog.has_unit("medic") and not UnitCatalog.has_unit("sapper"), "Medic and Sapper are merged into the Engineer")
 
 	# Buffs: stat multipliers, refresh, expiry and auras.
 	rifle.add_buff("test_drill", {"damage": 1.5, "range": 2.0, "attack_speed": 2.0}, 1.0)
@@ -1221,7 +1164,7 @@ func _check_unit_roster(main: Node) -> void:
 	for u in [shooter, armored, rifle, shield, lancer, medic]:
 		u.free()
 
-	# Sappers repair damaged buildings.
+	# Engineers repair damaged buildings.
 	var hub: Vector2i = region.platforms["Hub"].center
 	main.resources.add_scrap(200)
 	var hex := hub + Vector2i(2, -2)
@@ -1230,18 +1173,18 @@ func _check_unit_roster(main: Node) -> void:
 	_expect(main.building.try_place("rivet_turret", hex) == "", "place a turret to repair")
 	var turret: Building = region.buildings[hex]
 	turret.hp = turret.max_hp * 0.5
-	var sapper := UnitCatalog.make("sapper")
+	var sapper := UnitCatalog.make("engineer")
 	sapper.position = turret.global_position + Vector3(1.5, 0, 0)
 	units_root.add_child(sapper)
-	_expect(combat._repair(sapper, "player", 1.0) and is_equal_approx(turret.hp, turret.max_hp * 0.5 + sapper.repair_power), "a Sapper repairs a damaged building")
-	_expect(is_equal_approx(UnitCatalog.get_data("sapper").vs_buildings, sapper.vs_buildings) and sapper.vs_buildings > 1.0, "Sappers hit buildings harder")
-	# With nothing else to mend, a Sapper slowly repairs the Hub.
+	_expect(combat._repair(sapper, "player", 1.0) and is_equal_approx(turret.hp, turret.max_hp * 0.5 + sapper.repair_power), "an Engineer repairs a damaged building")
+	_expect(is_equal_approx(UnitCatalog.get_data("engineer").vs_buildings, sapper.vs_buildings) and sapper.vs_buildings > 1.0, "Engineers hit buildings harder")
+	# With nothing else to mend, an Engineer slowly repairs the Hub.
 	turret.hp = turret.max_hp
 	var hub_hq: Headquarters = combat.headquarters_on("Hub")
 	hub_hq.hp = hub_hq.max_hp - 100.0
 	sapper.position = hub_hq.global_position + Vector3(2.0, 0, 0)
 	_expect(combat._repair(sapper, "player", 1.0) and hub_hq.hp > hub_hq.max_hp - 100.0 and hub_hq.hp < hub_hq.max_hp - 100.0 + sapper.repair_power,
-		"a Sapper repairs the Hub, more slowly than a building")
+		"an Engineer repairs the Hub, more slowly than a building")
 	hub_hq.hp = hub_hq.max_hp
 	sapper.free()
 	main.building.demolish(hex)
@@ -1261,7 +1204,7 @@ func _check_defense_roles(main: Node) -> void:
 	_expect(defenses != null, "main should have a DefenseSystem")
 	if defenses == null:
 		return
-	for n in [combat, defenses, main.waves, main.raids, main.fleet, main.loads, main.economy, main.capture]:
+	for n in [combat, defenses, main.waves, main.raids, main.fleet, main.economy, main.capture]:
 		n.set_process(false)
 	for e in get_root().get_tree().get_nodes_in_group(Unit.ENEMY_GROUP):
 		e.free()
@@ -1296,25 +1239,46 @@ func _check_defense_roles(main: Node) -> void:
 	build.demolish(hub + Vector2i(2, -2))
 	walker.free()
 
-	# Ground support: a Rally Horn and a Rivet Turret buff a Riveteer.
+	# Ground support: the Rally Horn is the only aura tower; a Rivet Turret
+	# next to it is just a gun.
 	var riveteer: Unit = units[1]
 	riveteer.position = region.hex_center(hub + Vector2i(0, 2))
 	_expect(build.try_place("rally_horn", hub + Vector2i(-1, 2)) == "", "place a Rally Horn")
 	_expect(build.try_place("rivet_turret", hub + Vector2i(1, 1)) == "", "place a Rivet Turret")
 	defenses.step(1.0)
 	_expect(riveteer.damage_mult > 1.0 and riveteer.cooldown_mult < 1.0, "a Rally Horn should boost nearby units")
-	_expect(riveteer.armor > 0.0, "a Rivet Turret should give nearby units armor")
-	_expect(not BuildingCatalog.BUILDINGS.has("mending_post"), "the Mending Post is cut (Medics heal)")
+	_expect(riveteer.armor == 0.0, "a Rivet Turret gives no armor aura")
+	var auras := BuildingCatalog.BUILDINGS.keys().filter(func(id): return BuildingCatalog.BUILDINGS[id].has("aura"))
+	_expect(auras == ["rally_horn"], "the Rally Horn is the only aura tower, got %s" % [auras])
+	_expect(not BuildingCatalog.BUILDINGS.rally_horn.has("attack"), "the Rally Horn has no gun")
+	_expect(not BuildingCatalog.BUILDINGS.has("mending_post"), "the Mending Post is cut (Engineers heal)")
 	var far: Unit = units[2]
-	_expect(far.damage_mult == 1.0 and far.armor == 0.0, "units far away get no bonus")
-	var before := riveteer.hp
-	riveteer.take_damage(10.0)
-	_expect(before - riveteer.hp < 10.0, "armor should block part of the damage")
-	riveteer.hp = riveteer.max_hp
+	_expect(far.damage_mult == 1.0, "units far away get no bonus")
 	build.demolish(hub + Vector2i(-1, 2))
 	build.demolish(hub + Vector2i(1, 1))
 	defenses.step(0.1)
-	_expect(riveteer.damage_mult == 1.0 and riveteer.armor == 0.0, "bonuses end when the building is gone")
+	_expect(riveteer.damage_mult == 1.0, "bonuses end when the building is gone")
+
+	# Every gun tower fires its own kind of shot.
+	var shots := {}
+	for id in BuildingCatalog.BUILDINGS:
+		var attack: Dictionary = BuildingCatalog.BUILDINGS[id].get("attack", {})
+		if not attack.is_empty():
+			_expect(CombatSystem.TOWER_SHOTS.has(attack.get("shot", "")), "%s needs a shot look" % id)
+			_expect(not shots.has(attack.get("shot", "")), "%s shares its shot look with %s" % [id, shots.get(attack.get("shot", ""), "")])
+			shots[attack.get("shot", "")] = id
+
+	# The Skyhook's harpoon slows the ship it hooks.
+	var hook_ship: Unit = main.fleet.launch("bomber", 1, "Vesper")[0]
+	var hook_tower := Building.new().setup("skyhook_cannon")
+	region.add_child(hook_tower)
+	hook_tower.global_position = hook_ship.global_position + Vector3(4, -VesperFleet.ALTITUDE, 0)
+	combat.deal_hit(hook_tower, hook_ship, 1.0, Color.WHITE, false)
+	_expect(hook_ship.has_buff("hooked") and hook_ship.buff_multiplier("speed") < 1.0, "a Skyhook hit slows the ship")
+	hook_ship.tick_buffs(BuildingCatalog.BUILDINGS.skyhook_cannon.attack.hook.seconds + 0.1)
+	_expect(not hook_ship.has_buff("hooked"), "the hook comes loose after a few seconds")
+	hook_tower.free()
+	hook_ship.free()
 	riveteer.position = region.get_platform_position("Outpost")
 
 	# Hangar: launches drones, they shoot down a bomber, and die with the hangar.
@@ -1362,7 +1326,7 @@ func _check_combat_and_waves(main: Node) -> void:
 	var raids: RivalRaids = main.raids
 	var build: BuildController = main.building
 	var res: PlayerResources = main.resources
-	for n in [combat, waves, raids, main.loads, main.economy, main.capture]:
+	for n in [combat, waves, raids, main.economy, main.capture]:
 		n.set_process(false)
 	for e in get_root().get_tree().get_nodes_in_group(Unit.ENEMY_GROUP):
 		e.free()
@@ -1594,7 +1558,7 @@ func _check_combat_and_waves(main: Node) -> void:
 
 ## The map rules hold for many seeds: rival headquarters in two different
 ## compass directions at least 90 degrees apart, 4 to 9 platforms between
-## the Hub and each, and every platform reachable on foot or by ferry.
+## the Hub and each, and every platform reachable on foot.
 ## Airships steer around islands, and the wind turns their attack routes.
 func _check_air_routes(main: Node) -> void:
 	var region: SkyRegion = main.region
@@ -1795,6 +1759,8 @@ func _check_island_steering(main: Node) -> void:
 	region.set_platform_owner("Hub", "player")
 	_expect(build.try_place(IslandSteering.ENGINE, region.platforms["Hub"].center + Vector2i(1, 1)).contains("turbine"), "engines only fit on turbine islands")
 	region.set_platform_owner(turbine, "player")
+	# Four engines are heavy: give the island room to carry them.
+	region.platforms[turbine].capacity += 20
 	var spots: Array[Vector2i] = []
 	for hex in region.tiles_of_platform(turbine):
 		if region.build_problem(IslandSteering.ENGINE, hex) == "":
@@ -1860,16 +1826,19 @@ func _check_air_patrols(main: Node) -> void:
 	main.resources.add_scrap(3000)
 	region.storm_bonus += 200
 	_expect(patrols.queue_ship("interceptor").contains("Hangar"), "ships need a hangar first")
+	# Earlier checks have filled the Hub: give it room for the air network.
+	region.platforms["Hub"].capacity += 20
 	var spots: Array[Vector2i] = []
 	for hex in region.tiles_of_platform("Hub"):
-		if region.build_problem(AirPatrols.HANGAR, hex) == "" and HexGrid.distance(hex, region.platforms["Hub"].center) >= 2:
+		if build.placement_problem(AirPatrols.HANGAR, hex) == "" and HexGrid.distance(hex, region.platforms["Hub"].center) >= 2:
 			spots.append(hex)
 	_expect(spots.size() >= 3, "room on the Hub for a hangar and two masts")
 	if spots.size() < 3:
 		return
 	_expect(build.try_place(AirPatrols.HANGAR, spots[0]) == "", "build an Airship Hangar")
 	_expect(build.try_place(AirPatrols.MAST, spots[spots.size() - 1]) == "", "build a Mooring Mast")
-	_expect(build.try_place(AirPatrols.MAST, spots[spots.size() / 2]) == "", "build a second Mooring Mast")
+	var mast_err := build.try_place(AirPatrols.MAST, spots[spots.size() / 2])
+	_expect(mast_err == "", "build a second Mooring Mast: " + mast_err)
 	var hangar: Building = region.buildings[spots[0]]
 	var far_mast: Building = region.buildings[spots[spots.size() - 1]]
 	var near_mast: Building = region.buildings[spots[spots.size() / 2]]
@@ -2007,9 +1976,9 @@ func _check_layout_rules() -> void:
 			var between: int = l.paths[corp].size() - 2
 			_expect(between >= LevelLayout.MIN_BETWEEN and between <= LevelLayout.MAX_BETWEEN,
 				"seed %d: %d platforms between Hub and %s" % [map_seed, between, corp])
-		# Every platform is joined to the Hub by walkways or the ferry.
+		# Every platform is joined to the Hub by walkways.
 		var linked := {"Hub": true}
-		var links: Array = l.walkways + l.ferry_routes
+		var links: Array = l.walkways
 		var grew := true
 		while grew:
 			grew = false

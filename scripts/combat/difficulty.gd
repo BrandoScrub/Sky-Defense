@@ -5,9 +5,9 @@ class_name Difficulty
 extends RefCounted
 
 const LEVELS := {
-	"Easy": {"count": 0.7, "hp": 0.8, "scrap": 400},
-	"Normal": {"count": 1.0, "hp": 1.0, "scrap": 300},
-	"Hard": {"count": 1.3, "hp": 1.2, "scrap": 250},
+	"Easy": {"count": 0.7, "hp": 0.85, "scrap": 400},
+	"Normal": {"count": 1.0, "hp": 1.08, "scrap": 300},
+	"Hard": {"count": 1.3, "hp": 1.3, "scrap": 250},
 }
 const ORDER := ["Easy", "Normal", "Hard"]
 

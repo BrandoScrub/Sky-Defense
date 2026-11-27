@@ -142,3 +142,81 @@ static func falling(parent: Node3D, from: Vector3, to: Vector3, size: float, sec
 	if tumble:
 		tw.tween_property(m, "rotation", Vector3(1.2, 0.8, 2.2), seconds)
 	tw.chain().tween_callback(m.queue_free)
+
+
+## A jagged lightning bolt from `from` to `to` that flickers out: the Arc
+## Coil's chain lightning.
+static func bolt(parent: Node3D, from: Vector3, to: Vector3, color: Color, seconds := 0.2) -> void:
+	if not enabled():
+		return
+	var mat := _material(color.lightened(0.35))
+	var points: Array[Vector3] = [from]
+	var kinks := 4
+	var side := (to - from).cross(Vector3.UP).normalized()
+	if side.length() < 0.1:
+		side = Vector3.RIGHT
+	for i in range(1, kinks):
+		var t := float(i) / kinks
+		var jitter := side * randf_range(-0.45, 0.45) + Vector3.UP * randf_range(-0.3, 0.3)
+		points.append(from.lerp(to, t) + jitter)
+	points.append(to)
+	for i in points.size() - 1:
+		var m := line(parent, points[i], points[i + 1], mat, 0.07)
+		var tw := m.create_tween()
+		tw.tween_property(mat, "albedo_color:a", 0.0, seconds)
+		tw.tween_callback(m.queue_free)
+	flash(parent, to, color, 0.3, seconds)
+
+
+## A thin straight bar between two points (cables, bolts). Move it later
+## with stretch().
+static func line(parent: Node3D, from: Vector3, to: Vector3, material: Material, thickness := 0.05) -> MeshInstance3D:
+	var m := MeshInstance3D.new()
+	var box := BoxMesh.new()
+	box.size = Vector3(thickness, thickness, 1.0)
+	m.mesh = box
+	m.material_override = material
+	m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(m)
+	stretch(m, from, to)
+	return m
+
+
+## Re-lays a line() between two new points.
+static func stretch(m: MeshInstance3D, from: Vector3, to: Vector3) -> void:
+	var length := from.distance_to(to)
+	m.global_position = (from + to) / 2.0
+	m.scale = Vector3(1.0, 1.0, maxf(length, 0.01))
+	if length > 0.01:
+		m.look_at(to, Vector3.UP if absf((to - from).normalized().y) < 0.99 else Vector3.RIGHT)
+
+
+## The Skyhook's cable, from the gun to its harpoon or hooked ship.
+static func cable(parent: Node3D, from: Vector3, to: Vector3) -> MeshInstance3D:
+	if not enabled():
+		return null
+	return line(parent, from, to, _material(Color(0.12, 0.11, 0.1, 0.95), false), 0.06)
+
+
+## A brass ring that swells out to `radius` along the deck and fades: the
+## Rally Horn sounding, showing how far its call carries.
+static func ring(parent: Node3D, at: Vector3, radius: float, color: Color, seconds := 1.1) -> void:
+	if not enabled():
+		return
+	var m := MeshInstance3D.new()
+	var torus := TorusMesh.new()
+	torus.inner_radius = 0.92
+	torus.outer_radius = 1.0
+	torus.rings = 32
+	torus.ring_segments = 6
+	m.mesh = torus
+	var mat := _material(color)
+	m.material_override = mat
+	m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	m.scale = Vector3(radius * 0.25, 0.6, radius * 0.25)
+	parent.add_child(m)
+	m.global_position = Vector3(at.x, at.y + 0.35, at.z)
+	var tw := m.create_tween().set_parallel(true)
+	tw.tween_property(m, "scale", Vector3(radius, 0.6, radius), seconds).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	tw.tween_property(mat, "albedo_color:a", 0.0, seconds).set_ease(Tween.EASE_IN)
+	tw.chain().tween_callback(m.queue_free)

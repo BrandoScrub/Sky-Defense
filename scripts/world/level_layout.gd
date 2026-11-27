@@ -8,7 +8,7 @@
 ## - Between the Hub and each rival headquarters there's a chain of 4 to 9
 ##   platforms joined by walkways, with a few side platforms branching off.
 ## - Near the Hub: the Foundry (scrap), the Generator Rig (power socket) and
-##   the ferry-only Crystal Spire, each off in a direction of its own.
+##   the Crystal Spire beyond the Foundry, each off in a direction of its own.
 ## - A storm cloud hangs beside the middle of each rival's chain, with
 ##   harvester anchors on the platforms around it.
 ##
@@ -25,7 +25,6 @@
 ##     `where` is an offset from the centre (Vector2i), or the name of a
 ##     platform or cloud to put it on the rim facing that thing.
 ##   walkways: [[platform, platform]]
-##   ferry_routes: [[platform, platform]]
 ##   clouds: [{name, center, radius}]
 ##   air_lanes: [[from platform, to platform]]
 ##   directions: {corp: compass name}, e.g. {"Ironbell": "North", ...}
@@ -130,15 +129,13 @@ static func _attempt(rng: RandomNumberGenerator, rivals: Array) -> Dictionary:
 		return {}
 	if not b.spur("Generator Rig", "Hub", compass_vector(rig_dir), 1, [["generator_socket", Vector2i(0, 0)]]):
 		return {}
-	# The Crystal Spire hangs beyond the Foundry, reachable only by ferry
-	# (or a short walkway you build yourself).
+	# The Crystal Spire hangs beyond the Foundry, a walkway further out.
 	var side := 1.0 if rng.randf() < 0.5 else -1.0
 	var spire_dir := compass_vector(foundry_dir).rotated(Vector3.UP, side * PI / 3.0)
 	if not b.place_near("Crystal Spire", "Foundry", spire_dir, 2, 4, [
-			["crystal_seam", Vector2i(0, 0)], ["crystal_seam", Vector2i(-1, -1)], ["dock", "Hub"]]):
+			["crystal_seam", Vector2i(0, 0)], ["crystal_seam", Vector2i(-1, -1)]]):
 		return {}
-	b.feature("Hub", ["dock", "Crystal Spire"])
-	b.ferry_routes.append(["Hub", "Crystal Spire"])
+	b.walkways.append(["Foundry", "Crystal Spire"])
 
 	# Branches: one or two side platforms off each chain.
 	for corp in b.paths:
@@ -166,7 +163,7 @@ static func _attempt(rng: RandomNumberGenerator, rivals: Array) -> Dictionary:
 			b.air_lanes.append([rival.hq, "Hub"])
 			b.air_lanes.append([rival.hq, "Generator Rig"])
 	return {
-		"platforms": b.platforms, "walkways": b.walkways, "ferry_routes": b.ferry_routes,
+		"platforms": b.platforms, "walkways": b.walkways,
 		"clouds": b.clouds, "air_lanes": b.air_lanes, "paths": b.paths,
 		"directions": directions,
 	}
@@ -177,7 +174,6 @@ class _Builder:
 	var rng: RandomNumberGenerator
 	var platforms: Array = []
 	var walkways: Array = []
-	var ferry_routes: Array = []
 	var clouds: Array = []
 	var air_lanes: Array = []
 	var paths := {}

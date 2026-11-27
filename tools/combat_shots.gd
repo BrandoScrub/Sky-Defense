@@ -3,7 +3,7 @@
 ## impacts, shields, staggers, falling units. Waves are paused and a fight
 ## is staged on the Hub. Needs a display:
 ##   xvfb-run -a -s "-screen 0 1920x1080x24" godot --path . --rendering-method gl_compatibility \
-##     --script res://tools/combat_shots.gd -- out_dir [1920x1080,1280x720] [ground,air]
+##     --script res://tools/combat_shots.gd -- out_dir [1920x1080,1280x720] [ground,air,towers,lineup]
 ## Saves <size>-<scene>-1.png (fight just joined) and -2.png (a moment later).
 extends SceneTree
 
@@ -47,7 +47,7 @@ func _shoot(out_dir: String, tag: String, size: Vector2i, scene: String) -> void
 		# Your line in front of the HQ, a rival column coming at it from the east.
 		var line := [["shieldbearer", Vector3(3.0, 0, -1.2)], ["shieldbearer", Vector3(3.0, 0, 1.2)],
 			["rifleman", Vector3(1.0, 0, -2.0)], ["rifleman", Vector3(1.0, 0, 0.0)], ["rifleman", Vector3(1.0, 0, 2.0)],
-			["lancer", Vector3(0.0, 0, 3.4)], ["riveteer", Vector3(2.0, 0, -4.0)], ["medic", Vector3(-0.5, 0, -1.0)]]
+			["lancer", Vector3(0.0, 0, 3.4)], ["riveteer", Vector3(2.0, 0, -4.0)], ["engineer", Vector3(-0.5, 0, -1.0)]]
 		for spec in line:
 			var u := UnitCatalog.make(spec[0], "player")
 			u.position = region.snap_to_walkable(hub + spec[1])
@@ -76,13 +76,64 @@ func _shoot(out_dir: String, tag: String, size: Vector2i, scene: String) -> void
 				u.position = hub + side * 14.0 + Vector3.UP * VesperFleet.ALTITUDE
 				# Fresh orders from here (VesperFleet plans the run).
 				u.stop()
+	elif scene == "towers" or scene == "lineup":
+		# Every defense tower on the Hub, powered. "towers" also sends walkers
+		# from the east and airships from their lanes; "lineup" is a close,
+		# quiet look at the models.
+		main.resources.scrap = 5000
+		main.resources.crystals = 200
+		var c: Vector2i = region.platforms["Hub"].center
+		for d in [Vector2i(-3, 1), Vector2i(-2, -1), Vector2i(-1, -2)]:
+			main.building.try_place("dynamo", c + d)
+		# The towers stand in a row along the Hub's front (camera) edge,
+		# left to right in build-menu order; dynamos go at the back.
+		var front: Array[Vector2i] = []
+		for hex in region.tiles_of_platform("Hub"):
+			if region.tiles[hex].type == "deck" and not region.buildings.has(hex) and HexGrid.distance(hex, c) == 2 and region.hex_center(hex).z > hub.z - 0.5:
+				front.append(hex)
+		front.sort_custom(func(a, b): return region.hex_center(a).z > region.hex_center(b).z)
+		front = front.slice(0, 7)
+		front.sort_custom(func(a, b): return region.hex_center(a).x < region.hex_center(b).x)
+		var towers := ["rivet_turret", "arc_coil", "rally_horn", "flak_battery", "skyhook_cannon"]
+		var picks: Array[Vector2i] = []
+		for i in towers.size():
+			picks.append(front[int(round(i * (front.size() - 1) / 4.0))])
+		for i in towers.size():
+			var err: String = main.building.try_place(towers[i], picks[i])
+			print("place ", towers[i], " at ", picks[i], ": ", err if err != "" else "ok")
+		focus = hub + Vector3(0, 0, 2.5)
+		if scene == "towers":
+			for spec in [["riveteer", Vector3(3.5, 0, -0.5)], ["riveteer", Vector3(3.5, 0, 1.0)], ["rifleman", Vector3(2.5, 0, 2.5)]]:
+				var u := UnitCatalog.make(spec[0], "player")
+				u.position = region.snap_to_walkable(hub + spec[1])
+				units_root.add_child(u)
+			# Close enough that every tower is already firing in the shot.
+			var foes := ["walker", "rifleman", "walker", "walker", "rifleman", "walker"]
+			for i in foes.size():
+				var u := UnitCatalog.make(foes[i], "rival")
+				u.position = region.snap_to_walkable(hub + Vector3(-3.0 + (i % 3) * 1.4, 0, 5.5 + (i / 3) * 1.4))
+				units_root.add_child(u)
+				main.waves._toughen(u)
+				u.set_route(region.find_route(u.position, region.snap_to_walkable(hub)), true)
+			var k := 0
+			for kind in ["carrier", "gunship"]:
+				for u in main.fleet.launch(kind, 1, "Vesper"):
+					main.waves._toughen(u)
+					u.position = hub + Vector3(3.5 + k * 2.5, VesperFleet.ALTITUDE, 3.0 - k * 2.0)
+					u.stop()
+					k += 1
+	var zoom := 0.1
+	if scene == "lineup":
+		zoom = 0.03
+		focus = hub + Vector3(0, 0, 3.0)
+		main.waves.set_process(false)
 	cam.position = Vector3(focus.x, cam.position.y, focus.z + 6)
-	cam.zoom = 0.1
-	cam._target_zoom = 0.1
+	cam.zoom = zoom
+	cam._target_zoom = zoom
 	cam._apply_zoom()
-	await _settle(100 if scene == "ground" else 60)
+	await _settle(100 if scene == "ground" else (30 if scene == "towers" else 60))
 	await _save("%s/%s-%s-1.png" % [out_dir, tag, scene])
-	await _settle(40)
+	await _settle(40 if scene != "towers" else 12)
 	await _save("%s/%s-%s-2.png" % [out_dir, tag, scene])
 	root.remove_child(main)
 	main.free()

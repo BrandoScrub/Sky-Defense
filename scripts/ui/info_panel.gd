@@ -1,6 +1,6 @@
 ## The info card in the bottom-right corner. Left click anything in the world
-## (a unit, building, headquarters, platform, tile feature, storm cloud, ferry
-## route or air lane) to see what it is and a short summary of what it does.
+## (a unit, building, headquarters, platform, tile feature, storm cloud or
+## air lane) to see what it is and a short summary of what it does.
 ## Clicking empty sky, the x button or Esc hides it.
 class_name InfoPanel
 extends PanelContainer
@@ -31,11 +31,11 @@ static var BUILDING_INFO := {
 	"dynamo": "A coal-fired dynamo that powers your towers. Makes %d power, or %d on a yellow generator socket." % [BuildingCatalog.BUILDINGS.dynamo.power, BuildingCatalog.BUILDINGS.dynamo.power_on_socket],
 	"lift_engine": "An extra lift rotor under the deck. This island carries %d more weight, and the engine weighs nothing. One per island." % BuildingCatalog.BUILDINGS.lift_engine.capacity,
 	"harvester": "Draws charge from a storm cloud through a blue anchor. Gives power, pays crystals each wave, and counts toward who holds the storm.",
-	"rivet_turret": "A sturdy gun tower for walkers. Its plating gives cover to your units fighting beside it. Can't hit aircraft.",
-	"arc_coil": "Throws chain lightning across up to 3 walkers. Power hungry, and can't hit aircraft.",
-	"rally_horn": "A brass horn blaring marching tunes. Its own gun is weak, but nearby troops hit harder and fire faster. Can't hit aircraft.",
-	"flak_battery": "Rapid anti-air guns. Shreds bombers and other aircraft, ignores everything on the ground.",
-	"skyhook_cannon": "A long harpoon gun for big airships. Slow, but every hit tears the envelope. Ignores the ground.",
+	"rivet_turret": "The line gun. A riveted pillbox that hammers one walker at a time from the longest range of any ground tower. Can't hit aircraft.",
+	"arc_coil": "The crowd breaker. Lightning leaps across up to 3 walkers bunched together. Short reach, power hungry, and can't hit aircraft.",
+	"rally_horn": "The morale tower. It has no gun, but every blast of the horn makes your troops inside the brass ring hit harder and fire faster.",
+	"flak_battery": "The swarm shredder. Four sky guns whose shells burst among flocks of drones and light craft. Weaker against heavy hulls, ignores the ground.",
+	"skyhook_cannon": "The ship anchor. A crane-mounted harpoon with the longest reach in the sky. Double damage to heavy airships, and a hooked ship drags slowly for a few seconds. Ignores the ground.",
 	"turbine_engine": "A big brass propeller bolted to a turbine island. With 4 on one island you can steer it (Industry tab). It drifts up to 4 hexes, drops its walkways after a warning, and draws 30 power while under way.",
 	"airship_hangar": "Keeps 2 defense drones aloft and builds your patrol ships (Army tab, Z X). Ships fly a loop from here through your Mooring Masts. Holds 4. If it falls, its ships go to another hangar or go down.",
 	"mooring_mast": "A waypoint for your patrol ships. Ships only hunt within reach of a hangar or mast, so masts decide which sky you cover. It also sees far into the storm clouds.",
@@ -47,7 +47,6 @@ static var TILE_INFO := {
 	"harvester_anchor": ["Storm anchor", "Cloud Harvesters go here. They tap the nearest storm cloud for power and crystals."],
 	"scrap_heap": ["Scrap heap", "Salvage left by the Rising. Pays scrap at the end of each wave while you hold this island."],
 	"crystal_seam": ["Crystal seam", "A seam of Hum-charged crystal. Pays 5 crystals a wave while you hold the island."],
-	"dock": ["Ferry dock", "The ferry stops here. Right click an island with no walkway and your units ride across."],
 	"spawn": ["Rival muster point", "Rival walkers set out from here when a wave starts."],
 	"walkway": ["Walkway", "Riveted decking between islands. Lay new ones from the Industry tab to expand."],
 	"rival_walkway": ["Ironbell bridge", "A span Ironbell's crews built toward your Hub. Their walkers march along it, and so can yours."],
@@ -60,7 +59,6 @@ var building: BuildController
 var walkways: WalkwayBuilder
 var combat: CombatSystem
 var storms: StormSystem
-var loads: LoadSystem
 var defenses: DefenseSystem
 var fog: FogSystem
 var wind: WindSystem
@@ -231,10 +229,10 @@ func describe(thing) -> Dictionary:
 			info.subtitle = "Your hero"
 		info.body = UNIT_INFO.get(u.display_name, UnitCatalog.get_data(u.unit_type).blurb if not u.flying else "")
 		var stats := ["Health %d / %d" % [ceili(u.hp), int(u.max_hp)]]
+		if u.damage > 0.0:
+			stats.append("Damage %d" % roundi(u.get_damage()))
 		if u.heal_power > 0.0:
 			stats.append("Heals %d/s" % int(u.heal_power))
-		else:
-			stats.append("Damage %d" % roundi(u.get_damage()))
 		stats.append("Range %s" % str(snappedf(u.get_attack_range(), 0.1)))
 		if u.shield > 0.0:
 			stats.append("Shield %d%%" % int(u.shield * 100))
@@ -305,10 +303,6 @@ func describe(thing) -> Dictionary:
 					var count := storms.harvesters_on(thing.name)
 					var who: String = {"player": "You", "rival": "Rival"}.get(storms.control.get(thing.name, ""), "Nobody")
 					info.stats = "Controlled by: %s   Your harvesters %d, rival %d" % [who, count.player, count.rival]
-			"ferry":
-				info.title = "Ferry route"
-				info.subtitle = "%s to %s" % [thing.a, thing.b]
-				info.body = "A small airship shuttles between the two docks. Right click the far island and your units ride across."
 			"air_lane":
 				info.title = "%s wind lane" % RivalCatalog.corp_at(thing.a)
 				info.subtitle = "%s to %s" % [thing.a, thing.b]
@@ -341,9 +335,6 @@ func _describe_platform(platform_name: String, info: Dictionary) -> void:
 		if TILE_INFO.has(t) and not TILE_INFO[t][0] in features:
 			features.append(TILE_INFO[t][0])
 	var stats := "Load %d / %d" % [region.platform_load(platform_name), region.platform_capacity(platform_name)]
-	var state: String = region.load_states.get(platform_name, "")
-	if state != "" and state != "Stable":
-		stats += " (%s)" % state
 	if not features.is_empty():
 		stats += "\nHas: " + ", ".join(features)
 	info.stats = stats
@@ -380,19 +371,11 @@ func _cloud_at(screen: Vector2) -> String:
 	return ""
 
 
-## The ferry route or air lane under a screen point, or {}.
+## The air lane under a screen point, or {}.
 func _route_at(screen: Vector2) -> Dictionary:
 	var base := region.hex_center(Vector2i.ZERO).y
-	var point = _point_at(screen, base + SkyRegion.FERRY_HEIGHT)
-	if point != null:
-		var flat := Vector2(point.x, point.z)
-		for pair in region.layout.get("ferry_routes", []):
-			var a := _route_end(pair[0], true)
-			var b := _route_end(pair[1], true)
-			if flat.distance_to(Geometry2D.get_closest_point_to_segment(flat, a, b)) < region.tile_size:
-				return {"kind": "ferry", "a": pair[0], "b": pair[1]}
 	# Air lanes bend around islands, so test each leg of the drawn route.
-	point = _point_at(screen, base + SkyRegion.AIR_LANE_HEIGHT)
+	var point = _point_at(screen, base + SkyRegion.AIR_LANE_HEIGHT)
 	if point != null:
 		var flat := Vector2(point.x, point.z)
 		for lane in region.air_lane_routes():
@@ -403,16 +386,6 @@ func _route_at(screen: Vector2) -> Dictionary:
 				if flat.distance_to(Geometry2D.get_closest_point_to_segment(flat, a, b)) < region.tile_size * HexGrid.SQRT3 * AirNav.LANE_HALF_WIDTH:
 					return {"kind": "air_lane", "a": lane[0], "b": lane[1]}
 	return {}
-
-
-func _route_end(platform_name: String, at_dock: bool) -> Vector2:
-	var hex: Vector2i = region.platforms[platform_name].center
-	if at_dock:
-		for h in region.tiles_of_platform(platform_name):
-			if region.get_tile(h).type == "dock":
-				hex = h
-	var w := region.hex_center(hex)
-	return Vector2(w.x, w.z)
 
 
 func _point_at(screen: Vector2, height: float):
