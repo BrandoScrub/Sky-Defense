@@ -388,7 +388,7 @@ func _decor_of(platform_name: String) -> Dictionary:
 		for h in HexGrid.disk(hex, 1):
 			near[h] = true
 	var tag := platform_name.replace(" ", "")
-	var skip_prefixes := ["Underside_", "Trim_", "Label_", "Cloud_", "AirLane_", "Ferry_"]
+	var skip_prefixes := ["Underside_", "Trim_", "Label_", "Cloud_", "AirLane_"]
 	for child in region.get_children():
 		if not child is Node3D or child is Building or child is Headquarters:
 			continue

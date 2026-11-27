@@ -427,8 +427,7 @@ func _place_balloons() -> void:
 		var p: Dictionary = region.platforms[platform_name]
 		if p.kind == "rival" or p.get("balloon", false):
 			continue
-		# Only platforms the planned walkways link to the Hub (not the
-		# ferry-only Spire).
+		# Only platforms the planned walkways link to the Hub.
 		if linked.has(platform_name):
 			names.append(platform_name)
 	names.sort()

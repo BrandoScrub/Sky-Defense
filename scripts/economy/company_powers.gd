@@ -3,8 +3,6 @@
 ## for a few seconds and then needs a cooldown before it can be used again.
 ##
 ## - Overcharge: every tower you own fires faster for a while.
-## - Emergency Lift: your platforms ignore overload for a while (no sway, no
-##   slowdown, nothing breaks off).
 class_name CompanyPowers
 extends Node
 
@@ -17,17 +15,12 @@ const POWERS := {
 		"name": "Overcharge", "crystals": 15, "seconds": 20.0, "cooldown": 45.0,
 		"blurb": "Every tower you own fires 40% faster for 20 seconds.",
 	},
-	"emergency_lift": {
-		"name": "Emergency Lift", "short": "Lift Boost", "crystals": 20, "seconds": 30.0, "cooldown": 60.0,
-		"blurb": "For 30 seconds your platforms ignore overload: no sway, no slowdown, nothing breaks off.",
-	},
 }
 ## How much faster towers fire while Overcharge runs.
 const OVERCHARGE_RATE := 1.4
 
 @export var resources: PlayerResources
 @export var combat: CombatSystem
-@export var loads: LoadSystem
 
 ## power id -> seconds left while it runs
 var running := {}
@@ -87,5 +80,3 @@ func step(delta: float) -> void:
 func _apply() -> void:
 	if combat:
 		combat.player_tower_rate = OVERCHARGE_RATE if running.has("overcharge") else 1.0
-	if loads:
-		loads.ignore_player_overload = running.has("emergency_lift")

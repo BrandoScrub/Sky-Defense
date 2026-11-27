@@ -99,7 +99,7 @@ func _expand(army_goal: int, attack_wave: int) -> void:
 	if not rush or wave >= 4:
 		_build_walkway(20 if army.size() >= 6 else 0)
 	# 4. Grow the army.
-	var mix := ["riveteer", "shieldbearer", "rifleman", "riveteer", "lancer", "rifleman", "medic", "shieldbearer"]
+	var mix := ["riveteer", "shieldbearer", "rifleman", "riveteer", "lancer", "rifleman", "engineer", "shieldbearer"]
 	var keep := 40
 	if rush:
 		keep = 20
@@ -283,7 +283,7 @@ func _trace(t: float) -> void:
 			for b in region.buildings_on("Hub"):
 				ds.append("%.1f" % Vector2(b.global_position.x - e.global_position.x, b.global_position.z - e.global_position.z).length())
 			print("     %s hp %.0f/%.0f armor %.2f riding %s dists %s" % [e.display_name, e.hp, e.max_hp, e.armor, e.riding, ds])
-	print("   load %s %d/%d eff %.2f towers %s" % [main.loads.state_of("Hub"), region.platform_load("Hub"), region.platform_capacity("Hub"), region.grid_efficiency(), towers])
+	print("   load %d/%d eff %.2f towers %s" % [region.platform_load("Hub"), region.platform_capacity("Hub"), region.grid_efficiency(), towers])
 	print("   t=%.0f hub=%s bld=%d | enemies %s | mine %s" % [t, ("%.0f" % hq.hp) if hq else "-", region.buildings_on("Hub").size(), c, mine])
 
 

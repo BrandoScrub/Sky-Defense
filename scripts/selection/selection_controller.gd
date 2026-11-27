@@ -18,7 +18,6 @@ signal selection_changed(units: Array[Unit])
 @export var camera: RtsCamera
 @export var region: SkyRegion
 ## Optional: lets orders to places walkways don't reach go by airship.
-var ferry: FerrySystem
 
 var selected: Array[Unit] = []
 var control_groups := {}
@@ -118,16 +117,9 @@ func order_move(point: Vector3, attack_move := false) -> bool:
 		var clicked := region.platform_at(point)
 		if clicked != "":
 			target = region.snap_to_platform(point + offsets[i], clicked)
-		if ferry:
-			ferry.cancel(unit)
-			if ferry.is_riding(unit):
-				ordered = ferry.send(unit, target, attack_move) or ordered
-				continue
 		var route: PackedVector3Array = region.find_route(unit.position, target)
 		if route.is_empty():
-			# Somewhere a walkway doesn't reach: take the airship ferry.
-			if ferry and ferry.send(unit, target, attack_move):
-				ordered = true
+			# Somewhere a walkway doesn't reach yet.
 			continue
 		unit.set_route(route, attack_move)
 		ordered = true

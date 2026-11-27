@@ -86,6 +86,9 @@ func placement_problem(type_id: String, hex) -> String:
 		for b in region.buildings_on(platform):
 			if b.type_id == "lift_engine":
 				return "One Lift Engine per island"
+	var draw := -BuildingCatalog.power_for(type_id, region.get_tile(hex).type)
+	if draw > 0 and region.spare_power() < draw:
+		return "Needs %d spare power (you have %d). Build a Dynamo (Industry, Q)" % [draw, maxi(region.spare_power(), 0)]
 	return resources.shortfall(BuildingCatalog.get_data(type_id).cost, BuildingCatalog.crystals_of(type_id))
 
 
