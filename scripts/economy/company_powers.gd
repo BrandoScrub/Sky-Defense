@@ -47,7 +47,7 @@ func use(id: String) -> String:
 	if cooldowns.get(id, 0.0) > 0.0:
 		return "%s is ready again in %ds" % [spec.name, ceili(cooldowns[id])]
 	if resources and not resources.spend_crystals(spec.crystals):
-		return "%s needs %d crystals (Cloud Harvesters pay crystals each wave)" % [spec.name, spec.crystals]
+		return "%s needs %d crystals. Cloud Harvesters pay them each wave" % [spec.name, spec.crystals]
 	running[id] = spec.seconds
 	_apply()
 	notice.emit("%s! %s" % [spec.name, spec.blurb])
@@ -72,7 +72,7 @@ func step(delta: float) -> void:
 		if running[id] <= 0.0:
 			running.erase(id)
 			cooldowns[id] = POWERS[id].cooldown
-			notice.emit("%s has worn off" % POWERS[id].name)
+			notice.emit("%s has run down" % POWERS[id].name)
 			ended = true
 	for id in cooldowns.keys():
 		cooldowns[id] -= delta

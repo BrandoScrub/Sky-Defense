@@ -28,7 +28,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if start_hex == null:
 			var tile := region.get_tile(hex) if hex != null else {}
 			if tile.is_empty() or tile.platform == "" or region.platform_owner(tile.platform) != "player":
-				notice.emit("Start the walkway on a platform you own")
+				notice.emit("Start the walkway on an island you own")
 			else:
 				start_hex = hex
 		else:
@@ -69,14 +69,14 @@ func cancel() -> void:
 ## the reason it failed.
 func try_build(from_hex: Vector2i, to_hex) -> String:
 	if to_hex == null:
-		return "Point at another platform"
+		return "Point at another island"
 	var plan := region.plan_walkway(from_hex, to_hex)
 	if plan.problem != "":
 		return plan.problem
 	if not resources.spend_scrap(plan.cost):
 		return "Not enough scrap (%d needed)" % plan.cost
 	region.build_walkway(plan.tiles, "player", region.hex_center(from_hex), region.hex_center(to_hex))
-	notice.emit("Harpoons away! Building a %d-tile walkway (-%d scrap)" % [plan.tiles.size(), plan.cost])
+	notice.emit("Harpoons away! Laying %d tiles of walkway  (-%d scrap)" % [plan.tiles.size(), plan.cost])
 	return ""
 
 

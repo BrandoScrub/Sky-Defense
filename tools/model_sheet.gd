@@ -27,8 +27,7 @@ func _initialize() -> void:
 	for platform_name in region.platforms:
 		var plate := region.platform_label(platform_name)
 		if plate:
-			plate.modulate.a = 0.0
-			plate.outline_modulate.a = 0.0
+			plate.visible = false
 	# Freeze the game: this is a photo shoot, not a battle.
 	for system in [main.waves, main.combat, main.economy, main.defenses, main.patrols, main.selection]:
 		system.set_process(false)

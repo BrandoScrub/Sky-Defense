@@ -45,11 +45,11 @@ const COLORS := {
 
 ## Human-readable names for the legend.
 const LEGEND := [
-	["hub", "Your platform"], ["core", "Your headquarters"], ["neutral", "Neutral platform"], ["grassy", "Grassy crystal island"], ["overcharged", "Overcharged crystal island"],
-	["rival", "Ironbell platform"], ["vesper", "Vesper platform"], ["rival_core", "Rival headquarters"],
+	["hub", "Your island"], ["core", "Your headquarters"], ["neutral", "Unclaimed island"], ["grassy", "Grassy crystal island"], ["overcharged", "Overcharged crystal island"],
+	["rival", "Ironbell island"], ["vesper", "Vesper island"], ["rival_core", "Rival headquarters"],
 	["walkway", "Walkway"], ["rival_walkway", "Ironbell bridge"], ["generator_socket", "Generator socket"],
-	["harvester_anchor", "Storm harvester anchor"], ["scrap_heap", "Scrap heap"],
-	["crystal_seam", "Crystal seam"], ["dock", "Ferry dock"], ["spawn", "Rival wave spawn"],
+	["harvester_anchor", "Storm anchor"], ["scrap_heap", "Scrap heap"],
+	["crystal_seam", "Crystal seam"], ["dock", "Ferry dock"], ["spawn", "Rival muster point"],
 	["cloud", "Storm cloud"], ["ferry", "Ferry route"], ["air_lane", "Rival air lane"],
 ]
 
@@ -290,7 +290,7 @@ func get_bounds() -> Rect2:
 func build_problem(type_id: String, hex: Vector2i) -> String:
 	var tile := get_tile(hex)
 	if tile.is_empty() or tile.type == "walkway":
-		return "Buildings go on platform decks"
+		return "Buildings go on island decks"
 	if owners.get(tile.platform, "") != "player":
 		return "You don't own %s yet" % tile.platform
 	if buildings.has(hex):
@@ -441,20 +441,24 @@ func _refresh_label(platform_name: String) -> void:
 	var cap := platform_capacity(platform_name)
 	var state: String = load_states.get(platform_name, "Stable")
 	label.text = platform_name
+	# Everything under the name goes on a smaller second label, so the name
+	# reads first and the details don't crowd the map.
+	var lines := PackedStringArray()
 	if (show_loads and platform_owner(platform_name) == "player") or state != "Stable":
-		label.text += "\nLoad %d / %d" % [used, cap]
-	if state != "Stable":
-		label.text += "  (%s)" % state
+		lines.append("Load %d / %d" % [used, cap] + ("  (%s)" % state if state != "Stable" else ""))
 	if platform_owner(platform_name) != "player":
 		var holds := platform_contents(platform_name)
 		if holds != "":
-			label.text += "\n" + holds
+			lines.append(holds)
 	var status: String = _label_status.get(platform_name, "")
 	if status != "":
-		label.text += "\n" + status
+		lines.append(status)
+	var detail: Label3D = label.get_node("Detail")
+	detail.text = "\n".join(lines)
 	label.modulate = {
 		"Swaying": Color(1.0, 0.9, 0.4), "Sagging": Color(1.0, 0.6, 0.3), "Failing": Color(1.0, 0.35, 0.3),
-	}.get(state, Color.WHITE)
+	}.get(state, HudTheme.PARCHMENT)
+	detail.modulate = label.modulate
 
 
 ## What an island holds worth claiming, for its label, e.g. "2 scrap heaps,
@@ -525,13 +529,13 @@ func plan_walkway(from_hex: Vector2i, to_hex: Vector2i) -> Dictionary:
 	var a := get_tile(from_hex)
 	var b := get_tile(to_hex)
 	if a.is_empty() or a.platform == "":
-		plan.problem = "Start the walkway on a platform"
+		plan.problem = "Start the walkway on an island"
 	elif platform_owner(a.platform) != "player":
-		plan.problem = "Start the walkway on a platform you own"
+		plan.problem = "Start the walkway on an island you own"
 	elif b.is_empty() or b.platform == "":
-		plan.problem = "End the walkway on another platform"
+		plan.problem = "End the walkway on another island"
 	elif b.platform == a.platform:
-		plan.problem = "End the walkway on a different platform"
+		plan.problem = "End the walkway on a different island"
 	if plan.problem != "":
 		return plan
 	var line := HexGrid.line(from_hex, to_hex)
@@ -555,7 +559,7 @@ func plan_walkway(from_hex: Vector2i, to_hex: Vector2i) -> Dictionary:
 		elif left_start and t.platform == b.platform:
 			break
 	if new_tiles.is_empty():
-		plan.problem = "Those platforms are already touching"
+		plan.problem = "Those islands already touch"
 	elif new_tiles.size() > WALKWAY_MAX_TILES:
 		plan.problem = "Too long: walkways reach at most %d tiles" % WALKWAY_MAX_TILES
 	plan.tiles = new_tiles
@@ -1160,7 +1164,9 @@ func _column_mesh(depth: float) -> CylinderMesh:
 func _add_label(p: Dictionary) -> void:
 	var label := Label3D.new()
 	label.name = "Label_" + p.name.replace(" ", "")
-	label.text = "%s\nLoad 0 / %d" % [p.name, p.capacity]
+	label.text = p.name
+	label.font = HudTheme.title_font()
+	label.outline_modulate = Color(0.08, 0.06, 0.04, 0.9)
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	label.no_depth_test = true
 	# Same small size on screen at any zoom (like the fog hints), so names
@@ -1175,6 +1181,23 @@ func _add_label(p: Dictionary) -> void:
 	label.render_priority = 10
 	label.outline_render_priority = 9
 	label.position = hex_center(p.center) + Vector3.UP * (6.0 + p.radius)
+	label.modulate = HudTheme.PARCHMENT
+	var detail := Label3D.new()
+	detail.name = "Detail"
+	detail.billboard = label.billboard
+	detail.no_depth_test = true
+	detail.fixed_size = true
+	detail.font = HudTheme.body_font()
+	detail.font_size = 22
+	detail.outline_size = 7
+	detail.outline_modulate = label.outline_modulate
+	detail.pixel_size = label.pixel_size
+	detail.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	detail.render_priority = label.render_priority
+	detail.outline_render_priority = label.outline_render_priority
+	# Pixels below the name line (the offset is in label pixels, y up).
+	detail.offset = Vector2(0, -44)
+	label.add_child(detail)
 	add_child(label)
 	_labels[p.name] = label
 	_refresh_label(p.name)
@@ -1366,9 +1389,19 @@ func add_platform(p: Dictionary) -> void:
 	_add_label(p)
 
 
-## The floating name label of a platform, or null.
+## The floating name label of a platform, or null. Its "Detail" child holds
+## the smaller lines under the name (load, contents, claim progress).
 func platform_label(platform_name: String) -> Label3D:
 	return _labels.get(platform_name)
+
+
+## Everything a platform's floating label says, name first.
+func platform_label_text(platform_name: String) -> String:
+	var label := platform_label(platform_name)
+	if label == null:
+		return ""
+	var detail: String = label.get_node("Detail").text
+	return label.text + ("\n" + detail if detail != "" else "")
 
 
 ## The placeholder mesh of a tile, or null.

@@ -257,8 +257,8 @@ func _check_fog(main: Node) -> void:
 	# with what they hold on their label.
 	for near in ["Foundry", "Generator Rig", "Crystal Spire"]:
 		_expect(fog.is_platform_revealed(near), "%s (next to the Hub) should start out of the fog" % near)
-	_expect(region.platform_label("Foundry").text.contains("2 scrap heaps"), "the Foundry's label should say it holds 2 scrap heaps")
-	_expect(not region.platform_label("Hub").text.contains("scrap heap"), "your own Hub's label shouldn't list its contents")
+	_expect(region.platform_label_text("Foundry").contains("2 scrap heaps"), "the Foundry's label should say it holds 2 scrap heaps")
+	_expect(not region.platform_label_text("Hub").contains("scrap heap"), "your own Hub's label shouldn't list its contents")
 	var hq_tile: Node3D = region._tile_nodes[region.platforms["Ironbell HQ"].center]
 	_expect(not hq_tile.visible, "Ironbell HQ's deck should be hidden by the fog")
 	_expect(not region.get_node("HQ_IronbellHQ").visible, "Ironbell's HQ building should be hidden by the fog")
@@ -1638,7 +1638,7 @@ func _check_bomb_target(main: Node) -> void:
 		_expect(b != null, "the Army tab has an Interceptor button")
 		if b:
 			menu.refresh()
-			_expect(b.text.contains("needs a Hangar") and b.modulate.a < 0.5, "the Interceptor button is greyed without a Hangar")
+			_expect(b.text.contains("Hangar first") and b.modulate.a < 0.5, "the Interceptor button is greyed without a Hangar")
 
 
 ## Rivals launch airships in waves: Ironbell carriers drop troops on your
