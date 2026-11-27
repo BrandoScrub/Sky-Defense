@@ -1,7 +1,8 @@
 ## The support side of defenses (CombatSystem does the shooting):
 ##
 ## - Ground-defense auras: each building with an "aura" in BuildingCatalog
-##   boosts its own side's ground units within the aura's radius. Bonuses
+##   (the Rally Horn) boosts its own side's ground units within the aura's
+##   radius, and sounds every HORN_EVERY seconds with a ring showing it. Bonuses
 ##   from several buildings don't stack; a unit gets the best of each kind.
 ##   A building in a brownout gives a weaker aura.
 ## - Hangars: each building with a "hangar" entry keeps a few drones in the
@@ -15,6 +16,8 @@ extends Node
 const DRONE_ALTITUDE := 4.5
 ## How far from its hangar an idle drone circles.
 const ORBIT_RADIUS := 2.0
+## Seconds between blasts of an aura tower's horn (a ring shows its reach).
+const HORN_EVERY := 4.0
 
 @export var region: SkyRegion
 @export var combat: CombatSystem
@@ -23,6 +26,7 @@ const ORBIT_RADIUS := 2.0
 var hangars := {}
 var _count := 0
 var _time := 0.0
+var _horn_beat := -1
 
 
 func _process(delta: float) -> void:
@@ -46,6 +50,12 @@ func _apply_auras(delta: float) -> void:
 	for b in region.buildings.values():
 		if b.is_alive() and b.get_data().has("aura"):
 			sources.append(b)
+	var beat := int(_time / HORN_EVERY)
+	if beat != _horn_beat:
+		_horn_beat = beat
+		for b in sources:
+			if b.efficiency > 0.0:
+				CombatFx.ring(region, b.global_position, b.get_data().aura.radius, Color(1.0, 0.78, 0.35, 0.75) if b.faction == "player" else Color(1.0, 0.4, 0.3, 0.75))
 	for group in [Unit.GROUP, Unit.ENEMY_GROUP]:
 		for node in get_tree().get_nodes_in_group(group):
 			var u := node as Unit

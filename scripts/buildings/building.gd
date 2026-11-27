@@ -55,6 +55,42 @@ func get_attack() -> Dictionary:
 	return get_data().get("attack", {})
 
 
+## Turns the gun's head (the model's "Head" part, if it has one) to face
+## `point`. It swings round over a few frames (see _process).
+func aim_at(point: Vector3) -> void:
+	var head := _head()
+	if head == null:
+		return
+	var d := point - global_position
+	if Vector2(d.x, d.z).length() < 0.01:
+		return
+	_aim_yaw = atan2(d.x, d.z) - global_rotation.y
+	set_process(true)
+
+
+## How fast a gun head swings round, in radians per second.
+const TRAVERSE_SPEED := 7.0
+var _aim_yaw := 0.0
+
+
+func _process(delta: float) -> void:
+	var head := _head()
+	if head == null:
+		set_process(false)
+		return
+	var diff := wrapf(_aim_yaw - head.rotation.y, -PI, PI)
+	var turn := TRAVERSE_SPEED * delta
+	if absf(diff) <= turn:
+		head.rotation.y = _aim_yaw
+		set_process(false)
+	else:
+		head.rotation.y += signf(diff) * turn
+
+
+func _head() -> Node3D:
+	return _model.get_node_or_null("Head") if _model else null
+
+
 func is_alive() -> bool:
 	return hp > 0.0 and is_inside_tree()
 

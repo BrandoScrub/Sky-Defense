@@ -15,7 +15,7 @@ const REFUND_RATIO := 0.5
 ## economy buildings.
 ## Defense roles, for the build menu and info card.
 const ROLES := {
-	"ground": "Ground defense: can't hit aircraft, strengthens your units nearby",
+	"ground": "Ground defense: can't hit aircraft",
 	"flak": "Flak: shoots only aircraft and airships",
 	"hangar": "Hangar: launches defensive drones and builds patrol airships",
 }
@@ -43,33 +43,37 @@ const BUILDINGS := {
 		"hp": 120.0,
 		"capacity": 10,
 	},
-	# --- Ground defenses: modest guns that can't hit aircraft, but make your
-	# own ground units nearby stronger. "aura" lists what they give allies
-	# within "radius": damage_mult (more damage), cooldown_mult (below 1 =
-	# faster fire), armor (fraction of damage blocked) and heal (hp/second).
+	# --- Ground defenses: towers that can't hit aircraft. Each has one job:
+	# the Rivet Turret is the steady line gun, the Arc Coil breaks up packed
+	# troops, and the Rally Horn is the only aura tower ("aura" lists what it
+	# gives your troops within "radius": damage_mult for more damage and
+	# cooldown_mult below 1 for faster fire). "shot" picks the look of a
+	# tower's fire (CombatSystem).
 	"rivet_turret": {
 		"name": "Rivet Turret", "cost": 50, "power": -3, "weight": 2,
 		"tiles": ["deck"], "shape": "turret", "role": "ground",
 		"color": Color(0.6, 0.62, 0.66),
 		"hp": 150.0,
-		"attack": {"damage": 13.0, "range": 10.0, "cooldown": 0.8},
-		# Its plating gives cover to units fighting beside it.
-		"aura": {"radius": 5.0, "armor": 0.15},
+		# The longest reach of the ground towers and steady single-target
+		# damage: the gun that holds a walkway.
+		"attack": {"damage": 13.0, "range": 11.0, "cooldown": 0.8, "shot": "rivet"},
 	},
 	"arc_coil": {
 		"name": "Arc Coil", "cost": 70, "crystals": 10, "power": -8, "weight": 4,
 		"tiles": ["deck"], "shape": "coil", "role": "ground",
 		"color": Color(0.55, 0.45, 0.95),
 		"hp": 130.0,
-		# Chain lightning: hits up to 3 enemies near the first target.
-		"attack": {"damage": 16.0, "range": 8.0, "cooldown": 1.5, "chain": 3},
+		# Chain lightning: hits up to 3 enemies near the first target. Short
+		# reach, made for packed squads.
+		"attack": {"damage": 16.0, "range": 8.0, "cooldown": 1.5, "chain": 3, "shot": "bolt"},
 	},
 	"rally_horn": {
 		"name": "Rally Horn", "cost": 45, "power": -3, "weight": 2,
 		"tiles": ["deck"], "shape": "horn", "role": "ground",
 		"color": Color(0.85, 0.6, 0.25),
 		"hp": 110.0,
-		"attack": {"damage": 4.0, "range": 7.0, "cooldown": 1.0},
+		# No gun: it sounds every few seconds (a brass ring shows its reach)
+		# and your troops inside hit harder and fire faster.
 		"aura": {"radius": 7.0, "damage_mult": 1.35, "cooldown_mult": 0.8},
 	},
 	# --- Flak: anti-air only. "air_only" towers ignore walkers and buildings;
@@ -83,7 +87,7 @@ const BUILDINGS := {
 		# of it too. Shreds light craft and tight formations; heavy hulls
 		# shrug off some of it.
 		"attack": {"damage": 0.0, "range": 12.0, "cooldown": 0.35, "air": 22.0, "air_only": true,
-			"splash": 2.5, "vs_heavy": 0.85},
+			"splash": 2.5, "vs_heavy": 0.85, "shot": "flak"},
 	},
 	"skyhook_cannon": {
 		"name": "Skyhook Gun", "cost": 75, "crystals": 10, "power": -6, "weight": 4,
@@ -91,9 +95,10 @@ const BUILDINGS := {
 		"color": Color(0.5, 0.42, 0.35),
 		"hp": 140.0,
 		# Slow, long-range harpoon gun for big airships: double damage to heavy
-		# hulls, but it struggles to track small, light craft.
+		# hulls, but it struggles to track small, light craft. "hook": the
+		# harpooned ship drags at "slow" speed for "seconds".
 		"attack": {"damage": 0.0, "range": 16.0, "cooldown": 2.8, "air": 70.0, "air_only": true,
-			"vs_heavy": 2.0, "vs_light": 0.5},
+			"vs_heavy": 2.0, "vs_light": 0.5, "shot": "harpoon", "hook": {"slow": 0.5, "seconds": 3.0}},
 	},
 	# --- Industry: engines that let you move a turbine island (IslandSteering).
 	"turbine_engine": {

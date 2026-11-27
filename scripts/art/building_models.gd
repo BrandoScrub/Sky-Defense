@@ -112,68 +112,107 @@ static func _lift(root: Node3D, k: ModelKit, y: float) -> void:
 	k.pipe(root, [Vector3(0.9, y + 0.5, 0.5), Vector3(1.05, y + 0.5, 0.6), Vector3(1.05, y, 0.6)], 0.06)
 
 
-## Rivet Turret: an armoured casemate with a traversing gun head, an
-## ammunition drum, and cover plates that shelter troops beside it.
+## Rivet Turret, the line gun: a low, wide riveted pillbox with a domed head
+## and twin belt-fed barrels. The squattest of the towers. Its head turns to
+## face what it shoots.
 static func _turret(root: Node3D, k: ModelKit, y: float) -> void:
-	var base := k.drum(root, 0.82, 0.98, 0.45, Vector3(0, y + 0.225, 0), "accent", 8)
-	base.rotation.y = PI / 8.0
-	k.rivets(root, 0.92, y + 0.3, 8)
-	k.ring(root, 0.62, 0.05, Vector3(0, y + 0.47, 0), "brass")
-	for side in [-1.0, 1.0]:
-		var plate := k.box(root, Vector3(0.1, 0.75, 1.0), Vector3(side * 1.12, y + 0.37, 0.25), "steel")
-		plate.rotation.y = side * 0.3
-		k.box(root, Vector3(0.14, 0.07, 1.0), Vector3(side * 1.12, y + 0.76, 0.25), "brass").rotation.y = side * 0.3
-	var head := k.group(root, Vector3(0, y + 0.45, 0), "Head")
-	k.drum(head, 0.48, 0.58, 0.42, Vector3(0, 0.21, 0), "steel", 10)
-	k.box(head, Vector3(0.62, 0.36, 0.34), Vector3(0, 0.24, 0.42), "accent_dark")
-	k.barrel(head, Vector3(0, 0.26, 0.5), Vector3(0, 0.08, 1.0), 1.1, 0.085)
-	k.rod(head, Vector3(-0.6, 0.22, 0.05), Vector3(-0.42, 0.22, 0.05), 0.22, "brass", 10)
-	k.hatch(head, Vector3(0.05, 0.42, -0.12), 0.2)
-	k.lamp(head, Vector3(-0.25, 0.42, -0.3), 0.12, 0.07)
-	k.pennant(root, Vector3(0.75, y, -0.75), 1.1)
-
-
-## Arc Coil: copper windings round a ceramic insulator stack, with a charged
-## ring on top that throws chain lightning.
-static func _coil(root: Node3D, k: ModelKit, y: float) -> void:
-	var glow := k.paint(k.accent.lightened(0.25), 2.4)
-	k.drum(root, 0.62, 0.8, 0.35, Vector3(0, y + 0.175, 0), "iron", 10)
-	for i in 3:
-		k.ring(root, 0.62 - i * 0.09, 0.055, Vector3(0, y + 0.42 + i * 0.13, 0), "copper")
-	k.drum(root, 0.16, 0.26, 1.5, Vector3(0, y + 1.1, 0), "ceramic", 10)
+	var casemate := k.drum(root, 0.9, 1.05, 0.55, Vector3(0, y + 0.275, 0), "accent", 8)
+	casemate.rotation.y = PI / 8.0
+	for h in [0.12, 0.45]:
+		var band := k.drum(root, 0.93 - h * 0.25, 0.95 - h * 0.25, 0.06, Vector3(0, y + h, 0), "iron", 8)
+		band.rotation.y = PI / 8.0
+		k.rivets(root, 1.0 - h * 0.25, y + h + 0.02, 12)
+	# Firing slits all round.
 	for i in 4:
-		k.ring(root, 0.29 - i * 0.025, 0.045, Vector3(0, y + 0.9 + i * 0.28, 0), "ceramic")
-	k.ring(root, 0.52, 0.16, Vector3(0, y + 2.0, 0), "brass")
-	k.ball(root, 0.3, Vector3(0, y + 2.05, 0), glow)
-	k.rod(root, Vector3(0, y + 2.3, 0), Vector3(0, y + 2.75, 0), 0.03, "copper", 6)
-	k.ball(root, 0.07, Vector3(0, y + 2.78, 0), glow)
-	# Spark gap and earth cable.
-	for x in [-0.12, 0.12]:
-		k.rod(root, Vector3(x * 3.0, y, 0.82), Vector3(x, y + 0.4, 0.82), 0.03, "copper", 6)
-		k.ball(root, 0.06, Vector3(x, y + 0.42, 0.82), "brass")
-	k.pipe(root, [Vector3(-0.6, y + 0.2, -0.5), Vector3(-0.9, y + 0.2, -0.7), Vector3(-0.9, y, -0.7)], 0.05, "rubber")
+		var a := TAU * i / 4.0 + PI / 4.0
+		var slit := k.box(root, Vector3(0.36, 0.07, 0.05), Vector3(sin(a) * 0.98, y + 0.32, cos(a) * 0.98), "rubber")
+		slit.rotation.y = a
+	k.ring(root, 0.66, 0.05, Vector3(0, y + 0.57, 0), "brass")
+	var head := k.group(root, Vector3(0, y + 0.55, 0), "Head")
+	k.dome(head, 0.62, Vector3(0, 0.0, -0.05), "steel", 0.55)
+	k.box(head, Vector3(0.78, 0.3, 0.3), Vector3(0, 0.15, 0.5), "accent_dark")
+	k.rivets(head, 0.5, 0.05, 10)
+	for x in [-0.17, 0.17]:
+		k.barrel(head, Vector3(x, 0.17, 0.55), Vector3(0, 0.02, 1.0), 1.05, 0.07)
+	# Ammunition belt drum on the side, feeding both guns.
+	var belt := k.drum(head, 0.2, 0.2, 0.2, Vector3(0.52, 0.18, 0.18), "brass", 12)
+	belt.rotation.z = PI / 2.0
+	k.pipe(head, [Vector3(0.45, 0.2, 0.3), Vector3(0.3, 0.2, 0.48)], 0.04, "brass")
+	# Periscope and commander's hatch.
+	k.rod(head, Vector3(-0.2, 0.25, -0.15), Vector3(-0.2, 0.55, -0.15), 0.04, "iron", 6)
+	k.box(head, Vector3(0.1, 0.08, 0.14), Vector3(-0.2, 0.57, -0.11), "brass")
+	k.hatch(head, Vector3(0.12, 0.3, -0.2), 0.16)
+	k.pennant(root, Vector3(0.8, y + 0.55, -0.55), 0.8)
 
 
-## Rally Horn: a great brass horn on a mast, blown by a bellows and air tank,
-## flying the company pennant.
+## Arc Coil, the crowd breaker: the tallest tower, a lattice tripod lifting a
+## copper-wound insulator to a glowing discharge ball. Lightning leaps from
+## the ball.
+static func _coil(root: Node3D, k: ModelKit, y: float) -> void:
+	var glow := k.paint(k.accent.lightened(0.25), 2.6)
+	# Junction box and earth cables at the foot.
+	k.drum(root, 0.42, 0.55, 0.3, Vector3(0, y + 0.15, 0), "iron", 10)
+	k.ring(root, 0.45, 0.04, Vector3(0, y + 0.3, 0), "brass")
+	# Tripod legs with cross braces.
+	var feet: Array[Vector3] = []
+	var tops: Array[Vector3] = []
+	for i in 3:
+		var a := TAU * i / 3.0 + PI / 6.0
+		feet.append(Vector3(cos(a) * 0.85, y, sin(a) * 0.85))
+		tops.append(Vector3(cos(a) * 0.2, y + 1.7, sin(a) * 0.2))
+		k.rod(root, feet[i], tops[i], 0.05, "iron", 6)
+		k.drum(root, 0.1, 0.12, 0.08, feet[i] + Vector3(0, 0.04, 0), "brass", 6)
+	for i in 3:
+		var j := (i + 1) % 3
+		k.rod(root, feet[i].lerp(tops[i], 0.45), feet[j].lerp(tops[j], 0.45), 0.025, "iron", 6)
+		k.rod(root, feet[i].lerp(tops[i], 0.15), feet[j].lerp(tops[j], 0.6), 0.02, "iron", 6)
+	# Insulator column, wound in copper.
+	k.drum(root, 0.12, 0.18, 2.6, Vector3(0, y + 1.5, 0), "ceramic", 10)
+	for i in 4:
+		k.ring(root, 0.22, 0.04, Vector3(0, y + 0.5 + i * 0.25, 0), "ceramic")
+	for i in 6:
+		k.ring(root, 0.36 - i * 0.025, 0.05, Vector3(0, y + 1.9 + i * 0.12, 0), "copper")
+	# Discharge ring and ball.
+	k.ring(root, 0.5, 0.11, Vector3(0, y + 2.85, 0), "brass")
+	k.ball(root, 0.3, Vector3(0, y + 3.0, 0), glow)
+	k.rod(root, Vector3(0, y + 3.25, 0), Vector3(0, y + 3.65, 0), 0.03, "copper", 6)
+	k.ball(root, 0.07, Vector3(0, y + 3.68, 0), glow)
+	for i in 3:
+		var a := TAU * i / 3.0
+		k.ball(root, 0.06, Vector3(cos(a) * 0.5, y + 2.85, sin(a) * 0.5), glow)
+	k.pipe(root, [Vector3(0.4, y + 0.2, 0.1), Vector3(0.9, y + 0.1, 0.4), Vector3(1.0, y, 0.5)], 0.045, "rubber")
+
+
+## Rally Horn, the morale tower: a great flared brass horn on a tall mast,
+## blown by a bellows and air tank, flying the company pennant. No gun.
 static func _horn(root: Node3D, k: ModelKit, y: float) -> void:
-	k.box(root, Vector3(0.75, 0.5, 0.9), Vector3(-0.4, y + 0.25, -0.1), "leather")
-	for z in [-0.4, -0.1, 0.2]:
-		k.box(root, Vector3(0.8, 0.54, 0.06), Vector3(-0.4, y + 0.26, z), "accent")
-	k.tank(root, Vector3(0.5, y + 0.28, -0.55), 0.22, 0.5, Vector3.RIGHT, "copper")
-	var mast_top := Vector3(0.3, y + 2.0, 0)
-	k.drum(root, 0.2, 0.3, 0.3, Vector3(0.3, y + 0.15, 0), "iron", 8)
-	k.rod(root, Vector3(0.3, y, 0), mast_top, 0.07, "iron")
-	k.pipe(root, [Vector3(-0.4, y + 0.5, -0.1), Vector3(-0.4, y + 0.9, -0.1), Vector3(0.22, y + 1.5, -0.05), mast_top + Vector3(0, -0.1, -0.2)], 0.06)
-	# The big horn and two smaller ones.
-	k.cone(root, mast_top + Vector3(0, 0.25, 1.05), mast_top + Vector3(0, -0.1, -0.25), 0.58, 0.07, "brass", 14)
-	ModelKit.aim(k.drum(root, 0.5, 0.5, 0.02, mast_top + Vector3(0, 0.255, 1.07), "rubber", 14), Vector3(0, 0.35, 1.3))
-	var rim := k.ring(root, 0.58, 0.04, mast_top + Vector3(0, 0.25, 1.05), "brass")
-	ModelKit.aim(rim, Vector3(0, 0.35, 1.3))
+	var first := root.get_child_count()
+	k.box(root, Vector3(0.75, 0.5, 0.9), Vector3(-0.45, y + 0.25, -0.15), "leather")
+	for z in [-0.45, -0.15, 0.15]:
+		k.box(root, Vector3(0.8, 0.54, 0.06), Vector3(-0.45, y + 0.26, z), "accent")
+	k.tank(root, Vector3(0.5, y + 0.28, -0.6), 0.22, 0.5, Vector3.RIGHT, "copper")
+	var mast_top := Vector3(0.2, y + 2.3, -0.1)
+	k.drum(root, 0.22, 0.32, 0.3, Vector3(0.2, y + 0.15, -0.1), "iron", 8)
+	k.rod(root, Vector3(0.2, y, -0.1), mast_top, 0.08, "iron")
 	for side in [-1.0, 1.0]:
-		k.cone(root, mast_top + Vector3(side * 0.55, -0.3, 0.55), mast_top + Vector3(side * 0.1, -0.45, -0.1), 0.26, 0.04, "brass", 10)
-	k.pennant(root, mast_top, 0.9)
-	k.lamp(root, Vector3(-0.4, y + 0.5, 0.2), 0.1, 0.08)
+		k.rod(root, Vector3(0.2 + side * 0.6, y, -0.6), Vector3(0.2, y + 1.4, -0.1), 0.03, "iron", 6)
+	k.pipe(root, [Vector3(-0.45, y + 0.5, -0.15), Vector3(-0.45, y + 1.0, -0.15), Vector3(0.12, y + 1.7, -0.15), mast_top + Vector3(0, -0.1, -0.3)], 0.06)
+	# The great horn, flaring wide, with two smaller ones below.
+	var mouth := mast_top + Vector3(0, 0.35, 1.25)
+	k.cone(root, mouth, mast_top + Vector3(0, -0.1, -0.35), 0.85, 0.07, "brass", 16)
+	# The dark throat, set back inside the bell.
+	ModelKit.aim(k.drum(root, 0.38, 0.38, 0.02, mouth - Vector3(0, 0.35, 1.25).normalized() * 0.55, "rubber", 12), Vector3(0, 0.35, 1.25))
+	ModelKit.aim(k.ring(root, 0.85, 0.05, mouth, "brass"), Vector3(0, 0.35, 1.25))
+	for side in [-1.0, 1.0]:
+		k.cone(root, mast_top + Vector3(side * 0.6, -0.45, 0.55), mast_top + Vector3(side * 0.1, -0.55, -0.1), 0.3, 0.04, "brass", 10)
+	k.pennant(root, mast_top + Vector3(0, 0.05, -0.2), 0.9)
+	k.lamp(root, Vector3(-0.45, y + 0.5, 0.25), 0.1, 0.08)
+	# Turned so the horn calls out to the side: from the camera you see the
+	# flare's long profile rather than a flat disc.
+	var turn := Transform3D(Basis(Vector3.UP, PI * 0.4), Vector3.ZERO)
+	for i in range(first, root.get_child_count()):
+		var part := root.get_child(i) as Node3D
+		part.transform = turn * part.transform
 
 
 ## Mending Post: a white tonic tank under a big green cross, a medicine
@@ -197,58 +236,88 @@ static func _mender(root: Node3D, k: ModelKit, y: float) -> void:
 	k.pennant(root, Vector3(0.85, y, 0.6), 1.0)
 
 
-## Flak Battery: four barrels on a traversing ring mount, splinter shields
-## either side, a ring sight and ready ammunition behind.
+## Flak Battery, the swarm shredder: four sky guns pointing almost straight
+## up from a sandbagged pit, with ready ammunition crates. Its head turns to
+## face its target.
 static func _flak(root: Node3D, k: ModelKit, y: float) -> void:
-	k.drum(root, 0.8, 0.95, 0.3, Vector3(0, y + 0.15, 0), "accent", 12)
-	k.rivets(root, 0.9, y + 0.2, 8)
-	k.ring(root, 0.66, 0.05, Vector3(0, y + 0.32, 0), "brass")
+	var bags := k.paint(Color(0.62, 0.55, 0.4))
+	# Two courses of sandbags round the pit, open at the back.
+	for course in 2:
+		for i in 11:
+			var a := PI * 0.3 + (TAU - PI * 0.6) * (i + 0.5 * course) / 11.0
+			var r := 0.98 - course * 0.04
+			var bag := k.ball(root, 0.2, Vector3(sin(a) * r, y + 0.1 + course * 0.17, cos(a) * r), bags, 0.5)
+			bag.rotation.y = a
+			bag.scale.x *= 1.6
+	k.drum(root, 0.36, 0.45, 0.3, Vector3(0, y + 0.15, 0), "steel", 10)
+	k.ring(root, 0.42, 0.04, Vector3(0, y + 0.3, 0), "brass")
 	var head := k.group(root, Vector3(0, y + 0.3, 0), "Head")
-	k.box(head, Vector3(1.0, 0.34, 0.6), Vector3(0, 0.25, -0.05), "steel")
-	var up := Vector3(0, sin(deg_to_rad(52.0)), cos(deg_to_rad(52.0)))
-	for x in [-0.36, -0.13, 0.13, 0.36]:
-		k.barrel(head, Vector3(x, 0.38, -0.05), up, 1.35, 0.055)
+	k.box(head, Vector3(0.8, 0.22, 0.6), Vector3(0, 0.12, -0.05), "accent")
+	k.rivets(head, 0.36, 0.2, 8)
+	var up := Vector3(0, sin(deg_to_rad(70.0)), cos(deg_to_rad(70.0)))
+	for x in [-0.15, 0.15]:
+		for z in [-0.17, 0.08]:
+			k.barrel(head, Vector3(x, 0.25, z), up, 1.4, 0.055)
+	# Recoil housings, ring sight and the layer's seat.
 	for side in [-1.0, 1.0]:
-		var shield := k.box(head, Vector3(0.07, 0.7, 0.85), Vector3(side * 0.62, 0.55, 0.2), "accent")
-		shield.rotation.x = -0.35
-	# Ring sight, seat and ammunition.
-	k.rod(head, Vector3(0, 0.4, -0.3), Vector3(0, 0.95, -0.2), 0.02, "iron", 6)
-	ModelKit.aim(k.ring(head, 0.13, 0.02, Vector3(0, 1.0, -0.19), "brass"), up)
-	k.box(head, Vector3(0.3, 0.1, 0.25), Vector3(0, 0.42, -0.5), "leather")
-	k.box(root, Vector3(0.5, 0.3, 0.35), Vector3(-0.55, y + 0.15, -0.9), "accent_dark")
+		k.box(head, Vector3(0.1, 0.45, 0.35), Vector3(side * 0.34, 0.4, 0.0), "accent_dark").rotation.x = -0.3
+	k.rod(head, Vector3(-0.45, 0.25, 0.1), Vector3(-0.45, 0.85, 0.3), 0.02, "iron", 6)
+	ModelKit.aim(k.ring(head, 0.14, 0.02, Vector3(-0.45, 0.88, 0.31), "brass"), up)
+	k.box(head, Vector3(0.28, 0.08, 0.24), Vector3(0.0, 0.3, -0.45), "leather")
+	# Ready ammunition in the open back of the pit.
+	k.box(root, Vector3(0.42, 0.26, 0.3), Vector3(-0.4, y + 0.13, -0.85), "wood")
+	k.box(root, Vector3(0.42, 0.26, 0.3), Vector3(0.12, y + 0.13, -0.92), "wood")
 	for i in 3:
-		k.drum(root, 0.05, 0.05, 0.28, Vector3(-0.7 + i * 0.15, y + 0.44, -0.9), "brass", 6)
-	k.pennant(root, Vector3(0.8, y, -0.8), 1.1)
+		k.drum(root, 0.05, 0.05, 0.26, Vector3(-0.55 + i * 0.15, y + 0.4, -0.85), "brass", 6)
+	k.pennant(root, Vector3(0.62, y, -0.85), 1.1)
 
 
-## Skyhook Gun: a heavy harpoon launcher on a yoke, with the cable drum and
-## winch that reel big airships in.
+## Skyhook Gun, the ship anchor: a crane on a turntable whose long lattice
+## boom carries the harpoon, with the cable run over the A-frame back to the
+## winch and a counterweight. The tallest reach in the sky. The crane turns
+## to face its target.
 static func _skyhook(root: Node3D, k: ModelKit, y: float) -> void:
-	k.drum(root, 0.75, 0.92, 0.32, Vector3(0, y + 0.16, 0), "accent", 10)
-	k.rivets(root, 0.86, y + 0.2, 8)
-	var head := k.group(root, Vector3(0, y + 0.32, 0), "Head")
+	var plinth := k.drum(root, 0.85, 1.0, 0.25, Vector3(0, y + 0.125, 0), "iron", 4)
+	plinth.rotation.y = PI / 4.0
+	k.rivets(root, 0.82, y + 0.2, 8)
+	k.ring(root, 0.62, 0.05, Vector3(0, y + 0.27, 0), "brass")
+	var head := k.group(root, Vector3(0, y + 0.27, 0), "Head")
+	k.drum(head, 0.6, 0.62, 0.18, Vector3(0, 0.09, 0), "accent", 14)
+	# Cab and counterweight at the back.
+	k.box(head, Vector3(0.7, 0.45, 0.45), Vector3(0, 0.4, -0.55), "accent")
+	k.box(head, Vector3(0.74, 0.06, 0.5), Vector3(0, 0.65, -0.55), "brass")
+	k.box(head, Vector3(0.5, 0.3, 0.25), Vector3(0, 0.33, -0.9), "iron")
+	# A-frame.
+	var apex := Vector3(0, 1.6, -0.35)
 	for side in [-1.0, 1.0]:
-		k.box(head, Vector3(0.12, 0.85, 0.4), Vector3(side * 0.34, 0.42, 0.05), "iron")
-		k.rod(head, Vector3(side * 0.42, 0.7, 0.05), Vector3(side * 0.28, 0.7, 0.05), 0.1, "brass", 8)
-	var dir := Vector3(0, sin(deg_to_rad(42.0)), cos(deg_to_rad(42.0)))
-	var breech := Vector3(0, 0.7, 0.05) - dir * 0.55
-	var muzzle := breech + dir * 1.9
-	k.rod(head, breech, muzzle, 0.18, "steel", 10)
-	for t in [0.1, 0.45, 0.95]:
-		k.rod(head, breech + dir * (1.9 * t - 0.05), breech + dir * (1.9 * t + 0.05), 0.21, "brass", 10)
-	# The harpoon: shaft, barbed head.
-	k.rod(head, muzzle, muzzle + dir * 0.45, 0.05, "iron", 6)
-	k.cone(head, muzzle + dir * 0.4, muzzle + dir * 0.85, 0.17, 0.0, "brass", 4)
-	# Cable drum at the back, cable up to the breech.
-	var spool := Vector3(0, 0.3, -0.72)
-	k.rod(head, spool + Vector3(-0.3, 0, 0), spool + Vector3(0.3, 0, 0), 0.26, "rubber", 10)
+		k.rod(head, Vector3(side * 0.42, 0.18, -0.65), apex, 0.05, "iron", 6)
+		k.rod(head, Vector3(side * 0.42, 0.18, 0.05), apex, 0.05, "iron", 6)
+	k.ball(head, 0.09, apex, "brass")
+	# Lattice boom from its pivot out and up.
+	var dir := Vector3(0, sin(deg_to_rad(48.0)), cos(deg_to_rad(48.0)))
+	var pivot := Vector3(0, 0.35, 0.1)
+	var length := 2.4
+	var tip := pivot + dir * length
 	for side in [-1.0, 1.0]:
-		k.rod(head, spool + Vector3(side * 0.3, 0, 0), spool + Vector3(side * 0.34, 0, 0), 0.34, "brass", 10)
-	k.rod(head, spool + Vector3(0, 0.2, 0), breech, 0.03, "rubber", 6)
-	var crank := k.ring(head, 0.16, 0.025, spool + Vector3(0.42, 0, 0), "brass")
-	crank.rotation.z = PI / 2.0
-	k.lamp(root, Vector3(-0.7, y, 0.55), 0.3, 0.08)
-	k.pennant(root, Vector3(0.75, y, -0.75), 1.1)
+		k.rod(head, pivot + Vector3(side * 0.16, 0, 0), tip + Vector3(side * 0.06, 0, 0), 0.04, "accent_dark", 6)
+	for i in 6:
+		var t := (i + 0.5) / 6.0
+		var w := lerpf(0.16, 0.06, t)
+		k.rod(head, pivot + dir * length * t + Vector3(-w, 0, 0), pivot + dir * length * t + Vector3(w, 0, 0), 0.025, "brass", 6)
+	k.rod(head, pivot + Vector3(-0.2, 0, 0), pivot + Vector3(0.2, 0, 0), 0.08, "brass", 8)
+	# The harpoon at the boom's head: launcher sleeve, shaft and barbs.
+	k.rod(head, tip - dir * 0.3, tip + dir * 0.15, 0.11, "steel", 10)
+	k.rod(head, tip, tip + dir * 0.55, 0.035, "iron", 6)
+	k.cone(head, tip + dir * 0.5, tip + dir * 0.85, 0.15, 0.0, "brass", 4)
+	# Winch drum on the cab, cable over the apex to the boom's head.
+	var spool := Vector3(0, 0.75, -0.55)
+	k.rod(head, spool + Vector3(-0.26, 0, 0), spool + Vector3(0.26, 0, 0), 0.16, "rubber", 10)
+	for side in [-1.0, 1.0]:
+		k.rod(head, spool + Vector3(side * 0.26, 0, 0), spool + Vector3(side * 0.3, 0, 0), 0.22, "brass", 10)
+	k.rod(head, spool + Vector3(0, 0.1, 0), apex, 0.02, "rubber", 4)
+	k.rod(head, apex, tip, 0.02, "rubber", 4)
+	k.lamp(head, Vector3(0.3, 0.68, -0.4), 0.15, 0.07)
+	k.pennant(root, Vector3(-0.75, y, 0.6), 1.0)
 
 
 ## Turbine Engine: a cowled engine on a pylon, propeller facing out, with
