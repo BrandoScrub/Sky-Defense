@@ -82,6 +82,13 @@ var wind_multiplier := 1.0
 @export var repair_power := 0.0
 ## Launched from an Airship Hangar; DefenseSystem flies it.
 @export var is_drone := false
+## Heavy hitters (Lancers, walkers) stagger what they hit: a short shove
+## back and a pause before its next attack. A Shieldbearer facing the hit
+## braces and doesn't budge.
+@export var heavy_hits := false
+## How fast this unit's shots fly (units per second). Slower shells are
+## easier to see; the hit lands when the shell arrives.
+@export var shell_speed := 50.0
 
 ## Bonuses from nearby support buildings (see DefenseSystem). They work on
 ## any unit type, so new units get them for free. Reset every frame.
@@ -108,6 +115,9 @@ var attack_move := false
 var riding := false
 
 var _route := PackedVector3Array()
+## Knockback slide: where the unit is being shoved to, and time left.
+var _knock_to := Vector3.ZERO
+var _knock_left := 0.0
 var _ring: MeshInstance3D
 ## Buff id -> {"mods": Dictionary, "time_left": float}.
 var _buffs := {}
@@ -244,6 +254,39 @@ func reset_support() -> void:
 	armor = 0.0
 
 
+## The way the unit faces, flat on the deck.
+func forward() -> Vector3:
+	return Vector3(sin(rotation.y), 0.0, cos(rotation.y))
+
+
+## Turns the unit to face a point (it fights facing its target, which is
+## what a Shieldbearer's shield covers).
+func face(point: Vector3) -> void:
+	var to := point - global_position
+	to.y = 0.0
+	if to.length() > 0.01:
+		rotation.y = atan2(to.x, to.z)
+
+
+## True when `point` is in front of the unit, within `arc_cos` (the cosine
+## of half the arc: 0.5 is a 120 degree front).
+func is_facing(point: Vector3, arc_cos := 0.5) -> bool:
+	var to := point - global_position
+	to.y = 0.0
+	if to.length() < 0.01:
+		return true
+	return to.normalized().dot(forward()) >= arc_cos
+
+
+## Shoves the unit to `to` over a moment and holds off its next attack for
+## `seconds`. CombatSystem checks the spot is walkable first.
+func stagger(to: Vector3, seconds: float) -> void:
+	cooldown_left = maxf(cooldown_left, seconds)
+	if to != global_position:
+		_knock_to = Vector3(to.x, position.y, to.z)
+		_knock_left = 0.15
+
+
 func is_moving() -> bool:
 	return not _route.is_empty()
 
@@ -265,6 +308,11 @@ func stop() -> void:
 
 func _process(delta: float) -> void:
 	tick_buffs(delta)
+	if _knock_left > 0.0:
+		var t := minf(delta / _knock_left, 1.0)
+		_knock_left -= delta
+		position = position.lerp(_knock_to, t)
+		return
 	if _route.is_empty() or riding:
 		return
 	var target := _route[0]

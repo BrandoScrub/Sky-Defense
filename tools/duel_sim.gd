@@ -9,6 +9,8 @@
 ## air: rival airships (VesperFleet kinds), launched along their usual lanes.
 ## def: your units, standing at the HQ. towers: your buildings on the Hub.
 ## wave: rival units get that wave's extra health.
+## spread=1: your units stand in a ring round the HQ instead of a block, so
+## they shoot attackers from several sides (flanking shields).
 ## Prints one "DUEL" line: who's left, HQ damage, scrap spent and earned.
 extends SceneTree
 
@@ -22,7 +24,7 @@ func _parse(spec: String) -> Array:
 
 
 func _initialize() -> void:
-	var args := {"atk": "", "def": "", "towers": "", "wave": "1", "air": "", "seconds": "120", "seed": "3", "ships": ""}
+	var args := {"atk": "", "def": "", "towers": "", "wave": "1", "air": "", "seconds": "120", "seed": "3", "ships": "", "spread": "0"}
 	for a in OS.get_cmdline_user_args():
 		var kv := a.split("=")
 		if kv.size() == 2:
@@ -89,6 +91,10 @@ func _initialize() -> void:
 		for k in pair[1]:
 			var u := UnitCatalog.make(pair[0], "player")
 			u.position = region.snap_to_walkable(hub_pos + Vector3(-2.0 + (i % 4) * 1.2, 0, 1.5 + (i / 4) * 1.2))
+			if args.spread == "1":
+				# Spread out in a ring round the HQ, so attackers get shot from the side.
+				var ang := TAU * i / 8.0
+				u.position = region.snap_to_walkable(hub_pos + Vector3(cos(ang), 0, sin(ang)) * 6.0)
 			units_root.add_child(u)
 			spent += int(UnitCatalog.get_data(pair[0]).cost)
 			i += 1
@@ -151,5 +157,5 @@ func _initialize() -> void:
 			towers_left += 1
 	print("DUEL atk=%s air=%s def=%s towers=%s wave=%s | t=%.0f hq_lost=%.0f | attackers left %s | defenders left %s | towers left %d | spent %d earned %d" % [
 		args.atk, args.air, args.def + ("+" + args.ships if args.ships != "" else ""), args.towers, args.wave, t,
-		1500.0 - (hub_hq.hp if hub_hq and hub_hq.is_alive() else 0.0), alive_atk, alive_def, towers_left, spent, res.scrap - scrap_before])
+		hub_hq.max_hp - (hub_hq.hp if hub_hq and hub_hq.is_alive() else 0.0), alive_atk, alive_def, towers_left, spent, res.scrap - scrap_before])
 	quit()
