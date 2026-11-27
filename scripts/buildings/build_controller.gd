@@ -75,7 +75,7 @@ func cancel_placing() -> void:
 ## Why this building can't go on this tile right now, or "".
 func placement_problem(type_id: String, hex) -> String:
 	if hex == null:
-		return "Point at a platform"
+		return "Point at an island deck"
 	var problem := region.build_problem(type_id, hex)
 	if problem != "":
 		return problem
@@ -98,7 +98,7 @@ func try_place(type_id: String, hex, rotation_steps := 0) -> String:
 	var crystals := BuildingCatalog.crystals_of(type_id)
 	resources.pay(data.cost, crystals)
 	region.place_building(Building.new().setup(type_id), hex, rotation_steps)
-	notice.emit("Built %s (-%d scrap%s)" % [data.name, data.cost, ", -%d crystals" % crystals if crystals > 0 else ""])
+	notice.emit("%s built  (-%d scrap%s)" % [data.name, data.cost, ", -%d crystals" % crystals if crystals > 0 else ""])
 	return ""
 
 
@@ -114,7 +114,7 @@ func demolish(hex: Vector2i) -> int:
 	resources.add_scrap(refund)
 	if crystal_refund > 0:
 		resources.add_crystals(crystal_refund)
-	notice.emit("Demolished %s (+%d scrap%s)" % [building.get_data().name, refund, ", +%d crystals" % crystal_refund if crystal_refund > 0 else ""])
+	notice.emit("%s torn down for parts  (+%d scrap%s)" % [building.get_data().name, refund, ", +%d crystals" % crystal_refund if crystal_refund > 0 else ""])
 	building.queue_free()
 	return refund
 

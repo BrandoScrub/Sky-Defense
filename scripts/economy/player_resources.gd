@@ -34,7 +34,7 @@ func shortfall(scrap_cost: int, crystal_cost := 0) -> String:
 	if scrap < scrap_cost:
 		return "Not enough scrap (%d needed)" % scrap_cost
 	if crystals < crystal_cost:
-		return "Not enough crystals (%d needed; harvesters and crystal seams pay them)" % crystal_cost
+		return "Not enough crystals (%d needed). Harvesters and seams pay them" % crystal_cost
 	return ""
 
 

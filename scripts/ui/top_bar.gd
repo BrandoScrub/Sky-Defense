@@ -42,15 +42,7 @@ func _init() -> void:
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
 	offset_bottom = HEIGHT
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.1, 0.1, 0.12, 0.85)
-	style.border_color = Color(0.75, 0.6, 0.3, 0.8)
-	style.border_width_bottom = 2
-	style.content_margin_left = 16
-	style.content_margin_right = 16
-	style.content_margin_top = 4
-	style.content_margin_bottom = 4
-	add_theme_stylebox_override("panel", style)
+	theme_type_variation = "Strip"
 	var row := HBoxContainer.new()
 	row.name = "Row"
 	row.add_theme_constant_override("separation", 20)
@@ -60,12 +52,12 @@ func _ready() -> void:
 	res.name = "Resources"
 	res.add_theme_constant_override("separation", 22)
 	row.add_child(res)
-	_hub = _stat(res, "Hub", "Your Hub's headquarters. If it falls, you lose. Sappers repair it when no enemy is close.")
-	_scrap = _stat(res, "Scrap", "Scrap: the main currency. Spend it on buildings, walkways and troops. Kills pay scrap on the spot; scrap heaps on your platforms pay at the end of each wave (shown as +N).")
-	_power = _stat(res, "Power", "Power: used / made. Towers need power; if they use more than your generators and storms make, they brown out and slow down.")
-	_crystals = _stat(res, "Crystals", "Crystals: buy advanced gear (Arc Coil, Skyhook Gun, Hangar, Lancer, Gunboat) and Hum powers. Cloud Harvesters and crystal seams pay them at the end of each wave (shown as +N).")
-	_hqs = _stat(res, "RivalHQs", "The other way to win: wreck every rival headquarters (bridge out to them and attack). Or survive every wave.")
-	_overload = _stat(res, "Overload", "A platform is carrying more than it can lift. Overloaded platforms sway, sag and drop buildings. Demolish something, move units off, or add a Lift Engine (Industry, E).")
+	_hub = _stat(res, "Hub", "Your headquarters. If it falls, the charter is lost.\nSappers patch it up when no enemy is near.")
+	_scrap = _stat(res, "Scrap", "Scrap pays for buildings, walkways and troops.\nEvery kill pays a little. Islands and scrap heaps pay\nat the end of each wave (the +N).")
+	_power = _stat(res, "Power", "Power drawn / power made.\nDraw more than your Dynamos and storms make\nand every tower browns out and fires slower.")
+	_crystals = _stat(res, "Crystals", "Hum-charged crystals buy advanced gear and Hum powers.\nCloud Harvesters and crystal seams pay them\nat the end of each wave (the +N).")
+	_hqs = _stat(res, "RivalHQs", "Rival headquarters wrecked.\nGround them all to win early, or hold out to the last wave.")
+	_overload = _stat(res, "Overload", "An island is carrying more than it can lift.\nIt sways, then sags, then sheds buildings.\nLighten it, or add a Lift Engine (Industry, E).")
 	_overload.modulate = Color(1.0, 0.55, 0.45)
 	_overload.visible = false
 
@@ -84,7 +76,7 @@ func _ready() -> void:
 func _stat(parent: Control, stat_name: String, tip: String) -> Label:
 	var label := Label.new()
 	label.name = stat_name
-	label.add_theme_font_size_override("font_size", 18)
+	label.add_theme_font_size_override("font_size", 19)
 	label.tooltip_text = tip
 	# Labels ignore the mouse by default; this lets their tooltips show.
 	label.mouse_filter = Control.MOUSE_FILTER_PASS
@@ -105,7 +97,7 @@ func refresh() -> void:
 		var demand := region.power_demand()
 		_power.text = "Power %d / %d" % [demand, supply]
 		if demand > supply:
-			_power.text += " (brownout: towers at %d%%)" % int(region.grid_efficiency() * 100)
+			_power.text += "  brownout, towers at %d%%" % int(region.grid_efficiency() * 100)
 		_power.modulate = Color(1.0, 0.55, 0.45) if demand > supply else Color.WHITE
 		_crystals.text = "Crystals %d" % resources.crystals + _income_text(income.get("crystals", 0))
 		var heavy := overloaded_platforms()
@@ -114,7 +106,7 @@ func refresh() -> void:
 			_overload.text = "Overloaded: " + ", ".join(heavy)
 	if waves:
 		var grounded := waves.rivals_grounded()
-		_hqs.text = "Rival HQs down %d / %d" % grounded
+		_hqs.text = "Rivals grounded %d / %d" % grounded
 		_refresh_rivals()
 
 
@@ -124,7 +116,7 @@ func _refresh_hub() -> void:
 	var hq: Headquarters = combat.headquarters_on("Hub") if combat else null
 	_hub.visible = combat != null
 	if hq == null:
-		_hub.text = "Hub fallen"
+		_hub.text = "Hub lost"
 		_hub.modulate = Color(1.0, 0.35, 0.3)
 		return
 	var ratio := hq.hp / hq.max_hp
@@ -139,7 +131,7 @@ func _refresh_hub() -> void:
 		# Under fire: blink between its colour and bright red.
 		var on := (since / 250) % 2 == 0
 		colour = Color(1.0, 0.25, 0.2) if on else colour
-		_hub.text += "  under attack!"
+		_hub.text += "  under fire!"
 	_hub.modulate = colour
 
 
@@ -174,21 +166,21 @@ func _refresh_rivals() -> void:
 ## The one-line status under a rival's name.
 func status_text(entry: Dictionary) -> String:
 	if entry.defeated:
-		return "Defeated"
+		return "Grounded"
 	var bridge := ""
 	if not waves.has_contact(entry.corp):
-		bridge = ", bridge %d/%d" % bridge_progress(entry.corp)
+		bridge = " · bridge %d/%d" % bridge_progress(entry.corp)
 	match waves.phase:
 		WaveManager.BUILD:
 			if entry.units.is_empty():
-				return "Wave %d: sits it out%s" % [waves.wave, bridge]
+				return "Holding back%s" % bridge
 			var target := bomb_target_of(entry)
 			if target != "":
-				return "Wave %d in %s: bombs %s" % [waves.wave, clock(waves.time_left), target]
+				return "Wave %d in %s · bombing %s" % [waves.wave, clock(waves.time_left), target]
 			return "Wave %d in %s%s" % [waves.wave, clock(waves.time_left), bridge]
 		WaveManager.WAVE:
 			var left := waves.remaining_for(entry.corp)
-			return ("Attacking: %d left" % left if left > 0 else "Waiting for next wave") + bridge
+			return ("Attacking · %d left" % left if left > 0 else "Regrouping") + bridge
 	return ""
 
 
@@ -213,28 +205,28 @@ func bridge_progress(corp: String) -> Array:
 ## Hover text listing what a rival's wave sends.
 func wave_tooltip(entry: Dictionary) -> String:
 	if entry.defeated:
-		return "%s is defeated. Its headquarters has fallen." % entry.corp
+		return "%s is grounded. Its headquarters lies in ruins." % entry.corp
 	var attacking := waves.phase == WaveManager.WAVE
 	var lines := PackedStringArray()
-	lines.append("%s, wave %d%s:" % [entry.corp, waves.wave, " (attacking now)" if attacking else ""])
+	lines.append("%s, wave %d%s" % [entry.corp, waves.wave, " (attacking now)" if attacking else ""])
 	if entry.units.is_empty():
-		lines.append("  Nothing this wave")
+		lines.append("  Sends nothing this wave")
 	for u in entry.units:
-		lines.append("  %d x %s" % [u[1], u[0]])
+		lines.append("  %d  %s" % [u[1], u[0]])
 	var target := bomb_target_of(entry)
 	if target != "":
-		lines.append("Bombers fly at %s (your outer island with the most" % target)
-		lines.append("built on it). Flak there stops them.")
+		lines.append("Bombers are headed for %s, your richest outer island." % target)
+		lines.append("Flak there will meet them.")
 	var bonus := waves.health_bonus(-1, entry.corp)
 	if waves.is_push_wave() and not entry.units.is_empty():
-		lines.append("Big push: the wind turns, 40% more attackers")
+		lines.append("Big push: the wind turns and 40% more attack")
 	if bonus > 0.005 and not entry.units.is_empty():
-		lines.append("Health +%d%%" % roundi(bonus * 100))
+		lines.append("Tougher plating: +%d%% health" % roundi(bonus * 100))
 	if not waves.has_contact(entry.corp):
 		var progress := bridge_progress(entry.corp)
-		lines.append("Bridge %d of %d spans built. Its walkers creep along it," % progress)
-		lines.append("taking each island they reach (and wrecking what you built")
-		lines.append("there). Cut a span to set it back. Troop carriers fly in anyway.")
+		lines.append("Bridge: %d of %d spans built. Walkers follow it, taking" % progress)
+		lines.append("each island they reach. Cut a span to set them back.")
+		lines.append("Troop carriers fly in either way.")
 	return "\n".join(lines)
 
 
@@ -242,6 +234,10 @@ func _add_card(corp: String) -> void:
 	var card := PanelContainer.new()
 	card.name = corp
 	card.mouse_filter = Control.MOUSE_FILTER_STOP
+	var plate := HudTheme.flat(HudTheme.IRON_LIGHT, HudTheme.BRASS_DIM, 1)
+	plate.content_margin_top = 1
+	plate.content_margin_bottom = 1
+	card.add_theme_stylebox_override("panel", plate)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 6)
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -258,11 +254,12 @@ func _add_card(corp: String) -> void:
 	row.add_child(text)
 	var title := Label.new()
 	title.text = corp
+	title.theme_type_variation = "Heading"
 	title.add_theme_font_size_override("font_size", 14)
 	text.add_child(title)
 	var status := Label.new()
 	status.add_theme_font_size_override("font_size", 12)
-	status.modulate = Color(1.0, 0.85, 0.45)
+	status.add_theme_color_override("font_color", HudTheme.AMBER)
 	text.add_child(status)
 	_rivals.add_child(card)
 	_cards[corp] = {"card": card, "status": status}

@@ -47,7 +47,7 @@ const TABS := {
 	"Hum": ["power:overcharge", "power:emergency_lift"],
 }
 
-const DEFAULT_HINT := "Tab: next tab   Shift + WASD: move camera   Del: demolish   Space: start wave   P: pause   F1-F3: speed"
+const DEFAULT_HINT := "Tab  next tab     Shift + WASD  pan     Del  demolish\nSpace  ring the alarm     P  pause     F1-F3  speed"
 
 var building: BuildController
 var walkways: WalkwayBuilder
@@ -96,6 +96,7 @@ func _ready() -> void:
 		tab.name = tab_name
 		tab.text = tab_name
 		tab.toggle_mode = true
+		tab.theme_type_variation = "TabPlate"
 		tab.button_group = group
 		tab.focus_mode = Control.FOCUS_NONE
 		tab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -114,8 +115,8 @@ func _ready() -> void:
 	_hint.name = "Hint"
 	_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_hint.custom_minimum_size.x = BUTTON_SIZE.x * COLUMNS + 4 * (COLUMNS - 1)
-	_hint.add_theme_font_size_override("font_size", 13)
-	_hint.modulate = Color(1, 1, 1, 0.8)
+	_hint.add_theme_font_size_override("font_size", 14)
+	_hint.modulate = Color(1, 1, 1, 0.75)
 	box.add_child(_hint)
 	set_hint("")
 
@@ -185,7 +186,9 @@ func show_tab(tab_name: String) -> void:
 	if tab_name == current_tab or not TABS.has(tab_name):
 		return
 	current_tab = tab_name
-	_tab_buttons[tab_name].set_pressed_no_signal(true)
+	# set_pressed_no_signal skips the button group, so clear the others here.
+	for other in _tab_buttons:
+		_tab_buttons[other].set_pressed_no_signal(other == tab_name)
 	for child in _grid.get_children():
 		_grid.remove_child(child)
 		child.queue_free()
@@ -199,7 +202,9 @@ func show_tab(tab_name: String) -> void:
 		else:
 			var empty := Panel.new()
 			empty.custom_minimum_size = BUTTON_SIZE
-			empty.modulate = Color(1, 1, 1, 0.35)
+			# An empty slot is a bare socket: no rivets, just a faint outline.
+			empty.add_theme_stylebox_override("panel", HudTheme.flat(Color(0.05, 0.045, 0.04, 0.5), HudTheme.BRASS_DIM, 1))
+			empty.modulate = Color(1, 1, 1, 0.45)
 			empty.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			var key := _key_label(SLOT_KEYS[i])
 			key.modulate.a = 0.5
@@ -214,7 +219,7 @@ func activate(entry: String) -> void:
 		var type_id := entry.trim_prefix("unit:")
 		var problem := recruiter.queue_one(type_id)
 		var unit_name: String = UnitCatalog.get_data(type_id).name
-		recruiter.notice.emit(problem if problem != "" else "%s queued (%d in training)" % [unit_name, recruiter.queued])
+		recruiter.notice.emit(problem if problem != "" else "%s signed on (%d in training)" % [unit_name, recruiter.queued])
 		refresh()
 		return
 	if entry.begins_with("power:"):
@@ -226,7 +231,7 @@ func activate(entry: String) -> void:
 	if entry.begins_with("ship:"):
 		var problem := patrols.queue_ship(entry.trim_prefix("ship:")) if patrols else "No hangar"
 		var kind := entry.trim_prefix("ship:")
-		patrols.notice.emit(problem if problem != "" else "%s ordered" % patrols.ship_name(kind))
+		patrols.notice.emit(problem if problem != "" else "%s ordered from the yard" % patrols.ship_name(kind))
 		refresh()
 		return
 	match entry:
@@ -288,7 +293,7 @@ func _make_button(entry: String, key_text: String) -> Button:
 	button.toggle_mode = true
 	button.focus_mode = Control.FOCUS_NONE
 	button.clip_text = true
-	button.add_theme_font_size_override("font_size", 13)
+	button.add_theme_font_size_override("font_size", 14)
 	button.pressed.connect(activate.bind(entry))
 
 	button.add_child(_key_label(key_text))
@@ -309,8 +314,9 @@ func _key_label(key_text: String) -> Label:
 	key.name = "Key"
 	key.text = key_text
 	key.position = Vector2(6, 2)
-	key.add_theme_font_size_override("font_size", 12)
-	key.modulate = Color(1.0, 0.85, 0.45)
+	key.add_theme_font_size_override("font_size", 13)
+	key.add_theme_font_override("font", load(HudTheme.FONT_BOLD))
+	key.add_theme_color_override("font_color", HudTheme.AMBER)
 	key.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return key
 
@@ -338,7 +344,7 @@ func _update_button(entry: String) -> void:
 		button.tooltip_text = "%s  [%s]\nCompany power: %d crystals, lasts %ds, then %ds to recharge.\n%s\nCloud Harvesters and crystal seams pay crystals at the end of each wave." % [spec.name, _hotkey(entry), spec.crystals, int(spec.seconds), int(spec.cooldown), spec.blurb]
 		button.set_pressed_no_signal(running)
 		var can_use: bool = (resources == null or resources.crystals >= spec.crystals) and wait <= 0.0
-		button.modulate = Color(0.6, 0.85, 1.0) if running else (Color.WHITE if can_use else Color(1.0, 0.6, 0.6, 0.8))
+		button.modulate = Color(0.6, 0.85, 1.0) if running else (Color.WHITE if can_use else Color(1.0, 0.6, 0.55, 0.75))
 		return
 	if entry.begins_with("ship:"):
 		var kind := entry.trim_prefix("ship:")
@@ -412,10 +418,10 @@ func _update_button(entry: String) -> void:
 	if active:
 		button.modulate = Color(1.0, 0.85, 0.4)
 	else:
-		button.modulate = Color.WHITE if affordable else Color(1.0, 0.6, 0.6, 0.8)
+		button.modulate = Color.WHITE if affordable else Color(1.0, 0.6, 0.55, 0.75)
 	# Airships are built at a Hangar: greyed out until you have one.
 	if entry.begins_with("ship:") and (patrols == null or patrols.hangars.is_empty()):
-		button.text = "\n%s\nneeds a Hangar" % title
+		button.text = "\n%s\nHangar first" % title
 		button.modulate = Color(1, 1, 1, 0.4)
 
 
