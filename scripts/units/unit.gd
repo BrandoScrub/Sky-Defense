@@ -82,6 +82,11 @@ var wind_multiplier := 1.0
 @export var repair_power := 0.0
 ## Launched from an Airship Hangar; DefenseSystem flies it.
 @export var is_drone := false
+## Aircraft hull: "light" (drones, interceptors, gunships, tenders) or
+## "heavy" (bombers, troop carriers, gunboats); "" for ground units. Flak
+## shreds light craft, the Skyhook harpoon is made for heavy hulls, and only
+## a heavy hull crashes hard enough to hurt what's under it.
+@export var hull := ""
 ## Heavy hitters (Lancers, walkers) stagger what they hit: a short shove
 ## back and a pause before its next attack. A Shieldbearer facing the hit
 ## braces and doesn't budge.

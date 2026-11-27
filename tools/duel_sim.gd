@@ -44,6 +44,7 @@ func _initialize() -> void:
 		u.queue_free()
 	await process_frame
 	res.scrap = 100000
+	res.crystals = 100000
 	var spent := 0
 	var units_root: Node3D = main.get_node("Units")
 	var hub_pos := region.get_platform_position("Hub")

@@ -65,21 +65,24 @@ func _shoot(out_dir: String, tag: String, size: Vector2i, scene: String) -> void
 		main.resources.scrap = 5000
 		main.resources.crystals = 200
 		var c: Vector2i = region.platforms["Hub"].center
-		for p in [["flak_battery", Vector2i(2, -2)], ["flak_battery", Vector2i(-2, 2)], ["skyhook_cannon", Vector2i(2, 1)],
-				["airship_hangar", Vector2i(-2, -1)], ["dynamo", Vector2i(0, 3)], ["dynamo", Vector2i(-3, 1)]]:
+		for p in [["flak_battery", Vector2i(-2, 2)], ["skyhook_cannon", Vector2i(2, 1)], ["rivet_turret", Vector2i(1, -2)],
+				["dynamo", Vector2i(0, 3)], ["dynamo", Vector2i(-3, 1)]]:
 			main.building.try_place(p[0], c + p[1])
 		for kind in ["bomber", "gunship", "carrier"]:
-			for u in main.fleet.launch(kind, 2 if kind != "carrier" else 1, "Vesper" if kind != "carrier" else "Ironbell"):
+			for u in main.fleet.launch(kind, 3 if kind == "bomber" else 1, "Vesper" if kind != "carrier" else "Ironbell"):
 				main.waves._toughen(u)
 				# Start them close so the fight is on screen.
-				u.position = hub + (u.position - hub).normalized() * 16.0 + Vector3.UP * VesperFleet.ALTITUDE
+				var side := Vector3(u.position.x - hub.x, 0, u.position.z - hub.z).normalized()
+				u.position = hub + side * 14.0 + Vector3.UP * VesperFleet.ALTITUDE
+				# Fresh orders from here (VesperFleet plans the run).
+				u.stop()
 	cam.position = Vector3(focus.x, cam.position.y, focus.z + 6)
 	cam.zoom = 0.1
 	cam._target_zoom = 0.1
 	cam._apply_zoom()
-	await _settle(100 if scene == "ground" else 160)
+	await _settle(100 if scene == "ground" else 60)
 	await _save("%s/%s-%s-1.png" % [out_dir, tag, scene])
-	await _settle(70)
+	await _settle(40)
 	await _save("%s/%s-%s-2.png" % [out_dir, tag, scene])
 	root.remove_child(main)
 	main.free()

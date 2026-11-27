@@ -2,14 +2,23 @@
 ## corporation to fly). Kinds, in AIRSHIPS:
 ##   bomber  - Vesper. Each wave its bombers fly one air lane from the Vesper
 ##             Aerodrome to your richest outer island (the one with the most
-##             scrap in buildings; the Hub if you have none), then bomb the
-##             nearest of your buildings there, or the Hub's headquarters.
-##             The rival card names the target. Ignores your units.
+##             scrap in buildings; the Hub if you have none), then make
+##             bombing runs: they fly straight over the nearest of your
+##             buildings there (or the Hub's headquarters), turn and come
+##             back. Over any of your buildings they drop a bomb, which
+##             lands a moment later (its shadow shows where) and blasts
+##             everything of yours nearby, troops included. Heavy hull.
+##             The rival card names the target.
 ##   gunship - Vesper escort. Hunts your units and drones, in the air and on
-##             the decks, then your buildings.
+##             the decks, then your buildings. Light hull.
 ##   carrier - Ironbell troop carrier. Flies to your platform nearest its HQ,
 ##             hovers, drops a squad onto the deck, and flies home. Shoot it
-##             down on the way in and the troops go down with it.
+##             down on the way in and the troops go down with it. Heavy hull.
+##
+## Hulls (Unit.hull): flak bursts shred light craft and hurt heavy ones
+## less; the Skyhook does double damage to heavy hulls. A heavy hull that is
+## shot down falls, and crushes whatever is under it if it lands on an
+## island, yours or theirs (CombatSystem).
 ##
 ## Airships steer around islands rather than over them (AirNav) and follow
 ## the wind: they make their runs downwind, fly faster with a tailwind and
@@ -31,21 +40,29 @@ const ALTITUDE := 7.0
 const WIND_SPEED := 0.3
 ## Seconds a carrier hovers before its troops are down.
 const UNLOAD_SECONDS := 1.5
+## Bombers start a straight run when this close to their target, and fly
+## this far past it before turning back for the next run.
+const RUN_START := 12.0
+const RUN_OVERSHOOT := 7.0
+## A bomb is dropped when a bomber is this close (flat) to one of your
+## buildings, or to the edge of your headquarters.
+const BOMB_REACH := 1.4
 
 const AIRSHIPS := {
 	"bomber": {
-		"name": "Vesper Bomber", "corp": "Vesper", "hp": 110.0, "damage": 30.0, "range": 2.5,
-		"cooldown": 2.5, "speed": 5.0, "bounty": 25, "footprint": 0.9,
+		# damage: each bomb's blast; cooldown: seconds between bombs.
+		"name": "Vesper Bomber", "corp": "Vesper", "hp": 110.0, "damage": 20.0, "range": 2.5,
+		"cooldown": 2.0, "speed": 5.0, "bounty": 25, "footprint": 0.9, "hull": "heavy",
 		"color": Color(0.18, 0.22, 0.45), "targets_units": false, "hits_air": false,
 	},
 	"gunship": {
 		"name": "Vesper Gunship", "corp": "Vesper", "hp": 90.0, "damage": 9.0, "range": 5.0,
-		"cooldown": 0.8, "speed": 6.0, "bounty": 20, "footprint": 0.65,
+		"cooldown": 0.8, "speed": 6.0, "bounty": 20, "footprint": 0.65, "hull": "light",
 		"color": Color(0.32, 0.42, 0.7), "targets_units": true, "hits_air": true,
 	},
 	"carrier": {
 		"name": "Ironbell Troop Carrier", "corp": "Ironbell", "hp": 220.0, "damage": 0.0, "range": 0.0,
-		"cooldown": 99.0, "speed": 6.0, "bounty": 35, "footprint": 1.3,
+		"cooldown": 99.0, "speed": 6.0, "bounty": 35, "footprint": 1.3, "hull": "heavy",
 		"color": Color(0.45, 0.22, 0.16), "targets_units": false, "hits_air": false,
 		"troops": ["shieldbearer", "rifleman", "riveteer"],
 	},
@@ -125,7 +142,7 @@ func step(delta := 0.0) -> void:
 			"gunship":
 				_step_gunship(unit)
 			_:
-				_step_bomber(unit)
+				_step_bomber(unit, delta)
 
 
 ## Speed factor from the wind for where this airship is heading.
@@ -139,14 +156,38 @@ func wind_speed_for(unit: Unit) -> float:
 	return 1.0 + WIND_SPEED * to.normalized().dot(wind.blowing())
 
 
-func _step_bomber(unit: Unit) -> void:
+func _step_bomber(unit: Unit, _delta := 0.0) -> void:
+	# Bombs away over anything of yours below (CombatSystem counts the
+	# cooldown down).
+	if combat and unit.cooldown_left <= 0.0 and over_target(unit.global_position):
+		unit.cooldown_left = unit.get_attack_cooldown()
+		combat.drop_bomb(unit.global_position, "rival", unit.get_damage())
 	if unit.is_moving():
 		return
-	if combat and combat.nearest_enemy(unit.global_position, "rival", unit.attack_range, false, false) != null:
-		return
 	var target := target_for(unit)
-	if target != null:
+	if target == null:
+		return
+	var to := target.global_position - unit.global_position
+	to.y = 0.0
+	if to.length() > RUN_START:
 		_fly(unit, target.global_position)
+		return
+	# A straight run over the target and out the other side; the next run
+	# comes back the other way.
+	var dir := to.normalized() if to.length() > 1.0 else unit.forward()
+	unit.set_route(PackedVector3Array([target.global_position + dir * RUN_OVERSHOOT]))
+
+
+## True when a bomber at `point` is over one of your buildings or your
+## headquarters.
+func over_target(point: Vector3) -> bool:
+	for b in region.buildings.values():
+		if b.faction == "player" and b.is_alive() and _flat(point, b.global_position) <= BOMB_REACH:
+			return true
+	for hq in get_tree().get_nodes_in_group(Headquarters.GROUP):
+		if hq.faction == "player" and hq.is_alive() and _flat(point, hq.global_position) <= region.tile_size + BOMB_REACH:
+			return true
+	return false
 
 
 func _step_gunship(unit: Unit) -> void:
@@ -356,8 +397,11 @@ func _make(kind: String) -> Unit:
 	u.attack_cooldown = spec.cooldown
 	u.bounty = spec.bounty
 	u.footprint = spec.footprint
+	u.hull = spec.hull
 	u.body_color = spec.color
 	u.set_meta("airship", kind)
+	if kind == "bomber":
+		u.set_meta("bomb_runs", true)
 	if kind == "gunship":
 		u.set_meta("hunt_range", gunship_hunt_range)
 	return u
