@@ -96,6 +96,8 @@ const UNITS := {
 	"lancer": {
 		"name": "Lancer",
 		"cost": 60,
+		# Its arc lance is Hum-charged: costs crystals as well as scrap.
+		"crystals": 5,
 		"train_seconds": 8.0,
 		"hp": 80.0,
 		"damage": 30.0,

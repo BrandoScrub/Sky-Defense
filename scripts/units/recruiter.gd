@@ -35,6 +35,11 @@ static func cost_of(type_id: String) -> int:
 	return int(UnitCatalog.get_data(type_id).cost)
 
 
+## Crystals a unit costs on top of its scrap (0 for most).
+static func crystals_of(type_id: String) -> int:
+	return int(UnitCatalog.get_data(type_id).get("crystals", 0))
+
+
 ## Training time of a unit type, in seconds.
 static func train_seconds_of(type_id: String) -> float:
 	return float(UnitCatalog.get_data(type_id).train_seconds)
@@ -54,8 +59,9 @@ func queue_one(type_id := "riveteer") -> String:
 		return "The training queue is full"
 	if _field_count() + queue.size() >= unit_cap:
 		return "Unit limit reached (%d)" % unit_cap
-	if not resources.spend_scrap(cost_of(type_id)):
-		return "Not enough scrap: a %s costs %d" % [unit_name, cost_of(type_id)]
+	var crystals := crystals_of(type_id)
+	if not resources.pay(cost_of(type_id), crystals):
+		return "Not enough %s: a %s costs %d scrap%s" % ["scrap" if resources.scrap < cost_of(type_id) else "crystals", unit_name, cost_of(type_id), " and %d crystals" % crystals if crystals > 0 else ""]
 	if queue.is_empty():
 		time_left = train_seconds_of(type_id)
 	queue.append(type_id)

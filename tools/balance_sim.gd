@@ -85,6 +85,10 @@ func _expand(army_goal: int, attack_wave: int) -> void:
 	var wave: int = main.waves.wave
 	var army := get_nodes_in_group(Unit.GROUP)
 	var rush := strategy == "rush"
+	# 0. A Cloud Harvester on the Hub anchor first from wave 2: power and
+	# crystals every wave (crystals buy Lancers and Arc Coils).
+	if wave >= 2:
+		_harvester_on("Hub")
 	# 1. Power and a couple of towers first, so the Hub isn't bare.
 	if not rush or wave >= 3:
 		_towers_on("Hub", 2 + wave / 2 + res.scrap / 120)
@@ -101,6 +105,9 @@ func _expand(army_goal: int, attack_wave: int) -> void:
 		keep = 20
 	while army.size() + main.recruiter.queued < army_goal and res.scrap >= keep + 45:
 		var kind: String = mix[(stats.units) % mix.size()]
+		# Lancers cost crystals: train a Riveteer instead when short.
+		if res.crystals < Recruiter.crystals_of(kind):
+			kind = "riveteer"
 		if main.recruiter.queue_one(kind) != "":
 			break
 		stats.units += 1
@@ -123,13 +130,21 @@ func _towers_on(platform_name: String, goal: int) -> void:
 		var type := "rivet_turret"
 		if region.power_supply() < region.power_demand() + 4:
 			type = "dynamo"
-		elif have % 4 == 3:
+		elif have % 4 == 3 and res.crystals >= BuildingCatalog.crystals_of("arc_coil"):
 			type = "arc_coil"
 		if main.building.try_place(type, hex) == "":
 			stats.spent += BuildingCatalog.get_data(type).cost
 			if type != "dynamo":
 				have += 1
 				stats.towers += 1
+
+
+func _harvester_on(platform_name: String) -> void:
+	for hex in region.tiles_of_platform(platform_name):
+		if region.tiles[hex].type == "harvester_anchor" and not region.buildings.has(hex):
+			if main.building.try_place("harvester", hex) == "":
+				stats.spent += BuildingCatalog.get_data("harvester").cost
+			return
 
 
 func _flak_on(platform_name: String, goal: int) -> void:

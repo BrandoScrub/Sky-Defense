@@ -63,7 +63,7 @@ func _ready() -> void:
 	_hub = _stat(res, "Hub", "Your Hub's headquarters. If it falls, you lose. Sappers repair it when no enemy is close.")
 	_scrap = _stat(res, "Scrap", "Scrap: the main currency. Spend it on buildings, walkways and troops. Kills pay scrap on the spot; scrap heaps on your platforms pay at the end of each wave (shown as +N).")
 	_power = _stat(res, "Power", "Power: used / made. Towers need power; if they use more than your generators and storms make, they brown out and slow down.")
-	_crystals = _stat(res, "Crystals", "Crystals: an advanced resource. Your Cloud Harvesters pay crystals at the end of each wave (shown as +N).")
+	_crystals = _stat(res, "Crystals", "Crystals: buy advanced gear (Arc Coil, Skyhook Gun, Hangar, Lancer, Gunboat) and Hum powers. Cloud Harvesters and crystal seams pay them at the end of each wave (shown as +N).")
 	_hqs = _stat(res, "RivalHQs", "The other way to win: wreck every rival headquarters (bridge out to them and attack). Or survive every wave.")
 	_overload = _stat(res, "Overload", "A platform is carrying more than it can lift. Overloaded platforms sway, sag and drop buildings. Demolish something, move units off, or add a Lift Engine (Industry, E).")
 	_overload.modulate = Color(1.0, 0.55, 0.45)

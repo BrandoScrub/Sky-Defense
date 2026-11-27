@@ -54,7 +54,7 @@ const SHIPS := {
 		"color": Color(0.85, 0.7, 0.35),
 	},
 	"gunboat": {
-		"name": "Thunder Gunboat", "role": "Air-to-ground", "cost": 80, "build_seconds": 10.0,
+		"name": "Thunder Gunboat", "role": "Air-to-ground", "cost": 80, "crystals": 10, "build_seconds": 10.0,
 		"hp": 150.0, "damage": 18.0, "range": 5.0, "cooldown": 1.2, "speed": 6.0,
 		"hits_air": false, "air_only": false, "targets_units": true, "footprint": 0.8,
 		"vs_buildings": 1.5, "color": Color(0.6, 0.45, 0.25),
@@ -122,8 +122,9 @@ func queue_ship(kind: String) -> String:
 	if best == null:
 		return "Every hangar is full (%d ships each)" % MAX_SHIPS_PER_HANGAR
 	var cost: int = SHIPS[kind].cost
-	if resources and not resources.spend_scrap(cost):
-		return "Not enough scrap (%d needed)" % cost
+	var crystals: int = SHIPS[kind].get("crystals", 0)
+	if resources and not resources.pay(cost, crystals):
+		return resources.shortfall(cost, crystals)
 	hangars[best].queue.append(kind if kind != "utility" else "utility:" + utility_job)
 	if hangars[best].queue.size() == 1:
 		hangars[best].timer = SHIPS[kind].build_seconds

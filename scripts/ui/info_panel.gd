@@ -30,7 +30,7 @@ const UNIT_INFO := {
 const BUILDING_INFO := {
 	"dynamo": "Burns fuel to power your towers. Makes more on a yellow generator socket.",
 	"lift_engine": "An extra lift rotor under the deck. The platform it stands on can carry %d more weight, and the engine itself weighs nothing. One per island." % BuildingCatalog.BUILDINGS.lift_engine.capacity,
-	"harvester": "Taps a storm cloud from a blue anchor. Gives lots of power, pays crystals at the end of each wave, and counts toward who controls the storm.",
+	"harvester": "Taps a storm cloud from a blue anchor. Gives power, pays crystals at the end of each wave, and counts toward who controls the storm.",
 	"rivet_turret": "Sturdy gun tower against walkers. Its plating gives cover, so your units fighting beside it take less damage. Can't hit aircraft.",
 	"arc_coil": "Chain lightning that jumps between up to 3 walkers. Power hungry, and can't hit aircraft.",
 	"rally_horn": "A brass horn that blares marching tunes. Its own gun is weak, but your units nearby hit harder and fire faster. Can't hit aircraft.",
@@ -46,7 +46,7 @@ const TILE_INFO := {
 	"generator_socket": ["Generator socket", "A Dynamo Generator built here makes 15 power instead of 10."],
 	"harvester_anchor": ["Storm harvester anchor", "Cloud Harvesters can only be built here. They tap the nearest storm cloud for power and crystals."],
 	"scrap_heap": ["Scrap heap", "Salvage. Pays scrap at the end of each wave while you own this platform."],
-	"crystal_seam": ["Crystal seam", "A seam of energized crystals. Each one pays 5 crystals a wave while you hold its island. Crystals buy Hum powers."],
+	"crystal_seam": ["Crystal seam", "A seam of energized crystals. Each one pays 5 crystals a wave while you hold its island. Crystals buy advanced gear (Arc Coil, Skyhook Gun, Hangar, Lancer, Gunboat) and Hum powers."],
 	"dock": ["Ferry dock", "Airships stop here. Right click a platform with no walkway and your units ride the ferry there."],
 	"spawn": ["Rival wave spawn", "Rival walkers set out from here when a wave starts."],
 	"walkway": ["Walkway", "A metal walkway between platforms. Units walk along it. Islands start unconnected: build walkways from the Industry tab to expand."],
