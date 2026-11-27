@@ -310,9 +310,9 @@ func describe(thing) -> Dictionary:
 				info.subtitle = "%s to %s" % [thing.a, thing.b]
 				info.body = "A small airship shuttles between the two docks. Right click the far island and your units ride across."
 			"air_lane":
-				info.title = "Rival air lane"
+				info.title = "%s wind lane" % RivalCatalog.corp_at(thing.a)
 				info.subtitle = "%s to %s" % [thing.a, thing.b]
-				info.body = "Vesper's bombers fly this route from upwind. It moves when the wind turns, every 3 waves. Put flak or a Hangar under it."
+				info.body = "This rival's airships ride the wind down this lane, each weaving its own way between the islands, and make their run with the wind at their backs. The lane moves when the wind turns, every 3 waves. Put flak or a Hangar beside it."
 				if wind:
 					info.stats = "Wind from the %s, turns in %d wave%s" % [wind.from_name(), wind.waves_until_shift(wind.waves.wave), "" if wind.waves_until_shift(wind.waves.wave) == 1 else "s"]
 	return info
@@ -400,7 +400,7 @@ func _route_at(screen: Vector2) -> Dictionary:
 			for i in range(1, pts.size()):
 				var a := Vector2(pts[i - 1].x, pts[i - 1].z)
 				var b := Vector2(pts[i].x, pts[i].z)
-				if flat.distance_to(Geometry2D.get_closest_point_to_segment(flat, a, b)) < region.tile_size:
+				if flat.distance_to(Geometry2D.get_closest_point_to_segment(flat, a, b)) < region.tile_size * HexGrid.SQRT3 * AirNav.LANE_HALF_WIDTH:
 					return {"kind": "air_lane", "a": lane[0], "b": lane[1]}
 	return {}
 

@@ -621,8 +621,8 @@ func _check_info_panel(main: Node) -> void:
 		things.append({"kind": "cloud", "name": cloud})
 	for hq in main.get_tree().get_nodes_in_group(Headquarters.GROUP):
 		things.append(hq)
-	for pair in region.layout.air_lanes:
-		things.append({"kind": "air_lane", "a": pair[0], "b": pair[1]})
+	for lane in region.air_lane_routes():
+		things.append({"kind": "air_lane", "a": lane[0], "b": lane[1]})
 	for pair in region.layout.ferry_routes:
 		things.append({"kind": "ferry", "a": pair[0], "b": pair[1]})
 	for thing in things:
@@ -1617,16 +1617,50 @@ func _check_air_routes(main: Node) -> void:
 		_expect(route.size() > 1, "with islands in the way, the airship should bend around them")
 	# Lanes are drawn along planned routes, and avoid islands too.
 	var drawn := region.air_lane_routes()
-	_expect(drawn.size() == fleet.lanes().size() and drawn.size() > 0, "every Vesper lane is drawn")
+	_expect(drawn.size() == fleet.all_lanes().size() and drawn.size() > 0, "every rival wind lane is drawn")
+	_expect(drawn.any(func(l): return l[0] == fleet.hq_of("Ironbell")), "Ironbell's troop carriers get a wind lane too")
 	for lane in drawn:
 		var pts: PackedVector3Array = lane[2]
 		_expect(_route_over_islands(region, pts[0], pts.slice(1), [lane[0], lane[1]]) == "", "drawn lane %s to %s avoids islands" % [lane[0], lane[1]])
 		var node := region.get_node_or_null(("AirLane_%s_%s" % [lane[0], lane[1]]).replace(" ", ""))
 		_expect(node != null and node.get_child_count() > 0, "lane %s to %s has markers" % [lane[0], lane[1]])
+	# Each airship weaves its own way down the lane: through open sky, inside
+	# the band, ending at the target, and not all on the same line.
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5
+	var middle := nav.plan_attack(from, hub)
+	var mid_line := PackedVector3Array([Vector3(from.x, 0, from.z)])
+	mid_line.append_array(middle)
+	var half := AirNav.LANE_HALF_WIDTH * nav.step_length()
+	var weaves := []
+	var worst := 0.0
+	for i in 8:
+		var w := nav.plan_weave(from, hub, rng)
+		weaves.append(w)
+		_expect(not w.is_empty() and w[w.size() - 1].distance_to(Vector3(hub.x, 0, hub.z)) < 0.01, "a weave ends at its target")
+		var over := _route_over_islands(region, from, w, [fleet.home, "Hub"])
+		_expect(over == "", "a weave crosses %s" % over)
+		var prev := Vector3(from.x, 0, from.z)
+		for p in w:
+			for k in 5:
+				var at := prev.lerp(p, k / 4.0)
+				var best := INF
+				for j in range(1, mid_line.size()):
+					var c := Geometry3D.get_closest_point_to_segment(at, mid_line[j - 1], mid_line[j])
+					best = minf(best, at.distance_to(c))
+				worst = maxf(worst, best)
+			prev = p
+	_expect(worst < half + nav.step_length() * 2.5, "weaves stay near their lane (strayed %.1f, lane half-width %.1f)" % [worst, half])
+	var different := 0
+	for i in range(1, weaves.size()):
+		if weaves[i] != weaves[0]:
+			different += 1
+	_expect(different >= 6, "airships in a lane fly different lines (%d of 7 differ)" % different)
+	print("  weave: furthest from lane middle %.1f (half-width %.1f)" % [worst, half])
 	# Attacks come in from upwind: the last leg runs with the wind.
 	var old_wind := wind.from_index
 	var old_routes := {}
-	for lane in fleet.lanes():
+	for lane in fleet.all_lanes():
 		old_routes[lane[1]] = fleet.route_for(lane)
 	var stage = nav.staging_point(from, hub)
 	_expect(stage != null, "with wind, the flight gathers upwind of its target")
@@ -1643,8 +1677,8 @@ func _check_air_routes(main: Node) -> void:
 	var nb := wind.blowing()
 	_expect(nav.wind.distance_to(Vector2(nb.x, nb.z)) < 0.01, "the fleet hears the new wind")
 	var moved := 0
-	for lane in fleet.lanes():
-		if fleet.route_for(lane) != old_routes[lane[1]]:
+	for lane in fleet.all_lanes():
+		if fleet.route_for(lane) != old_routes.get(lane[1]):
 			moved += 1
 	_expect(moved > 0, "turning the wind changes the attack routes")
 	# Put things back for the wave tests.
@@ -1673,7 +1707,7 @@ func _check_bomb_target(main: Node) -> void:
 		placed = true
 	_expect(fleet.bomb_target("Vesper") == "Generator Rig", "bombers go for the outer island you built on, got %s" % fleet.bomb_target("Vesper"))
 	fleet.refresh_lanes()
-	var to := region.air_lane_routes().map(func(l): return l[1])
+	var to := region.air_lane_routes().filter(func(l): return l[0] == fleet.home).map(func(l): return l[1])
 	_expect(to == ["Generator Rig"], "Vesper's one drawn lane leads to its target, got %s" % [to])
 	if placed:
 		region.remove_building(hex)

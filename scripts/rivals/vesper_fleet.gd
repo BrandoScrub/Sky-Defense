@@ -1,6 +1,6 @@
 ## Every rival airship (the class keeps its old name; Vesper was the first
 ## corporation to fly). Kinds, in AIRSHIPS:
-##   bomber  - Vesper. Each wave its bombers fly one air lane from the Vesper
+##   bomber  - Vesper. Each wave its bombers fly its wind lane from the Vesper
 ##             Aerodrome to your richest outer island (the one with the most
 ##             scrap in buildings; the Hub if you have none), then make
 ##             bombing runs: they fly straight over the nearest of your
@@ -20,10 +20,13 @@
 ## shot down falls, and crushes whatever is under it if it lands on an
 ## island, yours or theirs (CombatSystem).
 ##
-## Airships steer around islands rather than over them (AirNav) and follow
-## the wind: they make their runs downwind, fly faster with a tailwind and
-## slower into a headwind. When the wind turns (WindSystem, every 3 waves)
-## the lanes are replanned and redrawn, and attacks come from a new side.
+## Wind lanes: each rival that flies airships has one broad lane from its
+## HQ to its target, following the wind round to the target's upwind side.
+## Every airship weaves its own line down the lane between the islands
+## (AirNav.plan_weave), so a wave spreads out. They fly faster with a
+## tailwind and slower into a headwind. When the wind turns (WindSystem,
+## every 3 waves) the lanes are replanned and redrawn, and attacks come
+## from a new side.
 ## Only anti-air weapons can hit airships: flak, hangar drones, headquarters
 ## guns and the Commander.
 class_name VesperFleet
@@ -88,9 +91,14 @@ var _drawn_target := {}
 var _target_timer := 0.0
 var _next_lane := 0
 var _drawn_version := -1
+## Picks each airship's weave through its wind lane.
+var _rng := RandomNumberGenerator.new()
 
 
 func _ready() -> void:
+	_rng.seed = hash(["weave", SkyRegion.seed_override])
+	if SkyRegion.seed_override < 0:
+		_rng.randomize()
 	_ensure_nav()
 	# Replace the lanes the map drew with one to this wave's target.
 	refresh_lanes.call_deferred()
@@ -110,10 +118,8 @@ func _process(delta: float) -> void:
 	_target_timer -= delta
 	if _target_timer <= 0.0:
 		_target_timer = 0.5
-		for corp in _air_corps():
-			if _drawn_target.get(corp, "") != bomb_target(corp):
-				refresh_lanes()
-				break
+		if _drawn_target != _lane_targets():
+			refresh_lanes()
 	step(delta)
 
 
@@ -281,23 +287,53 @@ func drop_target(corp: String) -> String:
 	return best
 
 
-## The air lane a corporation's bombers fly this wave (Vesper's by
-## default), as [[from, to]] platform names: from its HQ to bomb_target().
-## Empty for a rival that doesn't fly lanes.
+## The wind lane a corporation's airships fly this wave (Vesper's by
+## default), as [[from, to]] platform names: from its HQ to lane_target().
+## Empty for a rival that flies no airships or whose HQ has fallen.
 func lanes(corp := "") -> Array:
-	var from := home if corp == "" else hq_of(corp)
-	if from == "" or not region.layout.air_lanes.any(func(l): return l[0] == from):
+	if corp == "":
+		corp = RivalCatalog.corp_at(home)
+	if not _air_corps().has(corp):
 		return []
-	return [[from, bomb_target(corp if corp != "" else RivalCatalog.corp_at(from))]]
+	return [[hq_of(corp), lane_target(corp)]]
 
 
-## Corporations that fly air lanes on this map.
+## Every rival's wind lane, as lanes() does for one.
+func all_lanes() -> Array:
+	var out := []
+	for corp in _air_corps():
+		out.append_array(lanes(corp))
+	return out
+
+
+## Where a corporation's airships head: bombers and gunships for
+## bomb_target(), troop carriers for drop_target().
+func lane_target(corp: String) -> String:
+	for w in RivalCatalog.get_data(corp).get("waves", []):
+		if w.unit == "bomber" or w.unit == "gunship":
+			return bomb_target(corp)
+	return drop_target(corp)
+
+
+## Corporations on this map that fly airships and still have an HQ.
 func _air_corps() -> Array:
 	var out := []
-	for l in region.layout.air_lanes:
-		var corp := RivalCatalog.corp_at(l[0])
-		if corp != "" and not out.has(corp):
+	for corp in region.layout.get("paths", {}):
+		var hq := hq_of(corp)
+		if hq == "" or not region.platforms.has(hq):
+			continue
+		if combat and combat.headquarters_on(hq) == null:
+			continue
+		if RivalCatalog.get_data(corp).get("waves", []).any(func(w): return AIRSHIPS.has(w.unit)):
 			out.append(corp)
+	return out
+
+
+## corp -> lane target, for every rival flying a lane now.
+func _lane_targets() -> Dictionary:
+	var out := {}
+	for corp in _air_corps():
+		out[corp] = lane_target(corp)
 	return out
 
 
@@ -327,7 +363,7 @@ func bomb_target(_corp := "") -> String:
 	return best
 
 
-## Launches `size` bombers along the next air lane. Returns them.
+## Launches `size` bombers down the wind lane. Returns them.
 func send_flight(size: int, corp := "") -> Array[Unit]:
 	var out := launch("bomber", size, corp)
 	if not out.is_empty():
@@ -336,7 +372,8 @@ func send_flight(size: int, corp := "") -> Array[Unit]:
 
 
 ## Launches `count` airships of a kind from their corporation's HQ. Bombers
-## and gunships fly the next air lane; carriers head for drop_target.
+## and gunships head for bomb_target, carriers for drop_target. Each one
+## weaves its own way down the corporation's wind lane (AirNav.plan_weave).
 ## `corp` flies them (default: the kind's own corporation in AIRSHIPS).
 func launch(kind: String, count: int, corp := "") -> Array[Unit]:
 	var out: Array[Unit] = []
@@ -347,20 +384,10 @@ func launch(kind: String, count: int, corp := "") -> Array[Unit]:
 	if count <= 0 or start_name == "" or not region.platforms.has(start_name):
 		return out
 	var start := region.get_platform_position(start_name)
-	var route := PackedVector3Array()
-	var target_name := ""
-	if kind == "carrier":
-		target_name = drop_target(corp)
-		route = _ensure_nav().plan_attack(start, region.get_platform_position(target_name))
-	else:
-		var all := lanes(corp)
-		if all.is_empty():
-			return out
-		var lane: Array = all[0]
-		target_name = lane[1]
-		route = route_for(lane)
+	var target_name := drop_target(corp) if kind == "carrier" else bomb_target(corp)
 	var end := region.get_platform_position(target_name)
 	var offsets := SelectionController.formation_offsets_for(count, formation_spacing)
+	var lane := _ensure_nav().weave_lane(start, end)
 	for i in count:
 		_count += 1
 		var u := _make(kind)
@@ -371,11 +398,13 @@ func launch(kind: String, count: int, corp := "") -> Array[Unit]:
 			u.set_meta("carrier_state", "inbound")
 		u.position = start + offsets[i] + Vector3.UP * ALTITUDE
 		_units_root().add_child(u)
-		# Fly the route first, attacking anything in reach on the way.
-		var mine := PackedVector3Array()
-		for p in route:
-			mine.append(p + offsets[i])
-		u.set_route(mine if not mine.is_empty() else PackedVector3Array([end + offsets[i]]), kind != "carrier")
+		# Fly its own line down the lane first, attacking anything in reach
+		# on the way. Only the end keeps the formation, so they don't stack.
+		var mine := nav.plan_weave(start + offsets[i], end, _rng, lane)
+		if mine.is_empty():
+			mine = PackedVector3Array([end])
+		mine[mine.size() - 1] = Vector3(end.x, 0.0, end.z) + offsets[i]
+		u.set_route(mine, kind != "carrier")
 		out.append(u)
 	airships_launched.emit(corp, kind, count)
 	return out
@@ -421,13 +450,19 @@ func route_for(lane: Array) -> PackedVector3Array:
 	return _ensure_nav().plan_attack(region.get_platform_position(lane[0]), region.get_platform_position(lane[1]))
 
 
-## Replans and redraws every Vesper air lane for the current wind.
+## Replans and redraws every rival's wind lane for the current wind, each
+## in its corporation's colour.
 func refresh_lanes() -> void:
 	_drawn_version = region.tiles_version
-	for corp in _air_corps():
+	for corp in _drawn_target:
 		region.clear_air_routes_from(hq_of(corp))
+	for corp in region.layout.get("paths", {}):
+		region.clear_air_routes_from(hq_of(corp))
+	_drawn_target = {}
+	for corp in _air_corps():
+		var tint: Color = RivalCatalog.get_data(corp).get("glow", [SkyRegion.COLORS.air_lane])[0]
 		for lane in lanes(corp):
-			region.set_air_route(lane[0], lane[1], route_for(lane), false)
+			region.set_air_route(lane[0], lane[1], route_for(lane), false, tint)
 			_drawn_target[corp] = lane[1]
 	region.air_routes_changed.emit()
 

@@ -10,7 +10,10 @@ const DECK_HEIGHT := 1.0
 const WALKWAY_HEIGHT := 0.35
 const CLOUD_HEIGHT := 4.0
 const FERRY_HEIGHT := 3.0
-const AIR_LANE_HEIGHT := 9.0
+## Wind lanes are drawn just under deck level, so islands and walkways hide
+## them and they show in the open sky between.
+const AIR_LANE_HEIGHT := 0.2
+const WIND_LANE_SHADER := preload("res://shaders/wind_lane.gdshader")
 ## Tiles are drawn slightly smaller than the grid so their edges show.
 const TILE_GAP := 0.94
 
@@ -50,7 +53,7 @@ const LEGEND := [
 	["walkway", "Walkway"], ["rival_walkway", "Ironbell bridge"], ["generator_socket", "Generator socket"],
 	["harvester_anchor", "Storm anchor"], ["scrap_heap", "Scrap heap"],
 	["crystal_seam", "Crystal seam"], ["dock", "Ferry dock"], ["spawn", "Rival muster point"],
-	["cloud", "Storm cloud"], ["ferry", "Ferry route"], ["air_lane", "Rival air lane"],
+	["cloud", "Storm cloud"], ["ferry", "Ferry route"], ["air_lane", "Rival wind lane"],
 ]
 
 var tile_size := Layout.TILE_SIZE
@@ -1225,9 +1228,12 @@ func _draw_ferry_route(a_name: String, b_name: String) -> void:
 	_draw_markers("Ferry_%s_%s" % [a_name, b_name], a, b, FERRY_HEIGHT, COLORS.ferry, 0.5)
 
 
-## Draws the air lane from one platform to another along `route` (from
-## AirNav), replacing any earlier drawing of it.
-func set_air_route(a_name: String, b_name: String, route: PackedVector3Array, announce := true) -> void:
+## Draws the wind lane from one platform to another along `route` (from
+## AirNav): a band AirNav.LANE_HALF_WIDTH tiles either side of the route,
+## with streaks drifting toward the target, in `tint` (default
+## COLORS.air_lane). Replaces any earlier drawing of it. Drawn in pieces a
+## few tiles long so the fog can hide each one until its sky is explored.
+func set_air_route(a_name: String, b_name: String, route: PackedVector3Array, announce := true, tint := Color(0, 0, 0, 0)) -> void:
 	var points := PackedVector3Array([Vector3(get_platform_position(a_name).x, 0.0, get_platform_position(a_name).z)])
 	points.append_array(route)
 	air_routes[a_name + "|" + b_name] = points
@@ -1239,26 +1245,72 @@ func set_air_route(a_name: String, b_name: String, route: PackedVector3Array, an
 	var root := Node3D.new()
 	root.name = node_name
 	add_child(root)
-	# A marker every tile or so along the flight path, skipping both ends.
-	var spacing := tile_size * 1.6
-	var carry := spacing
+	var step := tile_size * HexGrid.SQRT3
+	var line := _rounded(points, step * 0.5)
+	if line.size() < 2:
+		return
+	var material := ShaderMaterial.new()
+	material.shader = WIND_LANE_SHADER
+	var color := tint if tint.a > 0.0 else COLORS.air_lane
+	material.set_shader_parameter("tint", Color(color, 1.0))
+	var half := AirNav.LANE_HALF_WIDTH * step
+	var total := 0.0
+	var along := PackedFloat32Array([0.0])
+	for i in range(1, line.size()):
+		total += line[i].distance_to(line[i - 1])
+		along.append(total)
+	# Each piece covers this many samples (about 4 tiles), sharing its ends
+	# with the next so the band is unbroken.
+	var per_piece := 8
+	var i0 := 0
+	while i0 < line.size() - 1:
+		var i1 := mini(i0 + per_piece, line.size() - 1)
+		var centre := line[(i0 + i1) / 2]
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		for i in range(i0, i1):
+			var quad := []
+			for j in [i, i + 1]:
+				var dir := (line[mini(j + 1, line.size() - 1)] - line[maxi(j - 1, 0)]).normalized()
+				var side := Vector3(-dir.z, 0.0, dir.x) * half
+				# Fade in over 2 tiles at the start and out over 3 at the end.
+				var fade := clampf(along[j] / (step * 2.0), 0.0, 1.0) * clampf((total - along[j]) / (step * 3.0), 0.0, 1.0)
+				quad.append([line[j] - side - centre, line[j] + side - centre, along[j], fade])
+			var a = quad[0]
+			var b = quad[1]
+			for v in [[a, 0], [b, 0], [b, 1], [a, 0], [b, 1], [a, 1]]:
+				var q = v[0]
+				st.set_color(Color(1, 1, 1, q[3]))
+				st.set_uv(Vector2(q[2], float(v[1])))
+				st.add_vertex(q[v[1]])
+		var piece := MeshInstance3D.new()
+		piece.mesh = st.commit()
+		piece.material_override = material
+		piece.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		piece.position = centre + Vector3.UP * AIR_LANE_HEIGHT
+		root.add_child(piece)
+		i0 = i1
+	if announce:
+		air_routes_changed.emit()
+
+
+## `points` resampled every `spacing` and with its corners rounded off, so
+## a wide band drawn along it doesn't fold over itself.
+static func _rounded(points: PackedVector3Array, spacing: float) -> PackedVector3Array:
+	var dense := PackedVector3Array()
 	for i in range(1, points.size()):
 		var a := points[i - 1]
 		var b := points[i]
-		var length := a.distance_to(b)
-		var t := carry
-		while t < length:
-			var at := a.lerp(b, t / length)
-			if at.distance_to(points[points.size() - 1]) > tile_size * 2.0 and at.distance_to(points[0]) > tile_size * 2.0:
-				var marker := MeshInstance3D.new()
-				marker.mesh = _hex_mesh(0.15, tile_size * 0.6)
-				marker.material_override = _material(COLORS.air_lane, true)
-				marker.position = at + Vector3.UP * AIR_LANE_HEIGHT
-				root.add_child(marker)
-			t += spacing
-		carry = t - length
-	if announce:
-		air_routes_changed.emit()
+		var n := maxi(1, int(ceil(a.distance_to(b) / spacing)))
+		for k in n:
+			dense.append(a.lerp(b, float(k) / n))
+	dense.append(points[points.size() - 1])
+	for pass_i in 6:
+		var smoothed := dense.duplicate()
+		for i in range(1, dense.size() - 1):
+			smoothed[i] = (dense[i - 1] + dense[i] * 2.0 + dense[i + 1]) * 0.25
+		dense = smoothed
+	return dense
 
 
 ## Removes every drawn air lane that starts at `a_name`.
