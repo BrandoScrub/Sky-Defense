@@ -1509,8 +1509,23 @@ func _check_combat_and_waves(main: Node) -> void:
 	riveteer_far.position = region.get_platform_position("Outpost")
 	bomber.cooldown_left = 0.0
 	var dynamo_hp := dynamo.hp
+	fleet.step(0.05)
 	combat.step(0.05)
+	_expect(dynamo.hp == dynamo_hp, "a bomb takes a moment to fall")
+	for k in 20:
+		combat.step(0.05)
 	_expect(dynamo.hp < dynamo_hp, "the bomber should bomb the dynamo below it")
+	# Hulls: the Skyhook harpoon hits a heavy bomber twice as hard, a light
+	# gunship half as hard.
+	_expect(bomber.hull == "heavy", "bombers have heavy hulls")
+	var hook: Dictionary = BuildingCatalog.get_data("skyhook_cannon").attack
+	_expect(hook.vs_heavy > 1.0 and hook.vs_light < 1.0, "the Skyhook is made for heavy hulls")
+	# A heavy hull shot down over an island crushes what's under it.
+	var under_hp := dynamo.hp
+	combat._crash(bomber)
+	for k in 30:
+		combat.step(0.05)
+	_expect(dynamo.hp < under_hp, "a falling wreck damages the building under it")
 	# A Flak Battery brings it down quickly.
 	_expect(build.try_place("flak_battery", hub + Vector2i(-1, 2)) == "", "place a Flak Battery")
 	for i in 200:

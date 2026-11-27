@@ -79,15 +79,21 @@ const BUILDINGS := {
 		"tiles": ["deck"], "shape": "flak", "role": "flak",
 		"color": Color(0.45, 0.55, 0.4),
 		"hp": 150.0,
-		"attack": {"damage": 0.0, "range": 12.0, "cooldown": 0.35, "air": 22.0, "air_only": true},
+		# Bursting shells: other aircraft within "splash" of the hit take part
+		# of it too. Shreds light craft and tight formations; heavy hulls
+		# shrug off some of it.
+		"attack": {"damage": 0.0, "range": 12.0, "cooldown": 0.35, "air": 22.0, "air_only": true,
+			"splash": 2.5, "vs_heavy": 0.85},
 	},
 	"skyhook_cannon": {
 		"name": "Skyhook Gun", "cost": 75, "crystals": 10, "power": -6, "weight": 4,
 		"tiles": ["deck"], "shape": "skyhook", "role": "flak",
 		"color": Color(0.5, 0.42, 0.35),
 		"hp": 140.0,
-		# Slow, long-range harpoon gun for big airships.
-		"attack": {"damage": 0.0, "range": 16.0, "cooldown": 2.8, "air": 70.0, "air_only": true},
+		# Slow, long-range harpoon gun for big airships: double damage to heavy
+		# hulls, but it struggles to track small, light craft.
+		"attack": {"damage": 0.0, "range": 16.0, "cooldown": 2.8, "air": 70.0, "air_only": true,
+			"vs_heavy": 2.0, "vs_light": 0.5},
 	},
 	# --- Industry: engines that let you move a turbine island (IslandSteering).
 	"turbine_engine": {

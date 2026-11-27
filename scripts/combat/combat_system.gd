@@ -58,6 +58,15 @@ const KNOCKBACK := 0.8
 const STAGGER_SECONDS := 0.45
 ## Shell speed for towers and headquarters guns, units per second.
 const TOWER_SHELL_SPEED := 60.0
+## Flak bursts: aircraft near the one hit take this share of the damage.
+const BURST_SHARE := 0.5
+## Bombs: seconds to fall, blast radius.
+const BOMB_FALL := 0.9
+const BOMB_RADIUS := 1.7
+## A downed heavy airship: seconds to fall, crush radius and damage.
+const WRECK_FALL := 1.2
+const WRECK_RADIUS := 2.2
+const WRECK_DAMAGE := 30.0
 ## A shell whose target falls before it lands hits an enemy this close to
 ## where it comes down instead.
 const SHELL_STRAY := 1.5
@@ -70,6 +79,8 @@ var rng := RandomNumberGenerator.new()
 var _chase_timer := 0.0
 ## Shells in flight: {hit, target, amount, color, left, total, from, fx}.
 var _shots: Array = []
+## Bombs and wrecks falling: {at, left, amount, radius, hit, sides, big}.
+var _blasts: Array = []
 
 
 func _ready() -> void:
@@ -104,12 +115,16 @@ func step(delta: float) -> void:
 	if chase:
 		_chase_timer = 0.5
 	_fly_shells(delta)
+	_land_blasts(delta)
 
 	for faction in ["player", "rival"]:
 		for unit in _units(faction):
 			if not unit.is_alive() or unit.riding:
 				continue
 			unit.cooldown_left -= delta
+			# Bombers drop their bombs as they fly over (VesperFleet runs them).
+			if unit.has_meta("bomb_runs"):
+				continue
 			if unit.heal_power > 0.0:
 				_tend(unit, faction, delta)
 				continue
@@ -348,7 +363,13 @@ func _aim_point(target: Node3D) -> Vector3:
 func _snapshot(attacker: Node3D, projectile) -> Dictionary:
 	var hit := {"from": attacker.global_position, "unit": attacker is Unit,
 		"faction": attacker.faction if "faction" in attacker else "", "vs_armor": 1.0,
-		"vs_buildings": 1.0, "heavy": false, "ranged": true, "style": "tracer"}
+		"vs_buildings": 1.0, "heavy": false, "ranged": true, "style": "tracer",
+		"vs_light": 1.0, "vs_heavy": 1.0, "splash": 0.0}
+	if attacker.has_method("get_attack"):
+		var attack: Dictionary = attacker.get_attack()
+		hit.vs_light = attack.get("vs_light", 1.0)
+		hit.vs_heavy = attack.get("vs_heavy", 1.0)
+		hit.splash = attack.get("splash", 0.0)
 	if attacker is Unit:
 		var a := attacker as Unit
 		hit.vs_armor = a.vs_armor
@@ -369,6 +390,8 @@ func _resolve(hit: Dictionary, target: Node3D, amount: float, color: Color) -> v
 			amount *= hit.vs_buildings
 		elif target is Unit and (target as Unit).armored:
 			amount *= hit.vs_armor
+	if target is Unit and (target as Unit).hull != "":
+		amount *= hit.get("vs_" + (target as Unit).hull, 1.0)
 	var blocked := false
 	if hit.projectile and not (target is Unit and (target as Unit).flying):
 		var blocker := shield_in_path(hit.from, target)
@@ -381,9 +404,13 @@ func _resolve(hit: Dictionary, target: Node3D, amount: float, color: Color) -> v
 			color = Color(0.75, 0.8, 0.9)
 			blocked = true
 	var at := _aim_point(target)
+	if hit.splash > 0.0 and target is Unit and (target as Unit).flying:
+		_burst(hit, target, amount, color)
 	if hit.style == "tracer":
 		_tracer(hit.from + Vector3.UP * 1.2, at, color)
-	else:
+	elif hit.style == "burst":
+		CombatFx.flash(region, at, Color(0.95, 0.75, 0.45, 0.8), hit.splash * 0.45, 0.25)
+	elif hit.style != "none":
 		CombatFx.flash(region, at, color, 0.22 if not hit.heavy else 0.4, 0.12 if not blocked else 0.18)
 	if target is Building:
 		var b := target as Building
@@ -400,11 +427,102 @@ func _resolve(hit: Dictionary, target: Node3D, amount: float, color: Color) -> v
 			if u.faction == "rival" and resources:
 				resources.add_scrap(int(round(u.bounty * BOUNTY_SHARE)))
 			CombatFx.puff(region, u.global_position + Vector3.UP * 0.6, u.footprint * 1.4)
+			if u.flying and u.hull == "heavy":
+				_crash(u)
 			unit_killed.emit(u)
 		elif hit.heavy and not u.flying and not u.riding:
 			_stagger(u, hit.from, hit.ranged)
 	else:
 		target.take_damage(amount)
+
+
+## Flak burst: other enemy aircraft within the splash radius of a hit take
+## BURST_SHARE of it (after their own hull's multiplier).
+func _burst(hit: Dictionary, target: Unit, amount: float, color: Color) -> void:
+	# The burst's base damage, before the hit target's own hull multiplier.
+	var side: float = amount / maxf(hit.get("vs_" + target.hull, 1.0), 0.01)
+	var shard := hit.duplicate()
+	shard.splash = 0.0
+	shard.style = "none"
+	shard.projectile = false
+	for u in _units(target.faction):
+		if u == target or not u.flying or not u.is_alive():
+			continue
+		if _aim_point(u).distance_to(_aim_point(target)) <= hit.splash:
+			_resolve(shard, u, side * BURST_SHARE, color)
+	if hit.style != "none":
+		hit.style = "burst"
+
+
+## Drops a bomb from `faction`: it lands after BOMB_FALL seconds at the deck
+## under `at` (a shadow shows where), then blasts every enemy unit on the
+## ground, building and headquarters within `radius`.
+func drop_bomb(at: Vector3, faction: String, amount: float, radius := BOMB_RADIUS) -> void:
+	var ground := Vector3(at.x, 0.0, at.z)
+	CombatFx.shadow(region, ground, radius, BOMB_FALL)
+	CombatFx.falling(region, at, ground, 0.35, BOMB_FALL, Color(0.15, 0.14, 0.13))
+	_blasts.append({"at": ground, "left": BOMB_FALL, "amount": amount, "radius": radius,
+		"hit": {"from": ground + Vector3.UP * 8.0, "unit": false, "faction": faction, "vs_armor": 1.0,
+			"vs_buildings": 1.0, "heavy": false, "ranged": false, "style": "none", "projectile": false,
+			"vs_light": 1.0, "vs_heavy": 1.0, "splash": 0.0},
+		"sides": ["rival" if faction == "player" else "player"], "big": false})
+
+
+## A heavy airship goes down: its wreck falls for WRECK_FALL seconds and, if
+## it lands on an island, crushes whatever is under it, on either side.
+func _crash(u: Unit) -> void:
+	var ground := Vector3(u.global_position.x, 0.0, u.global_position.z)
+	var radius := WRECK_RADIUS * clampf(u.footprint / 0.9, 0.8, 1.4)
+	if region.platform_at(ground) != "":
+		CombatFx.shadow(region, ground, radius, WRECK_FALL)
+	var lands := ground if region.platform_at(ground) != "" else ground + Vector3.DOWN * 14.0
+	CombatFx.falling(region, u.global_position, lands, u.footprint * 1.2, WRECK_FALL, u.body_color.darkened(0.7), true)
+	_blasts.append({"at": ground, "left": WRECK_FALL, "amount": WRECK_DAMAGE, "radius": radius,
+		"hit": {"from": ground + Vector3.UP * 8.0, "unit": false, "faction": "", "vs_armor": 1.0,
+			"vs_buildings": 1.0, "heavy": true, "ranged": false, "style": "none", "projectile": false,
+			"vs_light": 1.0, "vs_heavy": 1.0, "splash": 0.0},
+		"sides": ["player", "rival"], "big": true})
+
+
+## Counts falling bombs and wrecks down and blasts the ones that land.
+func _land_blasts(delta: float) -> void:
+	if _blasts.is_empty():
+		return
+	var still: Array = []
+	var landed: Array = []
+	for b in _blasts:
+		b.left -= delta
+		if b.left > 0.0:
+			still.append(b)
+		else:
+			landed.append(b)
+	_blasts = still
+	for b in landed:
+		var on_island := region.platform_at(b.at) != ""
+		if b.big and not on_island:
+			# Down into the clouds: nothing under it.
+			continue
+		CombatFx.flash(region, b.at + Vector3.UP * 0.5, Color(1.0, 0.6, 0.25, 0.9), b.radius * 0.6, 0.3)
+		CombatFx.puff(region, b.at + Vector3.UP * 0.4, b.radius * 0.7)
+		for victim in _in_blast(b.at, b.radius, b.sides):
+			_resolve(b.hit, victim, b.amount, Color.WHITE)
+
+
+## Every ground unit, building and headquarters of `sides` within `radius`
+## of a point on the deck (headquarters count from their edge).
+func _in_blast(at: Vector3, radius: float, sides: Array) -> Array:
+	var out := []
+	for side in sides:
+		for u in _units(side):
+			if u.is_alive() and not u.flying and not u.riding and _flat_distance(at, u.global_position) <= radius:
+				out.append(u)
+	for b in region.buildings.values():
+		if b.is_alive() and sides.has(b.faction) and _flat_distance(at, b.global_position) <= radius + Building.SIZE * 0.4:
+			out.append(b)
+	for hq in get_tree().get_nodes_in_group(Headquarters.GROUP):
+		if hq.is_alive() and sides.has(hq.faction) and _flat_distance(at, hq.global_position) - region.tile_size <= radius:
+			out.append(hq)
+	return out
 
 
 ## A heavy hit shoves a ground unit away from the attacker and delays its

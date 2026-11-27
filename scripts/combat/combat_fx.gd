@@ -114,3 +114,31 @@ static func shadow(parent: Node3D, at: Vector3, radius: float, seconds: float) -
 	tw.tween_property(m, "scale", Vector3(radius, 1.0, radius), seconds)
 	tw.tween_property(mat, "albedo_color:a", 0.6, seconds)
 	tw.chain().tween_callback(m.queue_free)
+
+
+## Something dropping from the sky to the deck over `seconds`: a bomb, or
+## (with `tumble`) a downed airship's burning hull.
+static func falling(parent: Node3D, from: Vector3, to: Vector3, size: float, seconds: float, color: Color, tumble := false) -> void:
+	if not enabled():
+		return
+	var m := MeshInstance3D.new()
+	if tumble:
+		var box := BoxMesh.new()
+		box.size = Vector3(0.7, 0.45, 1.4)
+		m.mesh = box
+	else:
+		m.mesh = _sphere_mesh()
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = color
+	mat.emission_enabled = tumble
+	mat.emission = Color(0.9, 0.35, 0.1)
+	mat.emission_energy_multiplier = 0.25
+	m.material_override = mat
+	m.scale = Vector3.ONE * size
+	parent.add_child(m)
+	m.global_position = from
+	var tw := m.create_tween().set_parallel(true)
+	tw.tween_property(m, "global_position", to + Vector3.UP * 0.2, seconds).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	if tumble:
+		tw.tween_property(m, "rotation", Vector3(1.2, 0.8, 2.2), seconds)
+	tw.chain().tween_callback(m.queue_free)

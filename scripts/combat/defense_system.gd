@@ -105,6 +105,7 @@ func _launch(hangar: Building) -> Unit:
 	d.is_drone = true
 	d.flying = true
 	d.hits_air = true
+	d.hull = "light"
 	d.weight = 0
 	d.move_speed = 9.0
 	d.max_hp = 35.0

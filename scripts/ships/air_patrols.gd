@@ -50,19 +50,19 @@ const SHIPS := {
 	"interceptor": {
 		"name": "Skyhawk Interceptor", "role": "Air-to-air", "cost": 60, "build_seconds": 8.0,
 		"hp": 90.0, "damage": 15.0, "range": 6.0, "cooldown": 0.6, "speed": 9.0,
-		"hits_air": true, "air_only": true, "targets_units": true, "footprint": 0.55,
+		"hits_air": true, "air_only": true, "targets_units": true, "footprint": 0.55, "hull": "light",
 		"color": Color(0.85, 0.7, 0.35),
 	},
 	"gunboat": {
 		"name": "Thunder Gunboat", "role": "Air-to-ground", "cost": 80, "crystals": 10, "build_seconds": 10.0,
 		"hp": 150.0, "damage": 18.0, "range": 5.0, "cooldown": 1.2, "speed": 6.0,
 		"hits_air": false, "air_only": false, "targets_units": true, "footprint": 0.8,
-		"vs_buildings": 1.5, "color": Color(0.6, 0.45, 0.25),
+		"vs_buildings": 1.5, "hull": "heavy", "heavy_hits": true, "color": Color(0.6, 0.45, 0.25),
 	},
 	"utility": {
 		"name": "Tender", "role": "Utility", "cost": 60, "build_seconds": 8.0,
 		"hp": 100.0, "damage": 0.0, "range": 0.0, "cooldown": 99.0, "speed": 7.0,
-		"hits_air": false, "air_only": false, "targets_units": false, "footprint": 0.7,
+		"hits_air": false, "air_only": false, "targets_units": false, "footprint": 0.7, "hull": "light",
 		"color": Color(0.55, 0.7, 0.6),
 	},
 }
@@ -266,6 +266,8 @@ func _launch(hangar: Building, entry: String) -> Unit:
 	u.attack_range = spec.range
 	u.attack_cooldown = spec.cooldown
 	u.vs_buildings = spec.get("vs_buildings", 1.0)
+	u.hull = spec.get("hull", "light")
+	u.heavy_hits = spec.get("heavy_hits", false)
 	u.footprint = spec.footprint
 	u.body_color = spec.color
 	u.set_meta("ship", kind)
