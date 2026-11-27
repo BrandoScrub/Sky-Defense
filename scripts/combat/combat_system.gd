@@ -6,7 +6,7 @@
 ##   enemies until the unit arrives (like the reference game's RTS controls).
 ## - Towers shoot the nearest enemy in range. Flak (air_only) sees only
 ##   aircraft; ground defenses can't see aircraft at all. Their fire rate scales with grid
-##   efficiency, and they miss more on an overloaded platform.
+##   efficiency.
 ## - Headquarters have a light gun of their own.
 ## - Your troops fight troops first: they shoot an enemy unit in range before
 ##   any building or headquarters. Every unit turns to face what it shoots.
@@ -18,7 +18,7 @@
 ##   air aren't blocked.
 ## - Heavy hitters (Lancers, walkers) stagger what they hit: a shove back and
 ##   a pause before its next attack. A Shieldbearer facing the hit braces.
-## - Medics heal the most wounded ally in range instead of fighting. Sappers
+## - Engineers heal the most wounded ally in range before anything else, and
 ##   repair damaged buildings in range when there's no enemy to fight.
 class_name CombatSystem
 extends Node
@@ -36,11 +36,9 @@ var player_tower_rate := 1.0
 ## from the islands you hold rather than from kills.
 const BOUNTY_SHARE := 0.5
 
-## Sappers mend a headquarters at this share of their building repair rate.
+## Engineers mend a headquarters at this share of their building repair rate.
 const HQ_REPAIR_SHARE := 0.4
 
-## Chance to miss for towers on a platform in each overload state.
-const MISS_CHANCE := {"Stable": 0.0, "Swaying": 0.15, "Sagging": 0.3, "Failing": 0.45}
 ## How far an Arc Coil's lightning can jump between targets.
 const CHAIN_JUMP := 5.0
 ## How far to either side of a shot's path a shield still catches it, added
@@ -73,7 +71,6 @@ const SHELL_STRAY := 1.5
 
 @export var region: SkyRegion
 @export var resources: PlayerResources
-@export var loads: LoadSystem
 
 var rng := RandomNumberGenerator.new()
 var _chase_timer := 0.0
@@ -125,8 +122,8 @@ func step(delta: float) -> void:
 			# Bombers drop their bombs as they fly over (VesperFleet runs them).
 			if unit.has_meta("bomb_runs"):
 				continue
-			if unit.heal_power > 0.0:
-				_tend(unit, faction, delta)
+			# Engineers patch up a wounded ally first, then fight or repair.
+			if unit.heal_power > 0.0 and _tend(unit, faction, delta):
 				continue
 			var target = _pick_target(unit, faction)
 			if target is bool:
@@ -166,10 +163,6 @@ func step(delta: float) -> void:
 			continue
 		var amount: float = attack.air if target is Unit and target.flying else attack.damage
 		b.cooldown_left = attack.cooldown
-		var miss: float = MISS_CHANCE.get(loads.state_of(b.platform) if loads else "Stable", 0.0)
-		if rng.randf() < miss:
-			_tracer(b.global_position + Vector3.UP * 1.2, target.global_position + Vector3(1.5, 1, 0), Color(0.7, 0.7, 0.7))
-			continue
 		if attack.has("chain"):
 			deal_hit(b, target, amount, Color(0.6, 0.7, 1.0), false)
 			_chain(target, b.faction, amount * 0.7, int(attack.chain) - 1)
@@ -574,58 +567,60 @@ func shield_in_path(from: Vector3, target: Node3D) -> Unit:
 	return best
 
 
-## Medic: heal the most wounded ally in range. Medics never attack.
-func _tend(medic: Unit, faction: String, delta: float) -> void:
+## Engineer: heal the most wounded ally in range. Returns true if it healed
+## someone (and so doesn't shoot this tick).
+func _tend(engineer: Unit, faction: String, delta: float) -> bool:
 	var best: Unit = null
 	var worst := 1.0
-	var reach := medic.get_attack_range()
+	var reach := engineer.get_attack_range()
 	for u in _units(faction):
-		if u == medic or not u.is_alive() or u.riding or u.flying or u.hp >= u.max_hp:
+		if u == engineer or not u.is_alive() or u.riding or u.flying or u.hp >= u.max_hp:
 			continue
-		if _flat_distance(medic.global_position, u.global_position) > reach:
+		if _flat_distance(engineer.global_position, u.global_position) > reach:
 			continue
 		var ratio := u.hp / u.max_hp
 		if ratio < worst:
 			worst = ratio
 			best = u
 	if best == null:
-		return
-	best.heal(medic.heal_power * medic.buff_multiplier("healing") * delta)
-	if medic.cooldown_left <= 0.0:
-		medic.cooldown_left = 0.6
-		_tracer(medic.global_position + Vector3.UP * 1.2, best.global_position + Vector3.UP * 1.0, Color(0.5, 1.0, 0.6))
+		return false
+	best.heal(engineer.heal_power * engineer.buff_multiplier("healing") * delta)
+	if engineer.cooldown_left <= 0.0:
+		engineer.cooldown_left = 0.6
+		_tracer(engineer.global_position + Vector3.UP * 1.2, best.global_position + Vector3.UP * 1.0, Color(0.5, 1.0, 0.6))
+	return true
 
 
-## Sapper: repair the most damaged friendly building in range. Returns true
+## Engineer: repair the most damaged friendly building in range. Returns true
 ## if it repaired something.
-func _repair(sapper: Unit, faction: String, delta: float) -> bool:
+func _repair(engineer: Unit, faction: String, delta: float) -> bool:
 	var best: Building = null
 	var worst := 1.0
 	for b in region.buildings.values():
 		if b.faction != faction or not b.is_alive() or b.hp >= b.max_hp:
 			continue
-		if _flat_distance(sapper.global_position, b.global_position) > sapper.get_attack_range() + Building.SIZE * 0.5:
+		if _flat_distance(engineer.global_position, b.global_position) > engineer.get_attack_range() + Building.SIZE * 0.5:
 			continue
 		if b.hp / b.max_hp < worst:
 			worst = b.hp / b.max_hp
 			best = b
-	var amount := sapper.repair_power * sapper.buff_multiplier("healing") * delta
+	var amount := engineer.repair_power * engineer.buff_multiplier("healing") * delta
 	if best == null:
-		# With every building whole, Sappers patch up their own headquarters,
+		# With every building whole, Engineers patch up their own headquarters,
 		# slowly: bombs that land are not gone for good, but it takes time.
 		for hq in get_tree().get_nodes_in_group(Headquarters.GROUP):
 			if hq.faction == faction and hq.is_alive() and hq.hp < hq.max_hp \
-					and _flat_distance(sapper.global_position, hq.global_position) <= sapper.get_attack_range() + region.tile_size * 1.5:
+					and _flat_distance(engineer.global_position, hq.global_position) <= engineer.get_attack_range() + region.tile_size * 1.5:
 				hq.repair(amount * HQ_REPAIR_SHARE)
-				if sapper.cooldown_left <= 0.0:
-					sapper.cooldown_left = 0.6
-					_tracer(sapper.global_position + Vector3.UP * 1.2, hq.global_position + Vector3.UP * 2.0, Color(0.9, 0.8, 0.4))
+				if engineer.cooldown_left <= 0.0:
+					engineer.cooldown_left = 0.6
+					_tracer(engineer.global_position + Vector3.UP * 1.2, hq.global_position + Vector3.UP * 2.0, Color(0.9, 0.8, 0.4))
 				return true
 		return false
 	best.repair(amount)
-	if sapper.cooldown_left <= 0.0:
-		sapper.cooldown_left = 0.6
-		_tracer(sapper.global_position + Vector3.UP * 1.2, best.global_position + Vector3.UP * 1.0, Color(0.9, 0.8, 0.4))
+	if engineer.cooldown_left <= 0.0:
+		engineer.cooldown_left = 0.6
+		_tracer(engineer.global_position + Vector3.UP * 1.2, best.global_position + Vector3.UP * 1.0, Color(0.9, 0.8, 0.4))
 	return true
 
 

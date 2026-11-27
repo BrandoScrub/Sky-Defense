@@ -7,10 +7,10 @@
 ##   Shieldbearer - riot shield. Tough melee brawler; its shield soaks up enemy
 ##                  shots aimed at it or at allies standing behind it.
 ##   Rifleman     - bolt gun. Long range and hard-hitting, but fragile.
-##   Sapper       - engineer. Repairs your buildings and wrecks enemy ones.
 ##   Lancer       - anti-armor. Slow, heavy arc-lance shots that punch through
 ##                  walkers, shields and buildings.
-##   Medic        - doesn't fight. Patches up wounded allies nearby.
+##   Engineer     - support. Patches up wounded allies, repairs your
+##                  buildings and wrecks enemy ones.
 class_name UnitCatalog
 extends RefCounted
 
@@ -34,9 +34,9 @@ const DEFAULTS := {
 	# Damage multipliers against armored units and against buildings / HQs.
 	"vs_armor": 1.0,
 	"vs_buildings": 1.0,
-	# Medic: hit points restored per second to one wounded ally in range.
+	# Engineer: hit points restored per second to one wounded ally in range.
 	"heal": 0.0,
-	# Sapper: hit points restored per second to one damaged building in range.
+	# Engineer: hit points restored per second to one damaged building in range.
 	"repair": 0.0,
 	"hits_air": false,
 	# Heavy hits shove the target back and delay its next attack.
@@ -85,19 +85,6 @@ const UNITS := {
 		"hits_air": true,
 		"blurb": "Carries a bolt gun. Outranges walkers and hits hard, and can take shots at airships, but goes down fast. Keep them behind Shieldbearers.",
 	},
-	"sapper": {
-		"name": "Sapper",
-		"cost": 40,
-		"train_seconds": 6.0,
-		"hp": 70.0,
-		"damage": 6.0,
-		"range": 2.5,
-		"cooldown": 1.0,
-		"vs_buildings": 4.0,
-		"repair": 8.0,
-		"color": Color(0.55, 0.4, 0.25),
-		"blurb": "Engineer with a wrench and a satchel of charges. Repairs damaged buildings nearby when no enemy is close, and does four times damage to enemy buildings.",
-	},
 	"lancer": {
 		"name": "Lancer",
 		"cost": 60,
@@ -117,17 +104,19 @@ const UNITS := {
 		"color": Color(0.35, 0.45, 0.55),
 		"blurb": "Anti-armor trooper with a Hum-charged arc lance. Slow, heavy bolts that do over double damage to armored walkers and knock them back. Its bolts burn through shields too.",
 	},
-	"medic": {
-		"name": "Medic",
+	"engineer": {
+		"name": "Engineer",
 		"cost": 40,
 		"train_seconds": 6.0,
-		"hp": 55.0,
-		"damage": 0.0,
-		"range": 4.5,
-		"speed": 6.0,
-		"heal": 7.0,
-		"color": Color(0.85, 0.85, 0.8),
-		"blurb": "Doesn't fight. Sprays tonic on the most wounded ally within range, healing it over time.",
+		"hp": 65.0,
+		"damage": 6.0,
+		"range": 4.0,
+		"cooldown": 1.0,
+		"vs_buildings": 4.0,
+		"heal": 6.0,
+		"repair": 8.0,
+		"color": Color(0.55, 0.4, 0.25),
+		"blurb": "Field engineer with a wrench, a tonic tank and a satchel of charges. Patches up the most wounded ally nearby first, repairs your buildings when nobody needs patching, and does four times damage to enemy buildings.",
 	},
 	# Ironbell's heavy walker: an armored rival-only unit.
 	"walker": {
@@ -149,7 +138,7 @@ const UNITS := {
 }
 
 ## Units the player can train, in Army tab order.
-const TRAINABLE := ["riveteer", "shieldbearer", "rifleman", "sapper", "lancer", "medic"]
+const TRAINABLE := ["riveteer", "shieldbearer", "rifleman", "lancer", "engineer"]
 
 ## Rival faction colours, mixed into a unit's own colour so you can tell sides apart.
 const FACTION_TINT := {

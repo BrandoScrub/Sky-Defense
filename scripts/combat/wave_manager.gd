@@ -92,8 +92,6 @@ func step(delta: float) -> void:
 				phase_changed.emit(phase, wave)
 
 
-## Extra walker toughness, e.g. from storms Ironbell controls (StormSystem).
-var hp_bonus := 0.0
 
 ## Optional: bridging rivals count their waves from first contact when set.
 var bridges: RivalBridges
@@ -313,7 +311,7 @@ func _track(corp: String, units: Array) -> void:
 
 func _toughen(u: Unit, corp := "") -> void:
 	var n := rival_wave(corp) if corp != "" else wave
-	u.max_hp *= (1.0 + hp_growth_per_wave * (n - 1)) * (1.0 + hp_bonus) * Difficulty.get_data().hp
+	u.max_hp *= (1.0 + hp_growth_per_wave * (n - 1)) * Difficulty.get_data().hp
 	u.hp = u.max_hp
 
 
@@ -416,7 +414,7 @@ func health_bonus(n := -1, corp := "") -> float:
 		n = wave
 	if corp != "":
 		n = rival_wave(corp, n)
-	return (1.0 + hp_growth_per_wave * (n - 1)) * (1.0 + hp_bonus) * Difficulty.get_data().hp - 1.0
+	return (1.0 + hp_growth_per_wave * (n - 1)) * Difficulty.get_data().hp - 1.0
 
 
 func _on_headquarters_destroyed(faction: String, platform: String) -> void:

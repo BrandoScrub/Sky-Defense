@@ -14,10 +14,10 @@ const TIPS := [
 	"Left click or drag to select, right click to move. Alt + right click attacks on the way. H finds your Commander. Ctrl + 1-5 saves a squad, 1-5 calls it back.",
 	"Islands start cut off. Lay a walkway (Industry, W) from an island you own, then park units on the far island to claim it. The Foundry has scrap, the Generator Rig has power.",
 	"Ironbell's crews build a bridge toward you one span at a time, and their walkers wait at its end. Park units beside a span for 8 quiet seconds to cut it down.",
-	"Rivet Turrets (Defense, Q) hold the spot where the bridge lands. Towers need power: keep Power positive with Dynamos (Industry, Q). A tower marked NO POWER barely fires.",
+	"Rivet Turrets (Defense, Q) hold the spot where the bridge lands. Every tower needs spare power to build: add Dynamos (Industry, Q), best on gold generator sockets.",
 	"From wave 3 Vesper bombers fly the red air lanes. Flak Batteries (Defense, A) shred them, ground guns can't. The wind turns every 3 waves and moves the lanes.",
 	"Cloud Harvesters (Industry, R) sit on storm anchors. Outnumber a rival's harvesters to take the storm's power, or its lightning hits you. Crystals buy Hum powers.",
-	"Every island has a weight limit. Overload it and it sags and sheds buildings; a Lift Engine (Industry, E) carries 10 more. Each island you hold pays %d scrap a wave.",
+	"Every island can only lift so much: when it's full, a Lift Engine (Industry, E) carries 10 more. Each island you hold pays %d scrap a wave.",
 	"Storm clouds hide the sky you haven't scouted, but glowing islands hint at what's inside. Click anything to learn what it is.",
 ]
 ## Width of the tips card, in pixels.
@@ -34,12 +34,10 @@ var capture: CaptureSystem
 var raids: RivalRaids
 ## corp -> RivalRaids, one per rival that sends ground parties.
 var all_raids := {}
-var loads: LoadSystem
 var economy: EconomySystem
 var combat: CombatSystem
 var defenses: DefenseSystem
 var waves: WaveManager
-var ferry: FerrySystem
 var storms: StormSystem
 var recruiter: Recruiter
 var fleet: VesperFleet
@@ -150,11 +148,6 @@ func _ready() -> void:
 		if raids == null:
 			raids = r
 
-	loads = LoadSystem.new()
-	loads.name = "LoadSystem"
-	loads.region = region
-	add_child(loads)
-
 	economy = EconomySystem.new()
 	economy.name = "EconomySystem"
 	economy.region = region
@@ -165,7 +158,6 @@ func _ready() -> void:
 	combat.name = "CombatSystem"
 	combat.region = region
 	combat.resources = resources
-	combat.loads = loads
 	add_child(combat)
 	combat.spawn_headquarters()
 	for r in all_raids.values():
@@ -185,7 +177,6 @@ func _ready() -> void:
 	powers.name = "CompanyPowers"
 	powers.resources = resources
 	powers.combat = combat
-	powers.loads = loads
 	add_child(powers)
 
 	defenses = DefenseSystem.new()
@@ -232,17 +223,11 @@ func _ready() -> void:
 	combat.headquarters_damaged.connect(_on_hq_damaged)
 	bridges.reached_player.connect(func(c, p): show_notice("%s's bridge reached %s: expect walkers!" % [c, p]))
 
-	ferry = FerrySystem.new()
-	ferry.name = "FerrySystem"
-	ferry.region = region
-	add_child(ferry)
-	selection.ferry = ferry
 
 	storms = StormSystem.new()
 	storms.name = "StormSystem"
 	storms.region = region
 	storms.combat = combat
-	storms.waves = waves
 	add_child(storms)
 	storms.control_changed.connect(_on_storm_control_changed)
 	storms.rival_harvester_built.connect(func(p): show_notice("A rival built a Cloud Harvester on %s" % p))
@@ -259,7 +244,6 @@ func _ready() -> void:
 	fog = FogSystem.new()
 	fog.name = "FogSystem"
 	fog.region = region
-	fog.ferry = ferry
 	add_child(fog)
 
 	_build_hud()
@@ -274,6 +258,7 @@ func _ready() -> void:
 	patrols.notice.connect(show_notice)
 	powers.notice.connect(show_notice)
 	powers.changed.connect(build_menu.refresh)
+	economy.grid_changed.connect(func(_e): build_menu.refresh())
 	patrols.mode_changed.connect(func(on): build_menu.set_hint("Patrol route: click a Hangar, then Mooring Masts in order. Right click finishes, Esc cancels." if on else ""))
 	patrols.ship_launched.connect(func(s): show_notice("%s cast off from the hangar" % s.display_name))
 	region.buildings_changed.connect(patrols.mark_routes_dirty)
@@ -292,8 +277,6 @@ func _ready() -> void:
 	fleet.flight_sent.connect(func(n): show_notice("Vesper bombers inbound: %d on the air lane" % n))
 	fleet.airships_launched.connect(_on_airships_launched)
 	fleet.troops_dropped.connect(func(corp, p, units): show_notice("%s dropped %d troops on %s!" % [corp, units.size(), p]))
-	ferry.departed.connect(_on_ferry_departed)
-	loads.building_lost.connect(func(b, p): show_notice("%s is overloaded: a %s broke off and fell!" % [p, b]))
 	economy.grid_changed.connect(func(_e): _refresh_resources())
 	economy.watch(waves)
 	wind.wind_changed.connect(func(_i, first):
@@ -337,11 +320,6 @@ func _on_airships_launched(corp: String, kind: String, n: int) -> void:
 			show_notice("%s troop carriers inbound: %d airship%s, %d troops each" % [corp, n, "" if n == 1 else "s", VesperFleet.AIRSHIPS.carrier.troops.size()])
 		"gunship":
 			show_notice("%s gunships inbound: %d escort%s hunting your units" % [corp, n, "" if n == 1 else "s"])
-
-
-func _on_ferry_departed(from_platform: String, to_platform: String, passengers: int) -> void:
-	if passengers > 0:
-		show_notice("Ferry away from %s to %s, %d aboard" % [from_platform, to_platform, passengers])
 
 
 func _on_drift_warning(balloon_name: String, platform_name: String, seconds: float, player_units: int) -> void:
@@ -611,6 +589,7 @@ func _build_hud() -> void:
 
 	build_menu = BuildMenu.new()
 	build_menu.building = building
+	build_menu.region = region
 	build_menu.walkways = walkways
 	build_menu.steering = steering
 	build_menu.patrols = patrols
@@ -627,7 +606,6 @@ func _build_hud() -> void:
 	info_panel.walkways = walkways
 	info_panel.combat = combat
 	info_panel.storms = storms
-	info_panel.loads = loads
 	info_panel.defenses = defenses
 	info_panel.fog = fog
 	info_panel.wind = wind
